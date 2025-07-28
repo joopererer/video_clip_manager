@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
-import '../player/player_screen.dart';
+import '../player/clip_editor_screen.dart';
 import '../player/clip_playback_screen.dart';
 import '../../widgets/clip_thumbnail.dart';
 
@@ -175,7 +175,7 @@ class ClipsTab extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PlayerScreen(video: video, initialClip: clip),
+        builder: (context) => ClipEditorScreen(video: video, initialClip: clip),
       ),
     );
   }

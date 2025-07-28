@@ -4,7 +4,7 @@ import 'package:file_picker/file_picker.dart';
 
 import '../../data/app_state.dart';
 import '../../data/models.dart';
-import '../player/player_screen.dart';
+import '../player/clip_editor_screen.dart';
 import '../../widgets/clip_thumbnail.dart';
 
 class VideosTab extends StatelessWidget {
@@ -171,7 +171,7 @@ class VideosTab extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PlayerScreen(video: targetVideo!),
+        builder: (context) => ClipEditorScreen(video: targetVideo!),
       ),
     );
   }

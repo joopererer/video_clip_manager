@@ -5,13 +5,14 @@ class VideoClip {
   Duration startTime;
   Duration endTime;
   Duration coverFrameTime;
-  List<String> tags;
+  List<String> tags; // This property itself is fine.
   String? notes;
   int rating;
   bool isFavorite;
 
   String? thumbnailPath;
 
+  // MODIFIED: The constructor is changed to ensure `tags` is always a modifiable list.
   VideoClip({
     required this.id,
     required this.name,
@@ -19,12 +20,14 @@ class VideoClip {
     required this.startTime,
     required this.endTime,
     required this.coverFrameTime,
-    this.tags = const [],
+    List<String> tags = const [], // The parameter can have a const default...
     this.notes,
     this.rating = 0,
     this.isFavorite = false,
     this.thumbnailPath,
-  });
+  }) : tags = List.from(
+         tags,
+       ); // ...but the property is initialized with a NEW, MODIFIABLE list.
 
   factory VideoClip.fromJson(Map<String, dynamic> json) {
     final startTime = Duration(milliseconds: json['start'] ?? 0);
@@ -39,6 +42,7 @@ class VideoClip {
       coverFrameTime: Duration(
         milliseconds: json['coverFrameTime'] ?? startTime.inMilliseconds,
       ),
+      // This already correctly creates a modifiable list from JSON.
       tags: List<String>.from(json['tags'] ?? []),
       notes: json['note'],
       rating: json['rating'] ?? 0,
@@ -59,6 +63,35 @@ class VideoClip {
       'rating': rating,
       'isFavorite': isFavorite,
     };
+  }
+
+  VideoClip copyWith({
+    String? id,
+    String? name,
+    String? videoPath,
+    Duration? startTime,
+    Duration? endTime,
+    Duration? coverFrameTime,
+    List<String>? tags,
+    String? notes,
+    int? rating,
+    bool? isFavorite,
+    String? thumbnailPath,
+  }) {
+    return VideoClip(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      videoPath: videoPath ?? this.videoPath,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+      coverFrameTime: coverFrameTime ?? this.coverFrameTime,
+      // When copying, we also ensure the list is new and modifiable.
+      tags: tags ?? List.from(this.tags),
+      notes: notes ?? this.notes,
+      rating: rating ?? this.rating,
+      isFavorite: isFavorite ?? this.isFavorite,
+      thumbnailPath: thumbnailPath ?? this.thumbnailPath,
+    );
   }
 }
 
