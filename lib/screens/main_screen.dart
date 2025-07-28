@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:path/path.dart' as p;
+
 import '../data/app_state.dart';
 import 'tabs/clips_tab.dart';
 import 'tabs/videos_tab.dart';
@@ -17,16 +19,15 @@ class _MainScreenState extends State<MainScreen>
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  List<String> _selectedTags = [];
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text;
-      });
-    });
+    _searchController.addListener(
+      () => setState(() => _searchQuery = _searchController.text),
+    );
   }
 
   @override
@@ -37,37 +38,95 @@ class _MainScreenState extends State<MainScreen>
   }
 
   void _showSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _showTagFilterDialog() {
+    final appState = context.read<AppState>();
+    showDialog(
+      context: context,
+      builder: (context) {
+        final allTags = appState.allTags;
+        List<String> tempSelectedTags = List.from(_selectedTags);
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Filter by Tags'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: allTags.isEmpty
+                    ? const Text('No tags available.')
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: allTags.length,
+                        itemBuilder: (context, index) {
+                          final tag = allTags[index];
+                          return CheckboxListTile(
+                            title: Text(tag),
+                            value: tempSelectedTags.contains(tag),
+                            onChanged: (isSelected) {
+                              setDialogState(() {
+                                if (isSelected == true) {
+                                  tempSelectedTags.add(tag);
+                                } else {
+                                  tempSelectedTags.remove(tag);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() => _selectedTags = tempSelectedTags);
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final appState = Provider.of<AppState>(context);
+    final appState = context.watch<AppState>();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Video Clip Manager'),
+        title: Text('Video Clip Manager (${appState.currentDbPath})'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.file_upload),
-            tooltip: 'Load Clips from JSON',
-            onPressed: appState.isLoading
-                ? null
-                : () async {
-                    final result = await appState.loadClipsFromFile();
-                    _showSnackBar(result);
-                  },
-          ),
-          IconButton(
-            icon: const Icon(Icons.save),
-            tooltip: 'Save Clips to JSON',
-            onPressed: appState.isLoading
-                ? null
-                : () async {
-                    final result = await appState.saveClipsToFile();
-                    _showSnackBar(result);
-                  },
+          PopupMenuButton<int>(
+            onSelected: (item) async {
+              if (item == 0) {
+                final result = await appState.importAndMergeClips();
+                _showSnackBar(result);
+              } else if (item == 1) {
+                final result = await appState.switchDatabase();
+                _showSnackBar(result);
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem<int>(
+                value: 0,
+                child: Text('Import & Merge JSON'),
+              ),
+              const PopupMenuItem<int>(
+                value: 1,
+                child: Text('Switch Database'),
+              ),
+            ],
           ),
         ],
         bottom: TabBar(
@@ -90,15 +149,29 @@ class _MainScreenState extends State<MainScreen>
                   decoration: InputDecoration(
                     labelText: 'Search...',
                     prefixIcon: const Icon(Icons.search),
+                    suffixIcon: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_selectedTags.isNotEmpty)
+                          Chip(
+                            label: Text('${_selectedTags.length}'),
+                            onDeleted: () =>
+                                setState(() => _selectedTags.clear()),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.filter_list),
+                          onPressed: _showTagFilterDialog,
+                        ),
+                        if (_searchQuery.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () => _searchController.clear(),
+                          ),
+                      ],
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8.0),
                     ),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () => _searchController.clear(),
-                          )
-                        : null,
                   ),
                 ),
               ),
@@ -106,7 +179,10 @@ class _MainScreenState extends State<MainScreen>
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                    ClipsTab(searchQuery: _searchQuery),
+                    ClipsTab(
+                      searchQuery: _searchQuery,
+                      selectedTags: _selectedTags,
+                    ),
                     VideosTab(searchQuery: _searchQuery),
                     PlaylistsTab(searchQuery: _searchQuery),
                   ],
@@ -114,13 +190,23 @@ class _MainScreenState extends State<MainScreen>
               ),
             ],
           ),
-          if (appState.isLoading)
-            const Opacity(
-              opacity: 0.8,
-              child: ModalBarrier(dismissible: false, color: Colors.black),
+          if (appState.isLoading || appState.isSaving)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(
+                      appState.isSaving ? 'Saving...' : 'Loading...',
+                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          if (appState.isLoading)
-            const Center(child: CircularProgressIndicator()),
         ],
       ),
     );

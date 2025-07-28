@@ -1,4 +1,3 @@
-// New screen for PLAYBACK ONLY
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -26,14 +25,18 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     super.initState();
     player = Player();
     controller = VideoController(player);
-    player.open(Media(widget.clip.videoPath), play: false).then((_) {
-      player.seek(widget.clip.startTime);
-      player.play();
+    player.open(Media(widget.clip.videoPath), play: false).then((_) async {
+      // Add a small delay to ensure the player is fully ready for seeking.
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (mounted) {
+        await player.seek(widget.clip.startTime);
+        await player.play();
+      }
     });
 
-    // Enforce clip end time
     _positionSubscription = player.stream.position.listen((position) {
-      if (position >= widget.clip.endTime) {
+      if (widget.clip.endTime > Duration.zero &&
+          position >= widget.clip.endTime) {
         player.pause();
         player.seek(widget.clip.startTime);
       }
@@ -51,7 +54,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16.0),
-      width: 640, // Fixed width for dialog-like appearance
+      width: 640,
       height: 600,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,7 +66,6 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                 child: Text(
                   widget.clip.name,
                   style: Theme.of(context).textTheme.headlineSmall,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               IconButton(

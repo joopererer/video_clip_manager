@@ -1,13 +1,15 @@
-// This screen now functions as the CLIP EDITOR
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_typeahead/flutter_typeahead.dart';
 
 import '../../data/models.dart';
 import '../../data/app_state.dart';
 import '../../widgets/custom_progress_bar.dart';
-import 'clip_editor_panel.dart';
+import '../../services/thumbnail_service.dart';
+import '../../main.dart'; // for formatDuration
 
 class PlayerScreen extends StatefulWidget {
   final OriginalVideo video;
@@ -22,9 +24,13 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   late final Player player;
   late final VideoController controller;
-
   late VideoClip _currentClip;
   bool _isNewClip = true;
+  String? _coverPreviewPath;
+
+  final _nameController = TextEditingController();
+  final _tagsController = TextEditingController();
+  final _notesController = TextEditingController();
 
   @override
   void initState() {
@@ -33,11 +39,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     controller = VideoController(player);
 
     if (widget.initialClip != null) {
-      // Editing an existing clip
       _currentClip = widget.initialClip!;
       _isNewClip = false;
     } else {
-      // Creating a new clip
       _isNewClip = true;
       _currentClip = VideoClip(
         id: 'clip_${DateTime.now().millisecondsSinceEpoch}',
@@ -45,24 +49,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
         name: 'New Clip for ${widget.video.name}',
         startTime: Duration.zero,
         endTime: Duration.zero,
+        coverFrameTime: Duration.zero,
       );
     }
 
+    _nameController.text = _currentClip.name;
+    _tagsController.text = _currentClip.tags.join(', ');
+    _notesController.text = _currentClip.notes ?? '';
+    _coverPreviewPath = _currentClip.thumbnailPath;
+
     player.open(Media(widget.video.path), play: false).then((_) {
-      if (!_isNewClip) {
-        player.seek(_currentClip.startTime);
-      }
-      setState(() {}); // Update to show duration
+      player.seek(_currentClip.startTime);
+      if (mounted) setState(() {});
     });
   }
 
   @override
   void dispose() {
     player.dispose();
+    _nameController.dispose();
+    _tagsController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
-  void _setStartTime(Duration time) {
+  void _setStartTimeFromPlayer() {
+    final time = player.state.position;
     setState(() {
       if (_currentClip.endTime != Duration.zero &&
           time > _currentClip.endTime) {
@@ -71,44 +83,87 @@ class _PlayerScreenState extends State<PlayerScreen> {
         _currentClip.startTime = time;
       }
     });
-    player.seek(time);
   }
 
-  void _setEndTime(Duration time) {
+  void _setEndTimeFromPlayer() {
+    final time = player.state.position;
     setState(() {
       if (time < _currentClip.startTime) {
         _currentClip.endTime = _currentClip.startTime;
       } else {
         _currentClip.endTime = time;
       }
-      setState(() {});
     });
   }
 
-  void _saveClip() {
-    final appState = Provider.of<AppState>(context, listen: false);
-    if (_isNewClip) {
-      appState.addClip(_currentClip);
-    } else {
-      appState.updateClip(_currentClip);
-    }
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Clip "${_currentClip.name}" saved!')),
+  Future<void> _previewClip() async {
+    if (_currentClip.startTime >= _currentClip.endTime) return;
+    await player.seek(_currentClip.startTime);
+    await player.play();
+
+    Future.delayed(_currentClip.endTime - _currentClip.startTime, () {
+      if (mounted && player.state.playing) {
+        player.pause();
+      }
+    });
+  }
+
+  Future<void> _setCover() async {
+    final position = player.state.position;
+    final thumbnailService = context.read<ThumbnailService>();
+    final newThumbPath = await thumbnailService.getThumbnail(
+      _currentClip.videoPath,
+      position,
+      _currentClip.id,
     );
+    if (mounted) {
+      setState(() {
+        _currentClip.coverFrameTime = position;
+        _coverPreviewPath = newThumbPath;
+      });
+    }
+  }
+
+  Future<void> _saveClip() async {
+    final appState = context.read<AppState>();
+
+    _currentClip.name = _nameController.text;
+    _currentClip.notes = _notesController.text;
+    _currentClip.tags = _tagsController.text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+
+    // Re-generate thumbnail on save to ensure it's up-to-date
+    final thumbnailService = context.read<ThumbnailService>();
+    _currentClip.thumbnailPath = await thumbnailService.getThumbnail(
+      _currentClip.videoPath,
+      _currentClip.coverFrameTime,
+      _currentClip.id,
+    );
+
+    if (_isNewClip) {
+      await appState.addClip(_currentClip);
+    } else {
+      await appState.updateClip(_currentClip);
+    }
+    if (mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Clip "${_currentClip.name}" saved!')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.read<AppState>();
     return Scaffold(
       appBar: AppBar(
         title: Text(_isNewClip ? 'Create Clip' : 'Edit Clip'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            tooltip: 'Save Clip',
-            onPressed: _saveClip,
-          ),
+          IconButton(icon: const Icon(Icons.save), onPressed: _saveClip),
         ],
       ),
       body: Column(
@@ -126,18 +181,120 @@ class _PlayerScreenState extends State<PlayerScreen> {
             player: player,
             startTime: _currentClip.startTime,
             endTime: _currentClip.endTime,
-            onSetStart: _setStartTime,
-            onSetEnd: _setEndTime,
+            onSetStart: (time) => setState(() => _currentClip.startTime = time),
+            onSetEnd: (time) => setState(() => _currentClip.endTime = time),
           ),
           Expanded(
             flex: 2,
-            child: ClipEditorPanel(
-              clip: _currentClip,
-              onUpdate: (updatedClip) {
-                setState(() {
-                  _currentClip = updatedClip;
-                });
-              },
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Clip Name',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TypeAheadField<String>(
+                    builder: (context, controller, focusNode) => TextField(
+                      controller: _tagsController,
+                      focusNode: focusNode,
+                      decoration: const InputDecoration(
+                        labelText: 'Tags (comma-separated)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    suggestionsCallback: (pattern) async {
+                      final lastTagPattern = pattern.split(',').last.trim();
+                      if (lastTagPattern.isEmpty) return [];
+                      return appState.allTags
+                          .where(
+                            (tag) => tag.toLowerCase().contains(
+                              lastTagPattern.toLowerCase(),
+                            ),
+                          )
+                          .toList();
+                    },
+                    itemBuilder: (context, suggestion) =>
+                        ListTile(title: Text(suggestion)),
+                    onSelected: (suggestion) {
+                      final currentTags = _tagsController.text
+                          .split(',')
+                          .map((t) => t.trim())
+                          .where((t) => t.isNotEmpty)
+                          .toList();
+                      currentTags.removeLast();
+                      if (!currentTags.contains(suggestion)) {
+                        currentTags.add(suggestion);
+                      }
+                      _tagsController.text = '${currentTags.join(', ')}, ';
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _notesController,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Notes',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      ElevatedButton(
+                        onPressed: _setStartTimeFromPlayer,
+                        child: const Text("Set Start"),
+                      ),
+                      ElevatedButton(
+                        onPressed: _setEndTimeFromPlayer,
+                        child: const Text("Set End"),
+                      ),
+                      ElevatedButton(
+                        onPressed: _previewClip,
+                        child: const Text("Preview Clip"),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (_coverPreviewPath != null)
+                    Column(
+                      children: [
+                        const Text(
+                          "Cover Preview:",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Image.file(
+                          File(_coverPreviewPath!),
+                          height: 100,
+                          fit: BoxFit.contain,
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Cover Time: ${formatDuration(_currentClip.coverFrameTime)}',
+                      ),
+                      const SizedBox(width: 16),
+                      ElevatedButton(
+                        onPressed: _setCover,
+                        child: const Text('Set Cover From Current Frame'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ],

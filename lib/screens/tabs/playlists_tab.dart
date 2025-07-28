@@ -6,7 +6,6 @@ class PlaylistsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // This is a placeholder for the playlist functionality
     return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
