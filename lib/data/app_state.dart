@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'dart:collection';
+import 'package:path/path.dart' as p;
 
 import 'models.dart';
+import 'data_service.dart';
 
 class AppState extends ChangeNotifier {
-  final List<OriginalVideo> _originalVideos = [];
-  final List<VideoClip> _clips = [];
+  final DataService _dataService = DataService();
+  List<OriginalVideo> _originalVideos = [];
+  List<VideoClip> _clips = [];
   final List<Playlist> _playlists = [];
 
   UnmodifiableListView<OriginalVideo> get originalVideos =>
@@ -14,56 +17,58 @@ class AppState extends ChangeNotifier {
   UnmodifiableListView<Playlist> get playlists =>
       UnmodifiableListView(_playlists);
 
-  // Sample Data for demonstration
-  AppState() {
-    final video1 = OriginalVideo(
-      id: 'vid1',
-      path:
-          '[https://user-images.githubusercontent.com/28951144/229373695-22f88f13-d18f-4288-9bf1-c3e078d83722.mp4](https://user-images.githubusercontent.com/28951144/229373695-22f88f13-d18f-4288-9bf1-c3e078d83722.mp4)',
-      name: 'Big Buck Bunny',
-    );
-    final video2 = OriginalVideo(
-      id: 'vid2',
-      path:
-          '[https://user-images.githubusercontent.com/28951144/229373709-603a7a89-2105-4e1b-a5a5-a6c3567c9a59.mp4](https://user-images.githubusercontent.com/28951144/229373709-603a7a89-2105-4e1b-a5a5-a6c3567c9a59.mp4)',
-      name: 'Tears of Steel',
-    );
-    _originalVideos.addAll([video1, video2]);
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
 
-    _clips.addAll([
-      VideoClip(
-        id: 'clip1',
-        videoId: 'vid1',
-        name: 'Bunny Intro',
-        startTime: const Duration(seconds: 5),
-        endTime: const Duration(seconds: 15),
-        tags: ['intro', 'funny'],
-        rating: 3,
-      ),
-      VideoClip(
-        id: 'clip2',
-        videoId: 'vid1',
-        name: 'Butterfly Scene',
-        startTime: const Duration(seconds: 30),
-        endTime: const Duration(seconds: 40),
-        tags: ['nature', 'animation'],
-        rating: 5,
-        isFavorite: true,
-      ),
-      VideoClip(
-        id: 'clip3',
-        videoId: 'vid2',
-        name: 'Robot Hand',
-        startTime: const Duration(seconds: 60),
-        endTime: const Duration(seconds: 75),
-        tags: ['sci-fi', 'vfx'],
-        notes: "Cool visual effects here.",
-      ),
-    ]);
+  Future<String> loadClipsFromFile() async {
+    _setLoading(true);
+    try {
+      final loadedClips = await _dataService.loadClipsFromFile();
+      if (loadedClips != null) {
+        _clips = loadedClips;
+        _generateOriginalVideos();
+        notifyListeners();
+        return "${loadedClips.length} clips loaded successfully.";
+      }
+      return "No file selected or file was empty.";
+    } catch (e) {
+      return "Error loading file: $e";
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<String> saveClipsToFile() async {
+    _setLoading(true);
+    try {
+      return await _dataService.saveClipsToFile(_clips);
+    } catch (e) {
+      return "Error saving file: $e";
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  void _generateOriginalVideos() {
+    final videoMap = <String, List<VideoClip>>{};
+    for (var clip in _clips) {
+      (videoMap[clip.videoPath] ??= []).add(clip);
+    }
+
+    _originalVideos = videoMap.entries.map((entry) {
+      final path = entry.key;
+      return OriginalVideo(
+        // Use a consistent ID based on the path
+        id: 'vid_${path.hashCode}',
+        path: path,
+        name: p.basename(path), // Get filename from path
+      );
+    }).toList();
   }
 
   void addClip(VideoClip clip) {
     _clips.add(clip);
+    _generateOriginalVideos();
     notifyListeners();
   }
 
@@ -71,12 +76,15 @@ class AppState extends ChangeNotifier {
     final index = _clips.indexWhere((c) => c.id == updatedClip.id);
     if (index != -1) {
       _clips[index] = updatedClip;
+      // Video path might change, so regenerate
+      _generateOriginalVideos();
       notifyListeners();
     }
   }
 
   void deleteClip(String clipId) {
     _clips.removeWhere((c) => c.id == clipId);
+    _generateOriginalVideos();
     notifyListeners();
   }
 
@@ -88,9 +96,11 @@ class AppState extends ChangeNotifier {
   }
 
   void deleteVideo(String videoId) {
+    final video = getVideoById(videoId);
+    if (video == null) return;
+
     // Prevent deletion if clips are associated
-    if (_clips.any((clip) => clip.videoId == videoId)) {
-      // In a real app, show a dialog to the user
+    if (_clips.any((clip) => clip.videoPath == video.path)) {
       debugPrint("Cannot delete video with associated clips.");
       return;
     }
@@ -106,21 +116,16 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void createPlaylist(Playlist playlist) {
-    _playlists.add(playlist);
-    notifyListeners();
-  }
-
-  void updatePlaylist(Playlist updatedPlaylist) {
-    final index = _playlists.indexWhere((p) => p.id == updatedPlaylist.id);
-    if (index != -1) {
-      _playlists[index] = updatedPlaylist;
-      notifyListeners();
+  VideoClip? getClipById(String id) {
+    try {
+      return _clips.firstWhere((c) => c.id == id);
+    } catch (e) {
+      return null;
     }
   }
 
-  void deletePlaylist(String playlistId) {
-    _playlists.removeWhere((p) => p.id == playlistId);
+  void _setLoading(bool loading) {
+    _isLoading = loading;
     notifyListeners();
   }
 }

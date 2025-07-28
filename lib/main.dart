@@ -23,12 +23,12 @@ class MyApp extends StatelessWidget {
         theme: ThemeData(
           primarySwatch: Colors.blue,
           useMaterial3: true,
-          brightness: Brightness.light,
+          brightness: Brightness.light, dialogTheme: DialogThemeData(backgroundColor: Colors.white),
         ),
         darkTheme: ThemeData(
           primarySwatch: Colors.blue,
           useMaterial3: true,
-          brightness: Brightness.dark,
+          brightness: Brightness.dark, dialogTheme: DialogThemeData(backgroundColor: const Color(0xFF1e1e1e)),
         ),
         themeMode: ThemeMode.system,
         home: const MainScreen(),

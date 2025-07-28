@@ -83,7 +83,6 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
                         widget.endTime,
                       );
 
-                      // Adjust marker position to be centered on the pixel
                       final double startMarkerOffset =
                           startPixelPosition - (markerWidth / 2);
                       final double endMarkerOffset =

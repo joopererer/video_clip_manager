@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../player/player_screen.dart';
+import '../player/clip_playback_screen.dart';
 
 class ClipsTab extends StatefulWidget {
   final String searchQuery;
@@ -21,11 +22,10 @@ class _ClipsTabState extends State<ClipsTab> {
       builder: (context, appState, child) {
         final filteredClips = appState.clips.where((clip) {
           final query = widget.searchQuery.toLowerCase();
-          final video = appState.getVideoById(clip.videoId);
           return clip.name.toLowerCase().contains(query) ||
               (clip.notes?.toLowerCase().contains(query) ?? false) ||
               clip.tags.any((t) => t.toLowerCase().contains(query)) ||
-              (video?.name.toLowerCase().contains(query) ?? false);
+              clip.videoPath.toLowerCase().contains(query);
         }).toList();
 
         return Column(
@@ -38,17 +38,17 @@ class _ClipsTabState extends State<ClipsTab> {
                   const Text('View Mode:'),
                   IconButton(
                     icon: Icon(_isGridView ? Icons.list : Icons.grid_view),
-                    onPressed: () {
-                      setState(() {
-                        _isGridView = !_isGridView;
-                      });
-                    },
+                    onPressed: () => setState(() => _isGridView = !_isGridView),
                   ),
                 ],
               ),
             ),
             Expanded(
-              child: _isGridView
+              child: filteredClips.isEmpty
+                  ? const Center(
+                      child: Text('No clips found. Try loading a JSON file.'),
+                    )
+                  : _isGridView
                   ? buildGridView(filteredClips, appState)
                   : buildListView(filteredClips, appState),
             ),
@@ -63,22 +63,29 @@ class _ClipsTabState extends State<ClipsTab> {
       itemCount: clips.length,
       itemBuilder: (context, index) {
         final clip = clips[index];
-        final video = appState.getVideoById(clip.videoId);
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
           child: ListTile(
             leading: const Icon(Icons.movie_filter, size: 40),
             title: Text(clip.name),
             subtitle: Text(
-              'From: ${video?.name ?? "Unknown Video"}\nTags: ${clip.tags.join(', ')}',
+              'From: ${clip.videoPath}\nTags: ${clip.tags.join(', ')}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (clip.isFavorite)
-                  const Icon(Icons.favorite, color: Colors.pink),
-                Text('${clip.rating}'),
-                const Icon(Icons.star, color: Colors.amber),
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.grey),
+                  tooltip: 'Edit Clip',
+                  onPressed: () => _editClip(context, clip),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.redAccent),
+                  tooltip: 'Delete Clip',
+                  onPressed: () => _deleteClip(context, clip, appState),
+                ),
               ],
             ),
             onTap: () => _playClip(context, clip),
@@ -93,36 +100,58 @@ class _ClipsTabState extends State<ClipsTab> {
       padding: const EdgeInsets.all(8.0),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 200,
-        childAspectRatio: 3 / 2,
+        childAspectRatio: 1.0, // Make it square
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
       itemCount: clips.length,
       itemBuilder: (context, index) {
         final clip = clips[index];
-        final video = appState.getVideoById(clip.videoId);
         return Card(
           clipBehavior: Clip.antiAlias,
-          child: GridTile(
-            footer: GridTileBar(
-              backgroundColor: Colors.black45,
-              title: Text(clip.name, style: const TextStyle(fontSize: 12)),
-              subtitle: Text(
-                video?.name ?? '',
-                style: const TextStyle(fontSize: 10),
+          child: InkWell(
+            onTap: () => _playClip(context, clip),
+            child: GridTile(
+              header: Container(
+                color: Colors.black54,
+                padding: const EdgeInsets.all(4.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: const Icon(
+                        Icons.edit,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      tooltip: 'Edit Clip',
+                      onPressed: () => _editClip(context, clip),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: const Icon(
+                        Icons.delete,
+                        color: Colors.pink,
+                        size: 18,
+                      ),
+                      tooltip: 'Delete Clip',
+                      onPressed: () => _deleteClip(context, clip, appState),
+                    ),
+                  ],
+                ),
               ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (clip.isFavorite)
-                    const Icon(Icons.favorite, color: Colors.pink, size: 16),
-                  Text('${clip.rating}', style: const TextStyle(fontSize: 12)),
-                  const Icon(Icons.star, color: Colors.amber, size: 16),
-                ],
+              footer: GridTileBar(
+                backgroundColor: Colors.black45,
+                title: Text(clip.name, style: const TextStyle(fontSize: 12)),
+                subtitle: Text(
+                  clip.tags.join(', '),
+                  style: const TextStyle(fontSize: 10),
+                ),
               ),
-            ),
-            child: InkWell(
-              onTap: () => _playClip(context, clip),
               child: Container(
                 color: Colors.blueGrey.shade100,
                 child: const Center(
@@ -141,19 +170,46 @@ class _ClipsTabState extends State<ClipsTab> {
   }
 
   void _playClip(BuildContext context, VideoClip clip) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(child: ClipPlaybackScreen(clip: clip)),
+    );
+  }
+
+  void _editClip(BuildContext context, VideoClip clip) {
     final appState = Provider.of<AppState>(context, listen: false);
-    final video = appState.getVideoById(clip.videoId);
-    if (video != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PlayerScreen(video: video, initialClip: clip),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: Original video not found!')),
-      );
-    }
+    final video = appState.originalVideos.firstWhere(
+      (v) => v.path == clip.videoPath,
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PlayerScreen(video: video, initialClip: clip),
+      ),
+    );
+  }
+
+  void _deleteClip(BuildContext context, VideoClip clip, AppState appState) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Deletion'),
+        content: Text('Are you sure you want to delete "${clip.name}"?'),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          TextButton(
+            onPressed: () {
+              appState.deleteClip(clip.id);
+              Navigator.of(ctx).pop();
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
   }
 }

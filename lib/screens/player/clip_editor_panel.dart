@@ -4,17 +4,11 @@ import '../../main.dart'; // for formatDuration
 
 class ClipEditorPanel extends StatefulWidget {
   final VideoClip clip;
-  final bool isNewClip;
-  final VoidCallback onSave;
-  final VoidCallback onDelete;
   final ValueChanged<VideoClip> onUpdate;
 
   const ClipEditorPanel({
     super.key,
     required this.clip,
-    required this.isNewClip,
-    required this.onSave,
-    required this.onDelete,
     required this.onUpdate,
   });
 
@@ -33,10 +27,17 @@ class _ClipEditorPanelState extends State<ClipEditorPanel> {
     _nameController = TextEditingController(text: widget.clip.name);
     _tagsController = TextEditingController(text: widget.clip.tags.join(', '));
     _notesController = TextEditingController(text: widget.clip.notes);
+
+    _nameController.addListener(_updateClipState);
+    _tagsController.addListener(_updateClipState);
+    _notesController.addListener(_updateClipState);
   }
 
   @override
   void dispose() {
+    _nameController.removeListener(_updateClipState);
+    _tagsController.removeListener(_updateClipState);
+    _notesController.removeListener(_updateClipState);
     _nameController.dispose();
     _tagsController.dispose();
     _notesController.dispose();
@@ -44,14 +45,15 @@ class _ClipEditorPanelState extends State<ClipEditorPanel> {
   }
 
   void _updateClipState() {
-    widget.clip.name = _nameController.text;
-    widget.clip.tags = _tagsController.text
+    final clip = widget.clip;
+    clip.name = _nameController.text;
+    clip.tags = _tagsController.text
         .split(',')
         .map((s) => s.trim())
         .where((s) => s.isNotEmpty)
         .toList();
-    widget.clip.notes = _notesController.text;
-    widget.onUpdate(widget.clip);
+    clip.notes = _notesController.text;
+    widget.onUpdate(clip);
   }
 
   @override
@@ -61,10 +63,7 @@ class _ClipEditorPanelState extends State<ClipEditorPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            widget.isNewClip ? 'Create New Clip' : 'Edit Clip',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          Text('Clip Details', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 16),
           TextField(
             controller: _nameController,
@@ -72,7 +71,6 @@ class _ClipEditorPanelState extends State<ClipEditorPanel> {
               labelText: 'Clip Name',
               border: OutlineInputBorder(),
             ),
-            onChanged: (_) => _updateClipState(),
           ),
           const SizedBox(height: 12),
           Row(
@@ -92,7 +90,6 @@ class _ClipEditorPanelState extends State<ClipEditorPanel> {
               labelText: 'Tags (comma-separated)',
               border: OutlineInputBorder(),
             ),
-            onChanged: (_) => _updateClipState(),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -102,7 +99,6 @@ class _ClipEditorPanelState extends State<ClipEditorPanel> {
               border: OutlineInputBorder(),
             ),
             maxLines: 3,
-            onChanged: (_) => _updateClipState(),
           ),
           const SizedBox(height: 12),
           Row(
@@ -119,15 +115,15 @@ class _ClipEditorPanelState extends State<ClipEditorPanel> {
                       color: Colors.amber,
                     ),
                     onPressed: () {
-                      setState(() {
-                        widget.clip.rating = index + 1;
-                        _updateClipState();
-                      });
+                      widget.clip.rating = index + 1;
+                      _updateClipState();
+                      setState(() {});
                     },
                   );
                 }),
               ),
               IconButton(
+                tooltip: 'Toggle Favorite',
                 icon: Icon(
                   widget.clip.isFavorite
                       ? Icons.favorite
@@ -135,30 +131,10 @@ class _ClipEditorPanelState extends State<ClipEditorPanel> {
                   color: widget.clip.isFavorite ? Colors.pink : Colors.grey,
                 ),
                 onPressed: () {
-                  setState(() {
-                    widget.clip.isFavorite = !widget.clip.isFavorite;
-                    _updateClipState();
-                  });
+                  widget.clip.isFavorite = !widget.clip.isFavorite;
+                  _updateClipState();
+                  setState(() {});
                 },
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              if (!widget.isNewClip)
-                TextButton.icon(
-                  icon: const Icon(Icons.delete),
-                  label: const Text('Delete'),
-                  onPressed: widget.onDelete,
-                  style: TextButton.styleFrom(foregroundColor: Colors.red),
-                ),
-              const Spacer(),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.save),
-                label: const Text('Save Clip'),
-                onPressed: widget.onSave,
               ),
             ],
           ),
