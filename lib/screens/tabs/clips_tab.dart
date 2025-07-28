@@ -1,10 +1,10 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../player/player_screen.dart';
 import '../player/clip_playback_screen.dart';
+import '../../widgets/clip_thumbnail.dart';
 
 class ClipsTab extends StatelessWidget {
   final String searchQuery;
@@ -74,7 +74,7 @@ class ClipsTab extends StatelessWidget {
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
           child: ListTile(
-            leading: _buildThumbnail(clip, 50),
+            leading: ClipThumbnail(clip: clip, size: 50),
             title: Text(clip.name),
             subtitle: Text(
               'Tags: ${clip.tags.join(', ')}',
@@ -147,25 +147,11 @@ class ClipsTab extends StatelessWidget {
                 backgroundColor: Colors.black45,
                 title: Text(clip.name, style: const TextStyle(fontSize: 12)),
               ),
-              child: _buildThumbnail(clip, null),
+              child: ClipThumbnail(clip: clip),
             ),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildThumbnail(VideoClip clip, double? size) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: clip.thumbnailPath != null
-          ? Image.file(
-              File(clip.thumbnailPath!),
-              fit: BoxFit.cover,
-              errorBuilder: (c, e, s) => const Icon(Icons.movie_filter),
-            )
-          : const Icon(Icons.movie_filter),
     );
   }
 
@@ -206,12 +192,12 @@ class ClipsTab extends StatelessWidget {
             onPressed: () => Navigator.of(ctx).pop(),
           ),
           TextButton(
-            child: const Text('Delete'),
             onPressed: () {
               appState.deleteClip(clip.id);
               Navigator.of(ctx).pop();
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
           ),
         ],
       ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:path/path.dart' as p;
 
 import '../data/app_state.dart';
 import 'tabs/clips_tab.dart';
@@ -115,6 +114,9 @@ class _MainScreenState extends State<MainScreen>
               } else if (item == 1) {
                 final result = await appState.switchDatabase();
                 _showSnackBar(result);
+              } else if (item == 2) {
+                await appState.forceRefreshThumbnails();
+                _showSnackBar("All thumbnails are being refreshed.");
               }
             },
             itemBuilder: (context) => [
@@ -125,6 +127,11 @@ class _MainScreenState extends State<MainScreen>
               const PopupMenuItem<int>(
                 value: 1,
                 child: Text('Switch Database'),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem<int>(
+                value: 2,
+                child: Text('Refresh All Thumbnails'),
               ),
             ],
           ),
@@ -190,9 +197,11 @@ class _MainScreenState extends State<MainScreen>
               ),
             ],
           ),
-          if (appState.isLoading || appState.isSaving)
+          if (appState.isLoading ||
+              appState.isSaving ||
+              appState.isGeneratingThumbnails)
             Container(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha: 0.5),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -200,7 +209,11 @@ class _MainScreenState extends State<MainScreen>
                     const CircularProgressIndicator(),
                     const SizedBox(height: 16),
                     Text(
-                      appState.isSaving ? 'Saving...' : 'Loading...',
+                      appState.isSaving
+                          ? 'Saving...'
+                          : (appState.isGeneratingThumbnails
+                                ? 'Generating Thumbnails...'
+                                : 'Loading...'),
                       style: const TextStyle(color: Colors.white, fontSize: 16),
                     ),
                   ],

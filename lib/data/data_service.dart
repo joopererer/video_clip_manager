@@ -2,11 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
 import 'models.dart';
-import '../services/thumbnail_service.dart';
+import '../services/path_service.dart';
 
 class LoadResult {
   final List<VideoClip>? clips;
@@ -15,9 +14,9 @@ class LoadResult {
 }
 
 class DataService {
-  final ThumbnailService thumbnailService;
+  final PathService pathService;
 
-  DataService({required this.thumbnailService});
+  DataService({required this.pathService});
 
   Future<void> ensureDirectoryExists(String dirPath) async {
     final dir = Directory(dirPath);
@@ -43,24 +42,15 @@ class DataService {
     try {
       final file = File(path);
       if (!await file.exists()) {
-        debugPrint('File not found at $path, returning empty list.');
+        await ensureDirectoryExists(p.dirname(path));
+        await file.create();
         return [];
       }
       final jsonString = await file.readAsString();
       if (jsonString.isEmpty) return [];
 
       final List<dynamic> jsonList = json.decode(jsonString);
-      final clips = <VideoClip>[];
-      for (var json in jsonList) {
-        final clip = VideoClip.fromJson(json);
-        clip.thumbnailPath = await thumbnailService.getThumbnail(
-          clip.videoPath,
-          clip.coverFrameTime,
-          clip.id,
-        );
-        clips.add(clip);
-      }
-      return clips;
+      return jsonList.map((json) => VideoClip.fromJson(json)).toList();
     } catch (e) {
       debugPrint('Error loading clips from $path: $e');
       rethrow;
@@ -81,8 +71,7 @@ class DataService {
     }
   }
 
-  Future<String> getDefaultDbPath() async {
-    final docDir = await getApplicationDocumentsDirectory();
-    return p.join(docDir.path, 'VideoClipManager', 'default_clips.json');
+  String getDefaultDbPath() {
+    return pathService.getDefaultDbPath();
   }
 }

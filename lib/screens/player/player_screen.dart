@@ -109,16 +109,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Future<void> _setCover() async {
-    final position = player.state.position;
     final thumbnailService = context.read<ThumbnailService>();
-    final newThumbPath = await thumbnailService.getThumbnail(
-      _currentClip.videoPath,
-      position,
+    // Use the main player instance for screenshotting as it's visible
+    final newThumbPath = await thumbnailService.generateThumbnail(
+      widget.video.path,
+      player.state.position,
       _currentClip.id,
     );
-    if (mounted) {
+
+    if (mounted && newThumbPath != null) {
       setState(() {
-        _currentClip.coverFrameTime = position;
+        _currentClip.coverFrameTime = player.state.position;
+        _currentClip.thumbnailPath = newThumbPath;
         _coverPreviewPath = newThumbPath;
       });
     }
@@ -135,13 +137,19 @@ class _PlayerScreenState extends State<PlayerScreen> {
         .where((s) => s.isNotEmpty)
         .toList();
 
-    // Re-generate thumbnail on save to ensure it's up-to-date
-    final thumbnailService = context.read<ThumbnailService>();
-    _currentClip.thumbnailPath = await thumbnailService.getThumbnail(
-      _currentClip.videoPath,
-      _currentClip.coverFrameTime,
-      _currentClip.id,
-    );
+    if (_currentClip.thumbnailPath == null ||
+        !await File(_currentClip.thumbnailPath!).exists()) {
+      if (_currentClip.coverFrameTime == Duration.zero) {
+        _currentClip.coverFrameTime = _currentClip.startTime;
+      }
+      final thumbnailService = context.read<ThumbnailService>();
+      // Use the main player instance for screenshotting
+      _currentClip.thumbnailPath = await thumbnailService.generateThumbnail(
+        widget.video.path,
+        _currentClip.coverFrameTime,
+        _currentClip.id,
+      );
+    }
 
     if (_isNewClip) {
       await appState.addClip(_currentClip);
@@ -200,17 +208,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                   const SizedBox(height: 12),
                   TypeAheadField<String>(
+                    controller: _tagsController,
                     builder: (context, controller, focusNode) => TextField(
-                      controller: _tagsController,
+                      controller: controller,
                       focusNode: focusNode,
                       decoration: const InputDecoration(
                         labelText: 'Tags (comma-separated)',
                         border: OutlineInputBorder(),
                       ),
                     ),
-                    suggestionsCallback: (pattern) async {
+                    suggestionsCallback: (pattern) {
                       final lastTagPattern = pattern.split(',').last.trim();
-                      if (lastTagPattern.isEmpty) return [];
+                      if (lastTagPattern.isEmpty) return <String>[];
                       return appState.allTags
                           .where(
                             (tag) => tag.toLowerCase().contains(
@@ -227,7 +236,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           .map((t) => t.trim())
                           .where((t) => t.isNotEmpty)
                           .toList();
-                      currentTags.removeLast();
+                      if (currentTags.isNotEmpty) currentTags.removeLast();
                       if (!currentTags.contains(suggestion)) {
                         currentTags.add(suggestion);
                       }
@@ -274,8 +283,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         const SizedBox(height: 8),
                         Image.file(
                           File(_coverPreviewPath!),
+                          key: ValueKey(_coverPreviewPath!),
                           height: 100,
                           fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(Icons.error),
                         ),
                       ],
                     ),

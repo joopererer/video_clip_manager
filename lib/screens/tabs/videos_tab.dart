@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
@@ -6,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../player/player_screen.dart';
+import '../../widgets/clip_thumbnail.dart';
 
 class VideosTab extends StatelessWidget {
   final String searchQuery;
@@ -65,13 +65,22 @@ class VideosTab extends StatelessWidget {
         final video = videos[index];
         final clipsFromVideo = appState.clips
             .where((c) => c.videoPath == video.path)
-            .length;
+            .toList();
+        final representativeClip = clipsFromVideo.isNotEmpty
+            ? clipsFromVideo[(clipsFromVideo.length / 2).floor()]
+            : null;
+
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
           child: ListTile(
-            leading: const Icon(Icons.movie_creation, size: 40),
+            leading: representativeClip != null
+                ? ClipThumbnail(clip: representativeClip, size: 50)
+                : const SizedBox(
+                    width: 50,
+                    child: Icon(Icons.movie_creation_outlined),
+                  ),
             title: Text(video.name),
-            subtitle: Text('Clips: $clipsFromVideo'),
+            subtitle: Text('Clips: ${clipsFromVideo.length}'),
             trailing: const Icon(Icons.add_box),
             onTap: () => _addNewClip(context, video),
           ),
@@ -89,16 +98,19 @@ class VideosTab extends StatelessWidget {
       padding: const EdgeInsets.all(8.0),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 200,
-        childAspectRatio: 3 / 2,
+        childAspectRatio: 1.0,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
-      itemCount: videos.length,
       itemBuilder: (context, index) {
         final video = videos[index];
         final clipsFromVideo = appState.clips
             .where((c) => c.videoPath == video.path)
-            .length;
+            .toList();
+        final representativeClip = clipsFromVideo.isNotEmpty
+            ? clipsFromVideo[(clipsFromVideo.length / 2).floor()]
+            : null;
+
         return Card(
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -108,20 +120,13 @@ class VideosTab extends StatelessWidget {
                 backgroundColor: Colors.black45,
                 title: Text(video.name, style: const TextStyle(fontSize: 12)),
                 subtitle: Text(
-                  'Clips: $clipsFromVideo',
+                  'Clips: ${clipsFromVideo.length}',
                   style: const TextStyle(fontSize: 10),
                 ),
               ),
-              child: Container(
-                color: Colors.blueGrey.shade100,
-                child: const Center(
-                  child: Icon(
-                    Icons.movie_creation_outlined,
-                    size: 40,
-                    color: Colors.black54,
-                  ),
-                ),
-              ),
+              child: representativeClip != null
+                  ? ClipThumbnail(clip: representativeClip)
+                  : const Icon(Icons.movie_creation_outlined, size: 50),
             ),
           ),
         );

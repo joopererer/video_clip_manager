@@ -1,39 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'data/app_state.dart';
 import 'screens/main_screen.dart';
+import 'services/path_service.dart';
 import 'services/thumbnail_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
 
-  // Initialize services
+  final pathService = PathService();
+  await pathService.init();
+
   final prefs = await SharedPreferences.getInstance();
-  final thumbnailService = ThumbnailService();
-  await thumbnailService.init();
+
+  // The thumbnail service now manages a global player
+  final thumbnailService = ThumbnailService(pathService: pathService);
 
   runApp(
     MultiProvider(
       providers: [
-        Provider.value(value: prefs),
+        Provider.value(value: pathService),
         Provider.value(value: thumbnailService),
         ChangeNotifierProvider(
-          create: (context) =>
-              AppState(prefs: prefs, thumbnailService: thumbnailService)
-                ..loadInitialClips(), // Load initial data
+          create: (context) => AppState(
+            prefs: prefs,
+            pathService: pathService,
+            thumbnailService: thumbnailService,
+          )..loadInitialClips(),
         ),
       ],
-      child: const MyApp(),
+      child: MyApp(thumbnailService: thumbnailService),
     ),
   );
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final ThumbnailService thumbnailService;
+  const MyApp({super.key, required this.thumbnailService});
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +60,24 @@ class MyApp extends StatelessWidget {
         dialogTheme: DialogThemeData(backgroundColor: const Color(0xFF1e1e1e)),
       ),
       themeMode: ThemeMode.system,
-      home: const MainScreen(),
+      home: Scaffold(
+        body: Stack(
+          children: [
+            const MainScreen(),
+            // This is the global, 1x1 pixel "drawing board" for screenshots
+            Positioned(
+              left: 0,
+              top: 0,
+              width: 1,
+              height: 1,
+              child: Video(
+                controller: thumbnailService.videoController,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ],
+        ),
+      ),
       debugShowCheckedModeBanner: false,
     );
   }

@@ -26,7 +26,6 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     player = Player();
     controller = VideoController(player);
     player.open(Media(widget.clip.videoPath), play: false).then((_) async {
-      // Add a small delay to ensure the player is fully ready for seeking.
       await Future.delayed(const Duration(milliseconds: 100));
       if (mounted) {
         await player.seek(widget.clip.startTime);

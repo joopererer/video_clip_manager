@@ -6,12 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
 import 'data_service.dart';
+import '../services/path_service.dart';
 import '../services/thumbnail_service.dart';
 
 const String _prefsKeyDbPath = 'db_path';
 
 class AppState extends ChangeNotifier {
   final SharedPreferences _prefs;
+  final PathService _pathService;
   final ThumbnailService _thumbnailService;
   late final DataService _dataService;
 
@@ -21,6 +23,7 @@ class AppState extends ChangeNotifier {
   String? _currentDbPath;
   bool _isLoading = false;
   bool _isSaving = false;
+  bool _isGeneratingThumbnails = false;
 
   bool _clipsIsGridView = false;
   bool _videosIsGridView = false;
@@ -31,6 +34,7 @@ class AppState extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
+  bool get isGeneratingThumbnails => _isGeneratingThumbnails;
   String get currentDbPath => _currentDbPath != null
       ? p.basename(_currentDbPath!)
       : 'No Database Loaded';
@@ -39,10 +43,12 @@ class AppState extends ChangeNotifier {
 
   AppState({
     required SharedPreferences prefs,
+    required PathService pathService,
     required ThumbnailService thumbnailService,
   }) : _prefs = prefs,
+       _pathService = pathService,
        _thumbnailService = thumbnailService {
-    _dataService = DataService(thumbnailService: _thumbnailService);
+    _dataService = DataService(pathService: _pathService);
     _clipsIsGridView = _prefs.getBool('clipsIsGridView') ?? false;
     _videosIsGridView = _prefs.getBool('videosIsGridView') ?? false;
   }
@@ -64,15 +70,16 @@ class AppState extends ChangeNotifier {
     try {
       _currentDbPath = _prefs.getString(_prefsKeyDbPath);
       if (_currentDbPath == null) {
-        _currentDbPath = await _dataService.getDefaultDbPath();
+        _currentDbPath = _pathService.getDefaultDbPath();
         await _prefs.setString(_prefsKeyDbPath, _currentDbPath!);
+        debugPrint("Default database path created at: $_currentDbPath");
       }
-
-      await _dataService.ensureDirectoryExists(p.dirname(_currentDbPath!));
+      debugPrint("Loading database from: $_currentDbPath");
 
       final loadedClips = await _dataService.loadClipsFromPath(_currentDbPath!);
       _clips = loadedClips;
       _generateOriginalVideos();
+      await _populateAllThumbnails();
     } catch (e) {
       debugPrint("Error during initial load: $e");
     } finally {
@@ -90,6 +97,7 @@ class AppState extends ChangeNotifier {
         await _prefs.setString(_prefsKeyDbPath, _currentDbPath!);
         _generateOriginalVideos();
         notifyListeners();
+        await _populateAllThumbnails();
         return "${result.clips!.length} clips loaded from ${p.basename(result.path!)}.";
       }
       return "No file selected or file was empty.";
@@ -114,6 +122,7 @@ class AppState extends ChangeNotifier {
         }
         _generateOriginalVideos();
         await _save();
+        await _populateAllThumbnails();
         return "$newClipsCount new clips imported and merged.";
       }
       return "No file selected or file was empty.";
@@ -124,11 +133,52 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> _save() async {
-    if (_currentDbPath == null) {
-      debugPrint("Save failed: current DB path is null.");
-      return;
+  Future<void> forceRefreshThumbnails() async {
+    _isGeneratingThumbnails = true;
+    notifyListeners();
+
+    try {
+      await _thumbnailService.clearCache();
+      for (final clip in _clips) {
+        clip.thumbnailPath = null;
+      }
+      // 注意：这里需要一个 notifyListeners() 来让UI立即移除旧图片，显示加载指示器
+      notifyListeners();
+
+      await _populateAllThumbnails();
+    } catch (e) {
+      debugPrint("Error forcing thumbnail refresh: $e");
+      // 这里可以添加一个向用户显示错误的功能
+    } finally {
+      _isGeneratingThumbnails = false;
+      notifyListeners();
     }
+  }
+
+  Future<void> _populateAllThumbnails() async {
+    // 这个函数不应该管理 _isGeneratingThumbnails 状态
+    final clipsToGenerate = <VideoClip>[];
+    for (final clip in _clips) {
+      final thumbPath = _thumbnailService.getThumbnailPath(clip.id);
+      if (await File(thumbPath).exists()) {
+        clip.thumbnailPath = thumbPath;
+      } else {
+        clipsToGenerate.add(clip);
+      }
+    }
+
+    // 立即更新那些已经有缓存的缩略图
+    notifyListeners();
+
+    if (clipsToGenerate.isNotEmpty) {
+      await _thumbnailService.generateThumbnailsInBatch(clipsToGenerate, () {
+        notifyListeners();
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    if (_currentDbPath == null) return;
     _isSaving = true;
     notifyListeners();
     await _dataService.saveClipsToPath(_clips, _currentDbPath!);
@@ -181,14 +231,6 @@ class AppState extends ChangeNotifier {
       allTagsSet.addAll(clip.tags);
     }
     return UnmodifiableListView(allTagsSet.toList()..sort());
-  }
-
-  OriginalVideo? getVideoById(String id) {
-    try {
-      return _originalVideos.firstWhere((v) => v.id == id);
-    } catch (e) {
-      return null;
-    }
   }
 
   void _setLoading(bool loading) {

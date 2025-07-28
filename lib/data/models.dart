@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 class VideoClip {
   final String id;
   String name;
@@ -11,6 +9,7 @@ class VideoClip {
   String? notes;
   int rating;
   bool isFavorite;
+
   String? thumbnailPath;
 
   VideoClip({
