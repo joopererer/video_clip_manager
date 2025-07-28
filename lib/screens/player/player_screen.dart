@@ -182,7 +182,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
               elevation: 4.0,
               margin: const EdgeInsets.all(8.0),
               clipBehavior: Clip.antiAlias,
-              child: Video(controller: controller),
+              // 告诉 Video 组件不要构建任何默认控件
+              child: ExcludeSemantics(
+                child: Video(
+                  controller: controller,
+                  controls: (state) => const SizedBox.shrink(),
+                ),
+              ),
             ),
           ),
           CustomProgressBar(

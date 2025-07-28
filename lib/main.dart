@@ -73,6 +73,7 @@ class MyApp extends StatelessWidget {
               child: Video(
                 controller: thumbnailService.videoController,
                 fit: BoxFit.contain,
+                controls: (state) => const SizedBox.shrink(), // 禁用所有默认控件
               ),
             ),
           ],

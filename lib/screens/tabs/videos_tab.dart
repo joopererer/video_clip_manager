@@ -40,9 +40,23 @@ class VideosTab extends StatelessWidget {
           Expanded(
             child: filteredVideos.isEmpty
                 ? const Center(child: Text('No videos found.'))
-                : appState.videosIsGridView
-                ? buildGridView(context, filteredVideos, appState)
-                : buildListView(context, filteredVideos, appState),
+                : AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300), // 设置一个过渡动画时间
+                    // 默认是淡入淡出效果，正好适用
+                    child: appState.videosIsGridView
+                        ? buildGridView(
+                            key: const ValueKey('videos_grid'),
+                            context,
+                            filteredVideos,
+                            appState,
+                          )
+                        : buildListView(
+                            key: const ValueKey('videos_list'),
+                            context,
+                            filteredVideos,
+                            appState,
+                          ),
+                  ),
           ),
         ],
       ),
@@ -57,9 +71,11 @@ class VideosTab extends StatelessWidget {
   Widget buildListView(
     BuildContext context,
     List<OriginalVideo> videos,
-    AppState appState,
-  ) {
+    AppState appState, {
+    Key? key,
+  }) {
     return ListView.builder(
+      key: key,
       itemCount: videos.length,
       itemBuilder: (context, index) {
         final video = videos[index];
@@ -92,9 +108,11 @@ class VideosTab extends StatelessWidget {
   Widget buildGridView(
     BuildContext context,
     List<OriginalVideo> videos,
-    AppState appState,
-  ) {
+    AppState appState, {
+    Key? key,
+  }) {
     return GridView.builder(
+      key: key,
       padding: const EdgeInsets.all(8.0),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 200,
@@ -102,6 +120,7 @@ class VideosTab extends StatelessWidget {
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
+      itemCount: videos.length,
       itemBuilder: (context, index) {
         final video = videos[index];
         final clipsFromVideo = appState.clips
