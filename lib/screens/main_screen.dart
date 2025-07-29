@@ -98,6 +98,180 @@ class _MainScreenState extends State<MainScreen>
     );
   }
 
+  void _showRatingFilterDialog() {
+    final appState = context.read<AppState>();
+    int? tempSelectedRating = appState.selectedRating;
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Filter by Rating'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Select rating to filter by:'),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      // 不过滤选项
+                      ChoiceChip(
+                        label: const Text('All Ratings'),
+                        selected: tempSelectedRating == null,
+                        onSelected: (selected) {
+                          setDialogState(() {
+                            tempSelectedRating = selected ? null : tempSelectedRating;
+                          });
+                        },
+                      ),
+                      // 无星级选项
+                      ChoiceChip(
+                        label: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.star_border, size: 16, color: Colors.grey),
+                            Text(' No Rating'),
+                          ],
+                        ),
+                        selected: tempSelectedRating == 0,
+                        onSelected: (selected) {
+                          setDialogState(() {
+                            tempSelectedRating = selected ? 0 : null;
+                          });
+                        },
+                      ),
+                      // 1-5星选项
+                      ...List.generate(5, (index) {
+                        final rating = index + 1;
+                        return ChoiceChip(
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ...List.generate(rating, (starIndex) => 
+                                const Icon(Icons.star, size: 16, color: Colors.amber)
+                              ),
+                              Text(' $rating'),
+                            ],
+                          ),
+                          selected: tempSelectedRating == rating,
+                          onSelected: (selected) {
+                            setDialogState(() {
+                              tempSelectedRating = selected ? rating : null;
+                            });
+                          },
+                        );
+                      }),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    appState.setSelectedRating(tempSelectedRating);
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showFavoriteFilterDialog() {
+    final appState = context.read<AppState>();
+    bool? tempSelectedFavorite = appState.selectedFavorite;
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Filter by Favorite'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Select favorite status to filter by:'),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('All Clips'),
+                        selected: tempSelectedFavorite == null,
+                        onSelected: (selected) {
+                          setDialogState(() {
+                            tempSelectedFavorite = selected ? null : tempSelectedFavorite;
+                          });
+                        },
+                      ),
+                      ChoiceChip(
+                        label: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.favorite, color: Colors.red),
+                            SizedBox(width: 4),
+                            Text('Favorites Only'),
+                          ],
+                        ),
+                        selected: tempSelectedFavorite == true,
+                        onSelected: (selected) {
+                          setDialogState(() {
+                            tempSelectedFavorite = selected ? true : null;
+                          });
+                        },
+                      ),
+                      ChoiceChip(
+                        label: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.favorite_border, color: Colors.grey),
+                            SizedBox(width: 4),
+                            Text('Not Favorites'),
+                          ],
+                        ),
+                        selected: tempSelectedFavorite == false,
+                        onSelected: (selected) {
+                          setDialogState(() {
+                            tempSelectedFavorite = selected ? false : null;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    appState.setSelectedFavorite(tempSelectedFavorite);
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -158,14 +332,110 @@ class _MainScreenState extends State<MainScreen>
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // 标签过滤
                         if (appState.selectedTags.isNotEmpty)
                           Chip(
                             label: Text('${appState.selectedTags.length}'),
                             onDeleted: () => appState.clearSelectedTags(),
                           ),
-                        IconButton(
+                                    // 星级过滤
+            if (appState.selectedRating != null)
+              Chip(
+                label: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    appState.selectedRating == 0
+                        ? const Icon(Icons.star_border, size: 16, color: Colors.grey)
+                        : const Icon(Icons.star, size: 16, color: Colors.amber),
+                    Text(appState.selectedRating == 0 ? 'No Rating' : '${appState.selectedRating}'),
+                  ],
+                ),
+                onDeleted: () => appState.clearSelectedRating(),
+              ),
+                        // 爱心收藏过滤
+                        if (appState.selectedFavorite != null)
+                          Chip(
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  appState.selectedFavorite! ? Icons.favorite : Icons.favorite_border,
+                                  size: 16,
+                                  color: appState.selectedFavorite! ? Colors.red : Colors.grey,
+                                ),
+                                Text(appState.selectedFavorite! ? 'Fav' : 'Not Fav'),
+                              ],
+                            ),
+                            onDeleted: () => appState.clearSelectedFavorite(),
+                          ),
+                        // 过滤按钮
+                        PopupMenuButton<String>(
                           icon: const Icon(Icons.filter_list),
-                          onPressed: _showTagFilterDialog,
+                          onSelected: (value) {
+                            switch (value) {
+                              case 'tags':
+                                _showTagFilterDialog();
+                                break;
+                              case 'rating':
+                                _showRatingFilterDialog();
+                                break;
+                              case 'favorite':
+                                _showFavoriteFilterDialog();
+                                break;
+                              case 'clear_all':
+                                appState.clearAllFilters();
+                                break;
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem<String>(
+                              value: 'tags',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.label),
+                                  SizedBox(width: 8),
+                                  Text('Filter by Tags'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem<String>(
+                              value: 'rating',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.star),
+                                  SizedBox(width: 8),
+                                  Text('Filter by Rating'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem<String>(
+                              value: 'favorite',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.favorite),
+                                  SizedBox(width: 8),
+                                  Text('Filter by Favorite'),
+                                ],
+                              ),
+                            ),
+                            if (appState.selectedTags.isNotEmpty || 
+                                appState.selectedRating != null || 
+                                appState.selectedFavorite != null)
+                              const PopupMenuDivider(),
+                            if (appState.selectedTags.isNotEmpty || 
+                                appState.selectedRating != null || 
+                                appState.selectedFavorite != null)
+                              const PopupMenuItem<String>(
+                                value: 'clear_all',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.clear_all),
+                                    SizedBox(width: 8),
+                                    Text('Clear All Filters'),
+                                  ],
+                                ),
+                              ),
+                          ],
                         ),
                         if (_searchQuery.isNotEmpty)
                           IconButton(
@@ -187,6 +457,8 @@ class _MainScreenState extends State<MainScreen>
                     ClipsTab(
                       searchQuery: _searchQuery,
                       selectedTags: appState.selectedTags,
+                      selectedRating: appState.selectedRating,
+                      selectedFavorite: appState.selectedFavorite,
                     ),
                     VideosTab(searchQuery: _searchQuery),
                     PlaylistsTab(searchQuery: _searchQuery),

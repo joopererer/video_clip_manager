@@ -26,11 +26,15 @@ enum SortOption {
 class ClipsTab extends StatefulWidget {
   final String searchQuery;
   final List<String> selectedTags;
+  final int? selectedRating;
+  final bool? selectedFavorite;
   
   const ClipsTab({
     super.key,
     required this.searchQuery,
     required this.selectedTags,
+    this.selectedRating,
+    this.selectedFavorite,
   });
 
   @override
@@ -49,20 +53,13 @@ class _ClipsTabState extends State<ClipsTab> {
     final appState = context.read<AppState>();
     final clips = appState.clips;
 
-    final filteredClips = clips.where((clip) {
-      final query = widget.searchQuery.toLowerCase();
-      final textMatch =
-          query.isEmpty ||
-              clip.name.toLowerCase().contains(query) ||
-              (clip.notes?.toLowerCase().contains(query) ?? false) ||
-              clip.videoPath.toLowerCase().contains(query);
-
-      final tagMatch =
-          widget.selectedTags.isEmpty ||
-              widget.selectedTags.every((tag) => clip.tags.contains(tag));
-
-      return textMatch && tagMatch;
-    }).toList();
+    // 使用AppState的getFilteredClips方法，包含所有过滤条件
+    final filteredClips = appState.getFilteredClips(
+      searchQuery: widget.searchQuery,
+      selectedTags: widget.selectedTags,
+      selectedRating: widget.selectedRating ?? appState.selectedRating,
+      selectedFavorite: widget.selectedFavorite ?? appState.selectedFavorite,
+    );
 
     // 应用排序
     final sortedClips = _sortClips(filteredClips);
@@ -468,6 +465,8 @@ class _ClipsTabState extends State<ClipsTab> {
           allClips: appState.clips.toList(),
           searchQuery: widget.searchQuery,
           selectedTags: widget.selectedTags,
+          selectedRating: widget.selectedRating,
+          selectedFavorite: widget.selectedFavorite,
           currentSortOption: _currentSortOption,
         ),
       ),

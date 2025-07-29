@@ -32,6 +32,12 @@ class AppState extends ChangeNotifier {
   // 标签过滤相关
   List<String> _selectedTags = [];
   
+  // 星级过滤相关
+  int? _selectedRating; // null表示不过滤星级，1-5表示过滤特定星级
+  
+  // 爱心收藏过滤相关
+  bool? _selectedFavorite; // null表示不过滤收藏状态，true表示只显示收藏的，false表示只显示未收藏的
+  
   // 批量更新和延迟保存相关
   Timer? _saveTimer;
   bool _hasUnsavedChanges = false;
@@ -49,6 +55,8 @@ class AppState extends ChangeNotifier {
   bool get clipsIsGridView => _clipsIsGridView;
   bool get videosIsGridView => _videosIsGridView;
   List<String> get selectedTags => List.unmodifiable(_selectedTags);
+  int? get selectedRating => _selectedRating;
+  bool? get selectedFavorite => _selectedFavorite;
 
   AppState({
     required SharedPreferences prefs,
@@ -96,6 +104,56 @@ class AppState extends ChangeNotifier {
   void clearSelectedTags() {
     if (_selectedTags.isNotEmpty) {
       _selectedTags.clear();
+      notifyListeners();
+    }
+  }
+
+  // 星级过滤相关方法
+  void setSelectedRating(int? rating) {
+    _selectedRating = rating;
+    notifyListeners();
+  }
+
+  void clearSelectedRating() {
+    if (_selectedRating != null) {
+      _selectedRating = null;
+      notifyListeners();
+    }
+  }
+
+  // 爱心收藏过滤相关方法
+  void setSelectedFavorite(bool? favorite) {
+    _selectedFavorite = favorite;
+    notifyListeners();
+  }
+
+  void clearSelectedFavorite() {
+    if (_selectedFavorite != null) {
+      _selectedFavorite = null;
+      notifyListeners();
+    }
+  }
+
+  // 清除所有过滤条件
+  void clearAllFilters() {
+    bool hasChanges = false;
+    
+    if (_selectedTags.isNotEmpty) {
+      _selectedTags.clear();
+      hasChanges = true;
+    }
+    
+    if (_selectedRating != null) {
+      _selectedRating = null;
+      hasChanges = true;
+    }
+    
+    if (_selectedFavorite != null) {
+      _selectedFavorite = null;
+      hasChanges = true;
+    }
+    
+    if (hasChanges) {
       notifyListeners();
     }
   }
@@ -309,8 +367,15 @@ class AppState extends ChangeNotifier {
   }
 
   // 获取过滤后的clip列表，用于播放界面的导航
-  List<VideoClip> getFilteredClips({String searchQuery = '', List<String>? selectedTags}) {
+  List<VideoClip> getFilteredClips({
+    String searchQuery = '', 
+    List<String>? selectedTags,
+    int? selectedRating,
+    bool? selectedFavorite,
+  }) {
     final tags = selectedTags ?? _selectedTags;
+    final rating = selectedRating ?? _selectedRating;
+    final favorite = selectedFavorite ?? _selectedFavorite;
     
     return _clips.where((clip) {
       final query = searchQuery.toLowerCase();
@@ -324,7 +389,15 @@ class AppState extends ChangeNotifier {
           tags.isEmpty ||
               tags.every((tag) => clip.tags.contains(tag));
 
-      return textMatch && tagMatch;
+      // 星级匹配逻辑：
+      // rating == null: 不过滤星级
+      // rating == 0: 只显示无星级的clips
+      // rating == 1-5: 只显示对应星级的clips
+      final ratingMatch = rating == null || clip.rating == rating;
+      
+      final favoriteMatch = favorite == null || clip.isFavorite == favorite;
+
+      return textMatch && tagMatch && ratingMatch && favoriteMatch;
     }).toList();
   }
 

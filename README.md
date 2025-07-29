@@ -10,7 +10,11 @@ A Flutter application for managing video clips with advanced editing capabilitie
 - Generate thumbnails for clips
 - Tag-based organization system
 - Playlist management
-- Search and filter functionality
+- Advanced search and filter functionality
+  - Text search across clip names, notes, and file paths
+  - Tag-based filtering with multi-tag support
+  - Star rating filtering (1-5 stars)
+  - Favorite status filtering (favorites only, not favorites, or all)
 
 ### Enhanced Clips Tab Interface
 The clips tab now features an optimized interface with two display modes:
@@ -119,6 +123,15 @@ The clip playback screen has been completely redesigned with advanced features:
 - **Navigate Clips**: Use previous/next buttons to browse through your clip collection
 - **Edit on the Fly**: Click the edit button to open the clip editor for modifications
 - **View Details**: See comprehensive information including time range, tags, and notes
+
+### Advanced Filtering
+- **Text Search**: Type in the search bar to filter by clip name, notes, or file path
+- **Tag Filtering**: Click the filter button and select "Filter by Tags" to choose multiple tags
+            - **Rating Filtering**: Click the filter button and select "Filter by Rating" to filter by specific star ratings (including "No Rating" for clips without stars)
+- **Favorite Filtering**: Click the filter button and select "Filter by Favorite" to show only favorites, only non-favorites, or all clips
+- **Combined Filters**: Use multiple filter types simultaneously for precise filtering
+- **Clear Filters**: Use "Clear All Filters" option or click the X on individual filter chips
+- **Visual Indicators**: Active filters are displayed as chips in the search bar with icons and counts
 
 ## Technical Details
 

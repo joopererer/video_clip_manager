@@ -17,6 +17,8 @@ class ClipPlaybackScreen extends StatefulWidget {
   final List<VideoClip>? allClips; // 用于导航功能
   final String searchQuery; // 当前搜索查询
   final List<String> selectedTags; // 当前选中的标签
+  final int? selectedRating; // 当前选中的星级
+  final bool? selectedFavorite; // 当前选中的收藏状态
   final SortOption currentSortOption; // 当前排序选项
 
   const ClipPlaybackScreen({
@@ -25,6 +27,8 @@ class ClipPlaybackScreen extends StatefulWidget {
     this.allClips,
     this.searchQuery = '',
     this.selectedTags = const [],
+    this.selectedRating,
+    this.selectedFavorite,
     this.currentSortOption = SortOption.dateAddedDesc,
   });
 
@@ -186,6 +190,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     final filteredClips = appState.getFilteredClips(
       searchQuery: widget.searchQuery,
       selectedTags: widget.selectedTags,
+      selectedRating: widget.selectedRating,
+      selectedFavorite: widget.selectedFavorite,
     );
     
     // 应用与ClipsTab相同的排序
@@ -204,6 +210,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     final filteredClips = appState.getFilteredClips(
       searchQuery: widget.searchQuery,
       selectedTags: widget.selectedTags,
+      selectedRating: widget.selectedRating,
+      selectedFavorite: widget.selectedFavorite,
     );
     
     // 应用与ClipsTab相同的排序
