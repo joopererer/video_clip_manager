@@ -18,9 +18,14 @@ class ClipsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.watch<AppState>();
+    // 只监听视图模式变化，不监听clips数据变化
+    final viewMode = context.select<AppState, bool>((appState) => appState.clipsIsGridView);
+    
+    // 直接获取clips数据，不通过watch
+    final appState = context.read<AppState>();
+    final clips = appState.clips;
 
-    final filteredClips = appState.clips.where((clip) {
+    final filteredClips = clips.where((clip) {
       final query = searchQuery.toLowerCase();
       final textMatch =
           query.isEmpty ||
@@ -45,10 +50,10 @@ class ClipsTab extends StatelessWidget {
               const Text('View Mode:'),
               IconButton(
                 icon: Icon(
-                  appState.clipsIsGridView ? Icons.list : Icons.grid_view,
+                  viewMode ? Icons.list : Icons.grid_view,
                 ),
                 onPressed: () =>
-                    appState.setClipsViewMode(!appState.clipsIsGridView),
+                    appState.setClipsViewMode(!viewMode),
               ),
             ],
           ),
@@ -58,7 +63,7 @@ class ClipsTab extends StatelessWidget {
               ? const Center(
             child: Text('No clips found. Try loading a JSON file.'),
           )
-              : appState.clipsIsGridView
+              : viewMode
               ? buildGridView(context, filteredClips)
               : buildListView(context, filteredClips),
         ),
@@ -72,31 +77,12 @@ class ClipsTab extends StatelessWidget {
       itemCount: clips.length,
       itemBuilder: (context, index) {
         final clip = clips[index];
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-          child: ListTile(
-            leading: ClipThumbnail(clip: clip, size: 50),
-            title: Text(clip.name),
-            subtitle: Text(
-              'Tags: ${clip.tags.join(', ')}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.grey),
-                  onPressed: () => _editClip(context, clip),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.redAccent),
-                  onPressed: () => _deleteClip(context, clip, appState),
-                ),
-              ],
-            ),
-            onTap: () => _playClip(context, clip),
-          ),
+        
+        return ClipListItem(
+          clip: clip,
+          onPlay: () => _playClip(context, clip),
+          onEdit: () => _editClip(context, clip),
+          onDelete: () => _deleteClip(context, clip, appState),
         );
       },
     );
@@ -108,47 +94,126 @@ class ClipsTab extends StatelessWidget {
       padding: const EdgeInsets.all(8.0),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 200,
-        childAspectRatio: 1.0,
+        childAspectRatio: 0.8,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
       ),
       itemCount: clips.length,
       itemBuilder: (context, index) {
         final clip = clips[index];
+        final duration = clip.endTime - clip.startTime;
+        
         return Card(
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: () => _playClip(context, clip),
-            child: GridTile(
-              header: Container(
-                color: Colors.black54,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.edit,
-                        color: Colors.white,
-                        size: 18,
+            child: Column(
+              children: [
+                // Header with action buttons only (no favorite icon)
+                Container(
+                  color: Colors.black54,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end, // 靠右对齐
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.edit,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                        onPressed: () => _editClip(context, clip),
                       ),
-                      onPressed: () => _editClip(context, clip),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.delete,
-                        color: Colors.pink,
-                        size: 18,
+                      IconButton(
+                        icon: const Icon(
+                          Icons.delete,
+                          color: Colors.pink,
+                          size: 18,
+                        ),
+                        onPressed: () => _deleteClip(context, clip, appState),
                       ),
-                      onPressed: () => _deleteClip(context, clip, appState),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              footer: GridTileBar(
-                backgroundColor: Colors.black45,
-                title: Text(clip.name, style: const TextStyle(fontSize: 12)),
-              ),
-              child: ClipThumbnail(clip: clip),
+                // Thumbnail
+                Expanded(
+                  child: ClipThumbnail(clip: clip),
+                ),
+                // Footer with info and controls
+                Container(
+                  color: Colors.black45,
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title
+                      Text(
+                        clip.name,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      // Duration
+                      Text(
+                        formatDuration(duration),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.white70,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // Rating stars and favorite button in one row
+                      Row(
+                        children: [
+                          // Rating stars
+                          ...List.generate(5, (starIndex) {
+                            return GestureDetector(
+                              onTap: () {
+                                final newRating = clip.rating == starIndex + 1 ? 0 : starIndex + 1;
+                                final updatedClip = clip.copyWith(rating: newRating);
+                                appState.updateClip(updatedClip);
+                              },
+                              child: Icon(
+                                starIndex < clip.rating ? Icons.star : Icons.star_border,
+                                color: starIndex < clip.rating ? Colors.amber : Colors.white54,
+                                size: 14,
+                              ),
+                            );
+                          }),
+                          const Spacer(),
+                          // Favorite button
+                          GestureDetector(
+                            onTap: () {
+                              final updatedClip = clip.copyWith(isFavorite: !clip.isFavorite);
+                              appState.updateClip(updatedClip);
+                            },
+                            child: Icon(
+                              clip.isFavorite ? Icons.favorite : Icons.favorite_border,
+                              color: clip.isFavorite ? Colors.redAccent : Colors.white54,
+                              size: 16,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Play button
+                          GestureDetector(
+                            onTap: () => _playClip(context, clip),
+                            child: const Icon(
+                              Icons.play_circle_outline,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -208,6 +273,210 @@ class ClipsTab extends StatelessWidget {
             child: const Text('Delete'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+String formatDuration(Duration duration) {
+  final hours = duration.inHours;
+  final minutes = duration.inMinutes.remainder(60);
+  final seconds = duration.inSeconds.remainder(60);
+  
+  if (hours > 0) {
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  } else {
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+}
+
+// 独立的列表项widget，只监听自己的clip数据变化
+class ClipListItem extends StatefulWidget {
+  final VideoClip clip;
+  final VoidCallback onPlay;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const ClipListItem({
+    super.key,
+    required this.clip,
+    required this.onPlay,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  State<ClipListItem> createState() => _ClipListItemState();
+}
+
+class _ClipListItemState extends State<ClipListItem> {
+  late ValueNotifier<int> _ratingNotifier;
+  late ValueNotifier<bool> _favoriteNotifier;
+
+  @override
+  void initState() {
+    super.initState();
+    _ratingNotifier = ValueNotifier(widget.clip.rating);
+    _favoriteNotifier = ValueNotifier(widget.clip.isFavorite);
+  }
+
+  @override
+  void didUpdateWidget(ClipListItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.clip.rating != widget.clip.rating) {
+      _ratingNotifier.value = widget.clip.rating;
+    }
+    if (oldWidget.clip.isFavorite != widget.clip.isFavorite) {
+      _favoriteNotifier.value = widget.clip.isFavorite;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ratingNotifier.dispose();
+    _favoriteNotifier.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = widget.clip.endTime - widget.clip.startTime;
+    
+    return RepaintBoundary(
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        child: InkWell(
+          onTap: widget.onPlay,
+          child: Container(
+            height: 80, // 调整高度
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                // 1. 略缩图 - 使用RepaintBoundary隔离
+                RepaintBoundary(
+                  child: Container(
+                    width: 80, // 调整略缩图宽度
+                    height: 56, // 保持16:9比例
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      color: Colors.grey.shade200,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: ClipThumbnail(clip: widget.clip, width: 80, height: 56),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // 2. 信息区域
+                Expanded(
+                  child: RepaintBoundary(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // 标题
+                        Text(
+                          widget.clip.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        // 时间信息
+                        Text(
+                          '${formatDuration(widget.clip.startTime)} - ${formatDuration(widget.clip.endTime)} (${formatDuration(duration)})',
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        if (widget.clip.tags.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Tags: ${widget.clip.tags.join(', ')}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // 3. 星级评分 - 使用ValueListenableBuilder精确更新
+                ValueListenableBuilder<int>(
+                  valueListenable: _ratingNotifier,
+                  builder: (context, rating, child) {
+                    return Wrap(
+                      spacing: 1.0,
+                      children: List.generate(5, (starIndex) {
+                        return GestureDetector(
+                          onTap: () {
+                            final appState = context.read<AppState>();
+                            final newRating = rating == starIndex + 1 ? 0 : starIndex + 1;
+                            final updatedClip = widget.clip.copyWith(rating: newRating);
+                            appState.updateClip(updatedClip);
+                          },
+                          child: Icon(
+                            starIndex < rating ? Icons.star : Icons.star_border,
+                            color: starIndex < rating ? Colors.amber : Colors.grey,
+                            size: 16,
+                          ),
+                        );
+                      }),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                // 4. 爱心收藏 - 使用ValueListenableBuilder精确更新
+                ValueListenableBuilder<bool>(
+                  valueListenable: _favoriteNotifier,
+                  builder: (context, isFavorite, child) {
+                    return GestureDetector(
+                      onTap: () {
+                        final appState = context.read<AppState>();
+                        final updatedClip = widget.clip.copyWith(isFavorite: !isFavorite);
+                        appState.updateClip(updatedClip);
+                      },
+                      child: Icon(
+                        isFavorite ? Icons.favorite : Icons.favorite_border,
+                        color: isFavorite ? Colors.redAccent : Colors.grey,
+                        size: 18,
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 16), // 5. <空白> 区域
+                // 6. 编辑按钮
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                  onPressed: widget.onEdit,
+                  tooltip: 'Edit Clip',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 4),
+                // 7. 删除按钮
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                  onPressed: widget.onDelete,
+                  tooltip: 'Delete Clip',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

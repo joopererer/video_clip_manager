@@ -2,56 +2,134 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../data/models.dart';
 
-class ClipThumbnail extends StatelessWidget {
+class ClipThumbnail extends StatefulWidget {
   final VideoClip clip;
   final double? size;
+  final double? width;
+  final double? height;
 
-  const ClipThumbnail({super.key, required this.clip, this.size});
+  const ClipThumbnail({
+    super.key, 
+    required this.clip, 
+    this.size,
+    this.width,
+    this.height,
+  });
+
+  @override
+  State<ClipThumbnail> createState() => _ClipThumbnailState();
+}
+
+class _ClipThumbnailState extends State<ClipThumbnail> {
+  bool? _fileExists;
+  bool _isLoading = true;
+  
+  // 静态缓存，避免重复检查相同路径
+  static final Map<String, bool> _fileExistsCache = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _checkFileExists();
+  }
+
+  @override
+  void didUpdateWidget(ClipThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 只有当thumbnailPath发生变化时才重新检查
+    if (oldWidget.clip.thumbnailPath != widget.clip.thumbnailPath) {
+      _checkFileExists();
+    }
+    // 如果只是rating或isFavorite等属性变化，不需要重新检查文件
+  }
+
+  Future<void> _checkFileExists() async {
+    if (widget.clip.thumbnailPath == null) {
+      setState(() {
+        _fileExists = false;
+        _isLoading = false;
+      });
+      return;
+    }
+
+    // 检查缓存
+    if (_fileExistsCache.containsKey(widget.clip.thumbnailPath)) {
+      setState(() {
+        _fileExists = _fileExistsCache[widget.clip.thumbnailPath];
+        _isLoading = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final exists = await File(widget.clip.thumbnailPath!).exists();
+      if (mounted) {
+        // 更新缓存
+        _fileExistsCache[widget.clip.thumbnailPath!] = exists;
+        setState(() {
+          _fileExists = exists;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        // 缓存错误结果
+        _fileExistsCache[widget.clip.thumbnailPath!] = false;
+        setState(() {
+          _fileExists = false;
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // This will be the content: an image, a loader, or a placeholder icon.
     Widget child;
 
-    final String? path = clip.thumbnailPath;
+    final String? path = widget.clip.thumbnailPath;
     Widget placeholder = Icon(
       Icons.movie_filter,
-      size: size != null ? size! * 0.8 : 40,
+      size: widget.size != null ? widget.size! * 0.8 : 40,
       color: Colors.grey.shade400,
     );
 
-    if (path == null) {
+    if (path == null || _isLoading) {
       child = Center(child: CircularProgressIndicator(strokeWidth: 2.0));
-    } else {
-      child = FutureBuilder<bool>(
-        key: ValueKey(path),
-        future: File(path).exists(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator(strokeWidth: 2.0));
-          }
-
-          final bool fileExists = snapshot.data ?? false;
-          if (fileExists) {
-            return Image.file(
-              File(path),
-              fit: BoxFit.cover,
-              // Make the image fill its container (the SizedBox or GridTile)
-              width: double.infinity,
-              height: double.infinity,
-              errorBuilder: (c, e, s) => Center(child: placeholder),
-            );
-          } else {
-            return Center(child: placeholder);
-          }
-        },
+    } else if (_fileExists == true) {
+      // 计算合适的缓存尺寸
+      double displayWidth = widget.width ?? widget.size ?? 200;
+      double displayHeight = widget.height ?? widget.size ?? 200;
+      int cacheWidth = (displayWidth * 2).toInt(); // 2倍尺寸确保清晰度
+      int cacheHeight = (displayHeight * 2).toInt();
+      
+      child = Image.file(
+        File(path),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (c, e, s) => Center(child: placeholder),
+        // 使用计算出的缓存参数
+        cacheWidth: cacheWidth,
+        cacheHeight: cacheHeight,
       );
+    } else {
+      child = Center(child: placeholder);
     }
 
     // If a size is provided (like in the ListView), wrap the child
     // in a SizedBox with fixed dimensions.
-    if (size != null) {
-      return SizedBox(width: size, height: size, child: child);
+    if (widget.size != null) {
+      return SizedBox(width: widget.size, height: widget.size, child: child);
+    }
+    
+    // If width and height are provided, use them
+    if (widget.width != null && widget.height != null) {
+      return SizedBox(width: widget.width, height: widget.height, child: child);
     }
 
     // Otherwise (like in the GridView), return the child directly

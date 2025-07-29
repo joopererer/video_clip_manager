@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:collection';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async'; // Added for Timer
 
 import 'models.dart';
 import 'data_service.dart';
@@ -27,6 +28,10 @@ class AppState extends ChangeNotifier {
 
   bool _clipsIsGridView = false;
   bool _videosIsGridView = false;
+  
+  // 批量更新和延迟保存相关
+  Timer? _saveTimer;
+  bool _hasUnsavedChanges = false;
 
   UnmodifiableListView<VideoClip> get clips => UnmodifiableListView(_clips);
   UnmodifiableListView<OriginalVideo> get originalVideos =>
@@ -190,7 +195,27 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     await _dataService.saveClipsToPath(_clips, _currentDbPath!);
     _isSaving = false;
+    _hasUnsavedChanges = false;
     notifyListeners();
+  }
+  
+  // 延迟保存方法，避免频繁保存
+  void _scheduleSave() {
+    _hasUnsavedChanges = true;
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 500), () {
+      if (_hasUnsavedChanges) {
+        _save();
+      }
+    });
+  }
+  
+  // 强制立即保存，用于应用退出时
+  Future<void> forceSave() async {
+    if (_hasUnsavedChanges) {
+      _saveTimer?.cancel();
+      await _save();
+    }
   }
 
   void _generateOriginalVideos() {
@@ -220,8 +245,8 @@ class AppState extends ChangeNotifier {
     if (index != -1) {
       _clips[index] = updatedClip;
       _generateOriginalVideos();
-      await _save();
-      notifyListeners();
+      notifyListeners(); // 立即更新UI
+      _scheduleSave(); // 延迟保存，避免频繁的保存操作
     }
   }
 
@@ -243,5 +268,11 @@ class AppState extends ChangeNotifier {
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
+  }
+  
+  @override
+  void dispose() {
+    _saveTimer?.cancel();
+    super.dispose();
   }
 }
