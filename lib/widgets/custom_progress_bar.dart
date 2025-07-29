@@ -10,6 +10,7 @@ class CustomProgressBar extends StatefulWidget {
   final Duration endTime;
   final Function(Duration) onSetStart;
   final Function(Duration) onSetEnd;
+  final bool showThumbnailPreview;
 
   const CustomProgressBar({
     super.key,
@@ -18,6 +19,7 @@ class CustomProgressBar extends StatefulWidget {
     required this.endTime,
     required this.onSetStart,
     required this.onSetEnd,
+    this.showThumbnailPreview = false,
   });
 
   @override
@@ -69,10 +71,15 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     setState(() {
       _hoverDx = dx;
       _hoverTime = hoverTime;
-      _thumbnailData = null;
+      if(widget.showThumbnailPreview) _thumbnailData = null;
     });
 
-    _updatePreview(hoverTime);
+    // On ne lance la mise à jour de l'aperçu que si c'est activé
+    if (widget.showThumbnailPreview) {
+      _updatePreview(hoverTime);
+    } else {
+      widget.player.seek(hoverTime);
+    }
   }
 
   void _handleEnter(PointerEnterEvent event) {
@@ -164,9 +171,11 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
                             _buildMarker(constraints.maxWidth, totalDuration, widget.endTime, Colors.red),
                             if (_isHovering && _hoverDx != null)
                               Positioned(
-                                left: _hoverDx! - 50,
+                                left: _hoverDx! - (widget.showThumbnailPreview ? 50 : 28),
                                 bottom: 20,
-                                child: _buildThumbnailPreview(),
+                                child: widget.showThumbnailPreview
+                                    ? _buildThumbnailPreview()
+                                    : _buildHoverTimePreview(),
                               ),
                           ],
                         ),
@@ -209,6 +218,20 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
           const SizedBox(height: 4),
           Text(formatDuration(_hoverTime ?? Duration.zero), style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'monospace')),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHoverTimePreview() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        formatDuration(_hoverTime ?? Duration.zero),
+        style: const TextStyle(color: Colors.white, fontSize: 12, fontFamily: 'monospace'),
       ),
     );
   }

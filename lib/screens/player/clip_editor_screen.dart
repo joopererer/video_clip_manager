@@ -662,6 +662,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                 endTime: _formClip.endTime,
                 onSetStart: (time) => setState(() => _formClip = _formClip.copyWith(startTime: time)),
                 onSetEnd: (time) => setState(() => _formClip = _formClip.copyWith(endTime: time)),
+                showThumbnailPreview: true,
               );
             }
             return const Padding(
