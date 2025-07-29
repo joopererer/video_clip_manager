@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../data/app_state.dart';
@@ -23,13 +24,13 @@ class ClipsTab extends StatelessWidget {
       final query = searchQuery.toLowerCase();
       final textMatch =
           query.isEmpty ||
-          clip.name.toLowerCase().contains(query) ||
-          (clip.notes?.toLowerCase().contains(query) ?? false) ||
-          clip.videoPath.toLowerCase().contains(query);
+              clip.name.toLowerCase().contains(query) ||
+              (clip.notes?.toLowerCase().contains(query) ?? false) ||
+              clip.videoPath.toLowerCase().contains(query);
 
       final tagMatch =
           selectedTags.isEmpty ||
-          selectedTags.every((tag) => clip.tags.contains(tag));
+              selectedTags.every((tag) => clip.tags.contains(tag));
 
       return textMatch && tagMatch;
     }).toList();
@@ -55,8 +56,8 @@ class ClipsTab extends StatelessWidget {
         Expanded(
           child: filteredClips.isEmpty
               ? const Center(
-                  child: Text('No clips found. Try loading a JSON file.'),
-                )
+            child: Text('No clips found. Try loading a JSON file.'),
+          )
               : appState.clipsIsGridView
               ? buildGridView(context, filteredClips)
               : buildListView(context, filteredClips),
@@ -165,17 +166,24 @@ class ClipsTab extends StatelessWidget {
   void _editClip(BuildContext context, VideoClip clip) {
     final appState = context.read<AppState>();
     final video = appState.originalVideos.firstWhere(
-      (v) => v.path == clip.videoPath,
+          (v) => v.path == clip.videoPath,
+      // Au cas où la vidéo originale aurait été supprimée, on en crée une temporaire.
       orElse: () => OriginalVideo(
-        id: 'temp',
+        id: 'temp_${clip.videoPath.hashCode}',
         path: clip.videoPath,
-        name: 'Unknown Video',
+        name: clip.videoPath.split(Platform.pathSeparator).last,
       ),
     );
+
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ClipEditorScreen(video: video, initialClip: clip),
+        // **LA CORRECTION EST ICI**
+        // On passe uniquement la vidéo. ClipEditorScreen se chargera d'afficher tous les clips associés.
+        builder: (context) => ClipEditorScreen(
+          video: video,
+          clipToEdit: clip,
+        ),
       ),
     );
   }

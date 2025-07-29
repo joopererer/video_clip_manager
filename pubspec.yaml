@@ -44,6 +44,7 @@ dependencies:
   path: ^1.9.1
   shared_preferences: ^2.5.3
   flutter_typeahead: ^5.2.0
+  scrollable_positioned_list: ^0.3.8
 
 dev_dependencies:
   flutter_test:
