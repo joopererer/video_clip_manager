@@ -7,14 +7,38 @@ import '../player/clip_editor_screen.dart';
 import '../player/clip_playback_screen.dart';
 import '../../widgets/clip_thumbnail.dart';
 
-class ClipsTab extends StatelessWidget {
+// 排序选项枚举
+enum SortOption {
+  nameAsc('Name (A-Z)', Icons.sort_by_alpha),
+  nameDesc('Name (Z-A)', Icons.sort_by_alpha),
+  dateAddedAsc('Date Added (Oldest)', Icons.access_time),
+  dateAddedDesc('Date Added (Newest)', Icons.access_time),
+  ratingAsc('Rating (Low to High)', Icons.star),
+  ratingDesc('Rating (High to Low)', Icons.star),
+  durationAsc('Duration (Short to Long)', Icons.timer),
+  durationDesc('Duration (Long to Short)', Icons.timer);
+
+  const SortOption(this.label, this.icon);
+  final String label;
+  final IconData icon;
+}
+
+class ClipsTab extends StatefulWidget {
   final String searchQuery;
   final List<String> selectedTags;
+  
   const ClipsTab({
     super.key,
     required this.searchQuery,
     required this.selectedTags,
   });
+
+  @override
+  State<ClipsTab> createState() => _ClipsTabState();
+}
+
+class _ClipsTabState extends State<ClipsTab> {
+  SortOption _currentSortOption = SortOption.dateAddedDesc; // 默认按添加时间倒序
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +50,7 @@ class ClipsTab extends StatelessWidget {
     final clips = appState.clips;
 
     final filteredClips = clips.where((clip) {
-      final query = searchQuery.toLowerCase();
+      final query = widget.searchQuery.toLowerCase();
       final textMatch =
           query.isEmpty ||
               clip.name.toLowerCase().contains(query) ||
@@ -34,41 +58,254 @@ class ClipsTab extends StatelessWidget {
               clip.videoPath.toLowerCase().contains(query);
 
       final tagMatch =
-          selectedTags.isEmpty ||
-              selectedTags.every((tag) => clip.tags.contains(tag));
+          widget.selectedTags.isEmpty ||
+              widget.selectedTags.every((tag) => clip.tags.contains(tag));
 
       return textMatch && tagMatch;
     }).toList();
 
+    // 应用排序
+    final sortedClips = _sortClips(filteredClips);
+
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        // 顶部控制栏：排序、视图模式、统计信息
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+          padding: const EdgeInsets.all(16.0),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(16.0),
+            border: Border.all(color: Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.shade200,
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              const Text('View Mode:'),
-              IconButton(
-                icon: Icon(
-                  viewMode ? Icons.list : Icons.grid_view,
+              // 排序下拉菜单
+              Expanded(
+                flex: 2,
+                child: _buildSortDropdown(),
+              ),
+              const SizedBox(width: 16),
+              // 统计信息
+              _buildStatistics(sortedClips.length, clips.length),
+              const SizedBox(width: 16),
+              // 视图模式切换按钮
+              GestureDetector(
+                onTap: () => appState.setClipsViewMode(!viewMode),
+                child: Container(
+                  height: 40,
+                  width: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade600,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.blue.shade200,
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    viewMode ? Icons.list : Icons.grid_view,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
-                onPressed: () =>
-                    appState.setClipsViewMode(!viewMode),
               ),
             ],
           ),
         ),
+        // 内容区域
         Expanded(
-          child: filteredClips.isEmpty
+          child: sortedClips.isEmpty
               ? const Center(
             child: Text('No clips found. Try loading a JSON file.'),
           )
               : viewMode
-              ? buildGridView(context, filteredClips)
-              : buildListView(context, filteredClips),
+              ? buildGridView(context, sortedClips)
+              : buildListView(context, sortedClips),
         ),
       ],
     );
+  }
+
+  // 构建排序下拉菜单
+  Widget _buildSortDropdown() {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.shade200,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<SortOption>(
+          value: _currentSortOption,
+          isExpanded: true,
+          icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
+          iconSize: 20,
+          elevation: 8,
+          dropdownColor: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          items: SortOption.values.map((SortOption option) {
+            return DropdownMenuItem<SortOption>(
+              value: option,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: _currentSortOption == option 
+                          ? Colors.blue.shade50 
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Icon(
+                      option.icon, 
+                      size: 16,
+                      color: _currentSortOption == option 
+                          ? Colors.blue.shade700 
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      option.label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: _currentSortOption == option 
+                            ? FontWeight.w600 
+                            : FontWeight.normal,
+                        color: _currentSortOption == option 
+                            ? Colors.blue.shade700 
+                            : Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: (SortOption? newValue) {
+            if (newValue != null) {
+              setState(() {
+                _currentSortOption = newValue;
+              });
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  // 构建统计信息显示
+  Widget _buildStatistics(int filteredCount, int totalCount) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.blue.shade50, Colors.blue.shade100],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20.0),
+        border: Border.all(color: Colors.blue.shade200, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.shade100.withValues(alpha: 0.3),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade600,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.video_library, 
+              size: 14, 
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '$filteredCount / $totalCount',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.blue.shade800,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 排序逻辑
+  List<VideoClip> _sortClips(List<VideoClip> clips) {
+    final sortedClips = List<VideoClip>.from(clips);
+    
+    switch (_currentSortOption) {
+      case SortOption.nameAsc:
+        sortedClips.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        break;
+      case SortOption.nameDesc:
+        sortedClips.sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()));
+        break;
+      case SortOption.dateAddedAsc:
+        sortedClips.sort((a, b) => a.id.compareTo(b.id)); // 假设ID按时间顺序
+        break;
+      case SortOption.dateAddedDesc:
+        sortedClips.sort((a, b) => b.id.compareTo(a.id));
+        break;
+      case SortOption.ratingAsc:
+        sortedClips.sort((a, b) => a.rating.compareTo(b.rating));
+        break;
+      case SortOption.ratingDesc:
+        sortedClips.sort((a, b) => b.rating.compareTo(a.rating));
+        break;
+      case SortOption.durationAsc:
+        sortedClips.sort((a, b) {
+          final durationA = a.endTime - a.startTime;
+          final durationB = b.endTime - b.startTime;
+          return durationA.compareTo(durationB);
+        });
+        break;
+      case SortOption.durationDesc:
+        sortedClips.sort((a, b) {
+          final durationA = a.endTime - a.startTime;
+          final durationB = b.endTime - b.startTime;
+          return durationB.compareTo(durationA);
+        });
+        break;
+    }
+    
+    return sortedClips;
   }
 
   Widget buildListView(BuildContext context, List<VideoClip> clips) {

@@ -15,6 +15,17 @@ A Flutter application for managing video clips with advanced editing capabilitie
 ### Enhanced Clips Tab Interface
 The clips tab now features an optimized interface with two display modes:
 
+#### Sorting and Statistics
+- **Advanced Sorting**: 8 different sorting options including:
+  - Name (A-Z / Z-A)
+  - Date Added (Newest / Oldest)
+  - Rating (High to Low / Low to High)
+  - Duration (Long to Short / Short to Long)
+- **Real-time Statistics**: Shows filtered count vs total count (e.g., "15 / 25")
+- **Smart Default**: Sorts by newest clips first by default
+- **Instant Sorting**: Results update immediately when sorting option changes
+- **Beautiful UI**: Modern design with gradients, shadows, and smooth animations
+
 #### List View
 - **Star Rating System**: Click on stars to rate clips (1-5 stars, click again to remove rating)
 - **Favorite System**: Heart icon to mark/unmark clips as favorites
@@ -35,12 +46,21 @@ The clips tab now features an optimized interface with two display modes:
 
 ### Key Improvements
 1. **Direct Interaction**: Click on stars or heart icons to modify ratings and favorites directly from the clips list
-2. **Visual Feedback**: Clear visual indicators for ratings and favorites
-3. **Consistent Design**: Both list and grid views maintain consistent functionality
-4. **Performance**: Optimized rendering with proper state management
-5. **User Experience**: Intuitive controls that don't require opening the editor for simple changes
+2. **Advanced Sorting**: Comprehensive sorting options for better organization
+3. **Real-time Statistics**: Always know how many clips are being displayed vs total
+4. **Visual Feedback**: Clear visual indicators for ratings and favorites
+5. **Consistent Design**: Both list and grid views maintain consistent functionality
+6. **Performance**: Optimized rendering with proper state management
+7. **User Experience**: Intuitive controls that don't require opening the editor for simple changes
 
 ## Usage
+
+### Sorting Clips
+- Use the beautiful sorting dropdown menu in the top-left of the clips tab
+- Choose from 8 different sorting options
+- Results update immediately when you change the sort order
+- Default sorting is by newest clips first
+- Modern UI with smooth animations and visual feedback
 
 ### Rating Clips
 - Click on the star icons in either view mode to set a rating (1-5 stars)
@@ -51,6 +71,11 @@ The clips tab now features an optimized interface with two display modes:
 - Click the heart icon to toggle favorite status
 - Favorite clips show a red heart icon
 - Favorites are automatically saved
+
+### Viewing Statistics
+- The blue badge shows "filtered count / total count"
+- Updates automatically when you search, filter, or sort
+- Helps you understand how many clips match your current criteria
 
 ### Switching View Modes
 - Use the view mode toggle button in the top-right corner of the clips tab
