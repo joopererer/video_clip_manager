@@ -15,6 +15,36 @@ A Flutter application for managing video clips with advanced editing capabilitie
 ### Enhanced Clips Tab Interface
 The clips tab now features an optimized interface with two display modes:
 
+### Enhanced Clip Playback Screen
+The clip playback screen has been completely redesigned with advanced features:
+
+#### Playback Controls
+- **Replay Button**: Instantly restart the clip from the beginning
+- **Play/Pause Toggle**: Control playback with overlay controls on the video
+- **Automatic Loop**: Clips automatically stop at the end time and can be replayed
+
+#### Interactive Features
+- **Star Rating System**: Click on stars to rate clips directly from the player
+- **Favorite Toggle**: Heart icon to mark/unmark clips as favorites
+- **Direct Editing**: Edit button to open the clip editor for modifications
+
+#### Navigation
+- **Previous/Next Buttons**: Navigate between clips in the collection
+- **Seamless Transitions**: Switch between clips without closing the player
+- **Visual Feedback**: Disabled buttons when no previous/next clips available
+
+#### Information Display
+- **Time Range**: Shows start time, end time, and total duration
+- **Tags and Notes**: Displays clip metadata when available
+- **Video File**: Shows the source video filename
+- **Enhanced Layout**: Larger window (720x680) for better viewing experience
+
+#### Technical Features
+- **State Management**: Real-time updates for ratings and favorites
+- **Responsive Design**: Adapts to different screen sizes
+- **Memory Efficient**: Proper cleanup of video resources
+- **Error Handling**: Graceful handling of missing files or navigation errors
+
 #### Sorting and Statistics
 - **Advanced Sorting**: 8 different sorting options including:
   - Name (A-Z / Z-A)
@@ -80,6 +110,15 @@ The clips tab now features an optimized interface with two display modes:
 ### Switching View Modes
 - Use the view mode toggle button in the top-right corner of the clips tab
 - Choose between list view (detailed) and grid view (visual)
+
+### Using the Enhanced Playback Screen
+- **Play Clips**: Click the play button on any clip to open the enhanced playback screen
+- **Replay**: Use the replay button to restart the clip from the beginning
+- **Rate While Playing**: Click on stars to rate clips directly from the player
+- **Toggle Favorites**: Use the heart icon to mark/unmark favorites during playback
+- **Navigate Clips**: Use previous/next buttons to browse through your clip collection
+- **Edit on the Fly**: Click the edit button to open the clip editor for modifications
+- **View Details**: See comprehensive information including time range, tags, and notes
 
 ## Technical Details
 

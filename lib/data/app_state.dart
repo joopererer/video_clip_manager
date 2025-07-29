@@ -29,6 +29,9 @@ class AppState extends ChangeNotifier {
   bool _clipsIsGridView = false;
   bool _videosIsGridView = false;
   
+  // 标签过滤相关
+  List<String> _selectedTags = [];
+  
   // 批量更新和延迟保存相关
   Timer? _saveTimer;
   bool _hasUnsavedChanges = false;
@@ -45,6 +48,7 @@ class AppState extends ChangeNotifier {
       : 'No Database Loaded';
   bool get clipsIsGridView => _clipsIsGridView;
   bool get videosIsGridView => _videosIsGridView;
+  List<String> get selectedTags => List.unmodifiable(_selectedTags);
 
   AppState({
     required SharedPreferences prefs,
@@ -68,6 +72,32 @@ class AppState extends ChangeNotifier {
     _videosIsGridView = isGrid;
     _prefs.setBool('videosIsGridView', isGrid);
     notifyListeners();
+  }
+
+  // 标签过滤相关方法
+  void setSelectedTags(List<String> tags) {
+    _selectedTags = List.from(tags);
+    notifyListeners();
+  }
+
+  void addSelectedTag(String tag) {
+    if (!_selectedTags.contains(tag)) {
+      _selectedTags.add(tag);
+      notifyListeners();
+    }
+  }
+
+  void removeSelectedTag(String tag) {
+    if (_selectedTags.remove(tag)) {
+      notifyListeners();
+    }
+  }
+
+  void clearSelectedTags() {
+    if (_selectedTags.isNotEmpty) {
+      _selectedTags.clear();
+      notifyListeners();
+    }
   }
 
   Future<void> loadInitialClips() async {
@@ -250,6 +280,19 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // 静默更新clip，不触发保存提示，用于播放界面等场景
+  void updateClipSilently(VideoClip updatedClip) {
+    final index = _clips.indexWhere((c) => c.id == updatedClip.id);
+    if (index != -1) {
+      _clips[index] = updatedClip;
+      _generateOriginalVideos();
+      notifyListeners(); // 立即更新UI
+      // 不调用_scheduleSave()，避免触发保存提示
+      // 但标记有未保存的更改，以便后续保存
+      _hasUnsavedChanges = true;
+    }
+  }
+
   Future<void> deleteClip(String clipId) async {
     _clips.removeWhere((c) => c.id == clipId);
     _generateOriginalVideos();
@@ -263,6 +306,26 @@ class AppState extends ChangeNotifier {
       allTagsSet.addAll(clip.tags);
     }
     return UnmodifiableListView(allTagsSet.toList()..sort());
+  }
+
+  // 获取过滤后的clip列表，用于播放界面的导航
+  List<VideoClip> getFilteredClips({String searchQuery = '', List<String>? selectedTags}) {
+    final tags = selectedTags ?? _selectedTags;
+    
+    return _clips.where((clip) {
+      final query = searchQuery.toLowerCase();
+      final textMatch =
+          query.isEmpty ||
+              clip.name.toLowerCase().contains(query) ||
+              (clip.notes?.toLowerCase().contains(query) ?? false) ||
+              clip.videoPath.toLowerCase().contains(query);
+
+      final tagMatch =
+          tags.isEmpty ||
+              tags.every((tag) => clip.tags.contains(tag));
+
+      return textMatch && tagMatch;
+    }).toList();
   }
 
   void _setLoading(bool loading) {

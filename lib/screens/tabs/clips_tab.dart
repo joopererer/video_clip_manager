@@ -459,9 +459,18 @@ class _ClipsTabState extends State<ClipsTab> {
   }
 
   void _playClip(BuildContext context, VideoClip clip) {
+    final appState = context.read<AppState>();
     showDialog(
       context: context,
-      builder: (context) => Dialog(child: ClipPlaybackScreen(clip: clip)),
+      builder: (context) => Dialog(
+        child: ClipPlaybackScreen(
+          clip: clip,
+          allClips: appState.clips.toList(),
+          searchQuery: widget.searchQuery,
+          selectedTags: widget.selectedTags,
+          currentSortOption: _currentSortOption,
+        ),
+      ),
     );
   }
 

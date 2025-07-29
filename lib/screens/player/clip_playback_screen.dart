@@ -1,15 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:provider/provider.dart';
 import 'dart:async';
+import 'dart:io';
+import 'package:path/path.dart' as p;
 
 import '../../data/models.dart';
-import '../../main.dart';
+import '../../data/app_state.dart';
+import 'clip_editor_screen.dart';
+import '../tabs/clips_tab.dart';
 
 class ClipPlaybackScreen extends StatefulWidget {
   final VideoClip clip;
+  final List<VideoClip>? allClips; // 用于导航功能
+  final String searchQuery; // 当前搜索查询
+  final List<String> selectedTags; // 当前选中的标签
+  final SortOption currentSortOption; // 当前排序选项
 
-  const ClipPlaybackScreen({super.key, required this.clip});
+  const ClipPlaybackScreen({
+    super.key, 
+    required this.clip,
+    this.allClips,
+    this.searchQuery = '',
+    this.selectedTags = const [],
+    this.currentSortOption = SortOption.dateAddedDesc,
+  });
 
   @override
   State<ClipPlaybackScreen> createState() => _ClipPlaybackScreenState();
@@ -19,25 +36,59 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   late final Player player;
   late final VideoController controller;
   StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<bool>? _playingSubscription;
+  bool _isPlaying = false;
+  late VideoClip _currentClip; // 使用late关键字，在initState中初始化
+  bool _showHints = false; // 控制提示显示
 
   @override
   void initState() {
     super.initState();
+    _currentClip = widget.clip; // 初始化当前clip
     player = Player();
     controller = VideoController(player);
-    player.open(Media(widget.clip.videoPath), play: false).then((_) async {
-      await Future.delayed(const Duration(milliseconds: 100));
-      if (mounted) {
-        await player.seek(widget.clip.startTime);
-        await player.play();
+    _initializePlayer();
+  }
+
+  Future<void> _initializePlayer() async {
+    // 确保播放器已经准备好
+    await player.open(Media(_currentClip.videoPath), play: false);
+    
+    if (mounted) {
+      // 等待一下确保媒体加载完成
+      await Future.delayed(Duration(milliseconds: 200));
+      
+      // 跳转到开始时间
+      await player.seek(_currentClip.startTime);
+      
+      // 再等待一下确保seek完成
+      await Future.delayed(Duration(milliseconds: 50));
+      
+      // 开始播放
+      await player.play();
+      
+      setState(() {
+        _isPlaying = true;
+      });
+    }
+
+    // 设置位置监听器
+    _positionSubscription = player.stream.position.listen((position) {
+      if (mounted && _currentClip.endTime > Duration.zero &&
+          position >= _currentClip.endTime) {
+        player.pause();
+        setState(() {
+          _isPlaying = false;
+        });
       }
     });
 
-    _positionSubscription = player.stream.position.listen((position) {
-      if (widget.clip.endTime > Duration.zero &&
-          position >= widget.clip.endTime) {
-        player.pause();
-        player.seek(widget.clip.startTime);
+    // 监听播放状态
+    _playingSubscription = player.stream.playing.listen((playing) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = playing;
+        });
       }
     });
   }
@@ -45,56 +96,523 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   @override
   void dispose() {
     _positionSubscription?.cancel();
+    _playingSubscription?.cancel();
     player.dispose();
     super.dispose();
   }
 
+  void _replay() async {
+    await player.seek(_currentClip.startTime);
+    await player.play();
+    setState(() {
+      _isPlaying = true;
+    });
+  }
+
+  void _togglePlayPause() async {
+    if (_isPlaying) {
+      await player.pause();
+    } else {
+      await player.play();
+    }
+  }
+
+  // 修改导航逻辑，在同一窗口中切换clip
+  void _navigateToClip(VideoClip? targetClip) async {
+    if (targetClip != null) {
+      // 取消之前的订阅
+      await _positionSubscription?.cancel();
+      await _playingSubscription?.cancel();
+      
+      // 暂停当前播放
+      await player.pause();
+      
+      // 更新当前clip
+      setState(() {
+        _currentClip = targetClip;
+        _isPlaying = false;
+      });
+      
+      // 重新初始化播放器
+      await _initializePlayer();
+    }
+  }
+
+  // 排序逻辑（与ClipsTab保持一致）
+  List<VideoClip> _sortClips(List<VideoClip> clips) {
+    final sortedClips = List<VideoClip>.from(clips);
+    
+    switch (widget.currentSortOption) {
+      case SortOption.nameAsc:
+        sortedClips.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        break;
+      case SortOption.nameDesc:
+        sortedClips.sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()));
+        break;
+      case SortOption.dateAddedAsc:
+        sortedClips.sort((a, b) => a.id.compareTo(b.id)); // 假设ID按时间顺序
+        break;
+      case SortOption.dateAddedDesc:
+        sortedClips.sort((a, b) => b.id.compareTo(a.id));
+        break;
+      case SortOption.ratingAsc:
+        sortedClips.sort((a, b) => a.rating.compareTo(b.rating));
+        break;
+      case SortOption.ratingDesc:
+        sortedClips.sort((a, b) => b.rating.compareTo(a.rating));
+        break;
+      case SortOption.durationAsc:
+        sortedClips.sort((a, b) {
+          final durationA = a.endTime - a.startTime;
+          final durationB = b.endTime - b.startTime;
+          return durationA.compareTo(durationB);
+        });
+        break;
+      case SortOption.durationDesc:
+        sortedClips.sort((a, b) {
+          final durationA = a.endTime - a.startTime;
+          final durationB = b.endTime - b.startTime;
+          return durationB.compareTo(durationA);
+        });
+        break;
+    }
+    
+    return sortedClips;
+  }
+
+  VideoClip? _getPreviousClip() {
+    // 获取当前过滤后的clip列表并应用排序
+    final appState = context.read<AppState>();
+    final filteredClips = appState.getFilteredClips(
+      searchQuery: widget.searchQuery,
+      selectedTags: widget.selectedTags,
+    );
+    
+    // 应用与ClipsTab相同的排序
+    final sortedClips = _sortClips(filteredClips);
+    
+    final currentIndex = sortedClips.indexWhere((c) => c.id == _currentClip.id);
+    if (currentIndex > 0) {
+      return sortedClips[currentIndex - 1];
+    }
+    return null;
+  }
+
+  VideoClip? _getNextClip() {
+    // 获取当前过滤后的clip列表并应用排序
+    final appState = context.read<AppState>();
+    final filteredClips = appState.getFilteredClips(
+      searchQuery: widget.searchQuery,
+      selectedTags: widget.selectedTags,
+    );
+    
+    // 应用与ClipsTab相同的排序
+    final sortedClips = _sortClips(filteredClips);
+    
+    final currentIndex = sortedClips.indexWhere((c) => c.id == _currentClip.id);
+    if (currentIndex >= 0 && currentIndex < sortedClips.length - 1) {
+      return sortedClips[currentIndex + 1];
+    }
+    return null;
+  }
+
+  void _editClip() {
+    final appState = context.read<AppState>();
+    final video = appState.originalVideos.firstWhere(
+      (v) => v.path == _currentClip.videoPath,
+      orElse: () => OriginalVideo(
+        id: 'temp_${_currentClip.videoPath.hashCode}',
+        path: _currentClip.videoPath,
+        name: _currentClip.videoPath.split('/').last,
+      ),
+    );
+
+    Navigator.of(context).pop(); // 关闭播放器
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ClipEditorScreen(
+          video: video,
+          clipToEdit: _currentClip,
+        ),
+      ),
+    );
+  }
+
+  void _filterByTag(String tag) {
+    // 获取AppState并设置标签过滤
+    final appState = context.read<AppState>();
+    appState.setSelectedTags([tag]); // 设置为只过滤这个标签
+    
+    // 关闭播放器并返回到clips_tab
+    Navigator.of(context).pop();
+    
+    // 显示过滤成功的提示
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Filtering clips by tag: $tag'),
+        duration: const Duration(seconds: 2),
+        action: SnackBarAction(
+          label: 'Clear',
+          onPressed: () => appState.clearSelectedTags(),
+        ),
+      ),
+    );
+  }
+
+  void _openVideoFile() async {
+    try {
+      final file = File(_currentClip.videoPath);
+      if (await file.exists()) {
+        // 在Windows上直接打开文件所在文件夹并选中文件
+        final result = await Process.run('explorer', ['/select,', _currentClip.videoPath]);
+        
+        if (result.exitCode == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Opened file location: ${p.basename(_currentClip.videoPath)}'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        } else {
+          // 如果选择文件失败，只显示错误信息，不再尝试打开文件夹
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to open file location'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('File not found: ${p.basename(_currentClip.videoPath)}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error opening file: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  // 处理键盘快捷键
+  void _handleKeyPress(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      switch (event.logicalKey.keyLabel) {
+        case ' ':
+          // 空格键：播放/暂停
+          _togglePlayPause();
+          break;
+        case 'R':
+        case 'r':
+          // R键：重播
+          _replay();
+          break;
+        case 'Arrow Left':
+        case 'A':
+        case 'a':
+          // 左箭头或A键：上一个
+          final prevClip = _getPreviousClip();
+          if (prevClip != null) {
+            _navigateToClip(prevClip);
+          }
+          break;
+        case 'Arrow Right':
+        case 'D':
+        case 'd':
+          // 右箭头或D键：下一个
+          final nextClip = _getNextClip();
+          if (nextClip != null) {
+            _navigateToClip(nextClip);
+          }
+          break;
+        case 'E':
+        case 'e':
+          // E键：编辑
+          _editClip();
+          break;
+        case 'F1':
+          // F1键：显示/隐藏快捷键提示
+          setState(() {
+            _showHints = !_showHints;
+          });
+          break;
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      width: 640,
-      height: 600,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  widget.clip.name,
-                  style: Theme.of(context).textTheme.headlineSmall,
+    final appState = context.watch<AppState>();
+    // 获取最新的clip数据，确保状态同步
+    final currentClip = appState.clips.firstWhere(
+      (clip) => clip.id == _currentClip.id,
+      orElse: () => _currentClip,
+    );
+    final previousClip = _getPreviousClip();
+    final nextClip = _getNextClip();
+
+    return RawKeyboardListener(
+      focusNode: FocusNode(),
+      onKey: _handleKeyPress,
+      child: Container(
+        padding: const EdgeInsets.all(16.0),
+        width: 720,
+        height: 680,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 标题栏
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    currentClip.name,
+                    style: Theme.of(context).textTheme.headlineSmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Row(
+                  children: [
+                    // 快捷键提示按钮
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _showHints = !_showHints;
+                        });
+                      },
+                      icon: Icon(
+                        _showHints ? Icons.keyboard : Icons.keyboard_outlined,
+                        color: _showHints ? Colors.blue : Colors.grey,
+                      ),
+                      tooltip: 'Keyboard Shortcuts (F1)',
+                    ),
+                    // 编辑按钮移到右上角
+                    IconButton(
+                      onPressed: _editClip,
+                      icon: const Icon(Icons.edit, color: Colors.orange),
+                      tooltip: 'Edit Clip (E)',
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            
+            // 视频播放区域
+            Expanded(
+              child: Card(
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  children: [
+                    Video(controller: controller),
+                    // 只保留重新播放按钮，位置调整到右下角避免与全屏按钮重叠
+                    Positioned(
+                      bottom: 8, // 更贴近边缘
+                      right: 60, // 避免与全屏按钮重叠
+                      child: GestureDetector(
+                        onTap: _replay,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Icon(
+                            Icons.replay,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 快捷键提示悬浮窗
+                    if (_showHints)
+                      Positioned(
+                        top: 16,
+                        right: 16,
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Keyboard Shortcuts',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              _buildShortcutHint('Space', 'Play/Pause'),
+                              _buildShortcutHint('R', 'Replay'),
+                              _buildShortcutHint('← / A', 'Previous'),
+                              _buildShortcutHint('→ / D', 'Next'),
+                              _buildShortcutHint('E', 'Edit'),
+                              _buildShortcutHint('F1', 'Toggle Hints'),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(context).pop(),
+            ),
+            const SizedBox(height: 16),
+            
+            // 导航按钮行 - 前一个和下一个按钮放在一起
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // 上一个按钮
+                IconButton(
+                  onPressed: previousClip != null ? () => _navigateToClip(previousClip) : null,
+                  icon: Icon(
+                    Icons.skip_previous,
+                    color: previousClip != null ? Colors.blue : Colors.grey,
+                  ),
+                  tooltip: 'Previous Clip (← / A)',
+                ),
+                
+                const SizedBox(width: 20),
+                
+                // 下一个按钮
+                IconButton(
+                  onPressed: nextClip != null ? () => _navigateToClip(nextClip) : null,
+                  icon: Icon(
+                    Icons.skip_next,
+                    color: nextClip != null ? Colors.blue : Colors.grey,
+                  ),
+                  tooltip: 'Next Clip (→ / D)',
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // 信息显示区域 - 按原始顺序排列
+            // 1. 时间标记信息
+            _buildInfoRow(
+              Icons.timer,
+              'Time Range',
+              '${formatDuration(currentClip.startTime)} - ${formatDuration(currentClip.endTime)} (${formatDuration(currentClip.endTime - currentClip.startTime)})',
+            ),
+            const SizedBox(height: 8),
+            
+            // 2. 文件路径信息
+            _buildClickableInfoRow(
+              Icons.video_file,
+              'Video',
+              currentClip.videoPath.split('/').last,
+              onTap: _openVideoFile,
+            ),
+            const SizedBox(height: 8),
+            
+            // 3. 标签信息 - 可点击过滤
+            _buildTagInfoRow(currentClip.tags),
+            const SizedBox(height: 8),
+            
+            // 4. 备注信息
+            _buildInfoRow(
+              Icons.notes, 
+              'Notes', 
+              currentClip.notes != null && currentClip.notes!.isNotEmpty ? currentClip.notes! : 'No notes',
+            ),
+            const SizedBox(height: 8),
+            
+                         // 5. 星级评分 - 可点击修改
+             Container(
+               // 固定高度，确保布局一致性
+               height: 32,
+               child: Row(
+                 children: [
+                   const Icon(Icons.star, size: 18, color: Colors.amber),
+                   const SizedBox(width: 8),
+                   const Text('Rating: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                   const SizedBox(width: 8),
+                   ...List.generate(5, (starIndex) {
+                     return GestureDetector(
+                       onTap: () {
+                         final newRating = currentClip.rating == starIndex + 1 ? 0 : starIndex + 1;
+                         final updatedClip = currentClip.copyWith(rating: newRating);
+                         appState.updateClipSilently(updatedClip);
+                       },
+                       child: Icon(
+                         starIndex < currentClip.rating ? Icons.star : Icons.star_border,
+                         color: starIndex < currentClip.rating ? Colors.amber : Colors.grey,
+                         size: 20,
+                       ),
+                     );
+                   }),
+                   const Spacer(),
+                   // 收藏按钮 - 可点击修改
+                   GestureDetector(
+                     onTap: () {
+                       final updatedClip = currentClip.copyWith(isFavorite: !currentClip.isFavorite);
+                       appState.updateClipSilently(updatedClip);
+                     },
+                     child: Icon(
+                       currentClip.isFavorite ? Icons.favorite : Icons.favorite_border,
+                       color: currentClip.isFavorite ? Colors.redAccent : Colors.grey,
+                       size: 24,
+                     ),
+                   ),
+                 ],
+               ),
+             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShortcutHint(String key, String action) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              key,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: Video(controller: controller),
             ),
           ),
-          const SizedBox(height: 16),
-          _buildInfoRow(
-            Icons.timer,
-            'Duration',
-            '${formatDuration(widget.clip.startTime)} - ${formatDuration(widget.clip.endTime)}',
-          ),
-          const SizedBox(height: 8),
-          _buildInfoRow(Icons.label, 'Tags', widget.clip.tags.join(', ')),
-          const SizedBox(height: 8),
-          _buildInfoRow(Icons.notes, 'Notes', widget.clip.notes ?? 'N/A'),
-          const SizedBox(height: 8),
-          _buildInfoRow(
-            Icons.star,
-            'Rating',
-            List.generate(5, (i) => i < widget.clip.rating ? '★' : '☆').join(),
+          const SizedBox(width: 8),
+          Text(
+            action,
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+            ),
           ),
         ],
       ),
@@ -108,8 +626,126 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
         Icon(icon, size: 18, color: Colors.grey.shade600),
         const SizedBox(width: 8),
         Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-        Expanded(child: Text(value)),
+        Expanded(
+          child: Container(
+            // 固定高度，确保布局一致性
+            height: 20,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: const TextStyle(fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ),
       ],
     );
+  }
+
+  Widget _buildClickableInfoRow(IconData icon, String label, String value, {VoidCallback? onTap}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: Colors.grey.shade600),
+        const SizedBox(width: 8),
+        Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+        Expanded(
+          child: Container(
+            // 固定高度，确保布局一致性
+            height: 20,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: GestureDetector(
+                onTap: onTap,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: onTap != null ? Colors.blue : null,
+                    decoration: onTap != null ? TextDecoration.underline : null,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTagInfoRow(List<String> tags) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.label, size: 18, color: Colors.grey.shade600),
+        const SizedBox(width: 8),
+        Text('Tags: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Container(
+            // 固定高度，确保布局一致性
+            height: 32, // 始终保持32px高度
+            child: tags.isEmpty
+                ? Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'No tags',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade500,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  )
+                : Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.start,
+                    children: tags.map((tag) => _buildTagChip(tag)).toList(),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTagChip(String tag) {
+    return GestureDetector(
+      onTap: () => _filterByTag(tag),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade100.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.blue.shade300.withValues(alpha: 0.5),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          tag,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.blue.shade700,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String formatDuration(Duration duration) {
+  final hours = duration.inHours;
+  final minutes = duration.inMinutes.remainder(60);
+  final seconds = duration.inSeconds.remainder(60);
+  
+  if (hours > 0) {
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  } else {
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 }

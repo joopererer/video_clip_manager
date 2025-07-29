@@ -18,7 +18,6 @@ class _MainScreenState extends State<MainScreen>
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  List<String> _selectedTags = [];
 
   @override
   void initState() {
@@ -49,7 +48,7 @@ class _MainScreenState extends State<MainScreen>
       context: context,
       builder: (context) {
         final allTags = appState.allTags;
-        List<String> tempSelectedTags = List.from(_selectedTags);
+        List<String> tempSelectedTags = List.from(appState.selectedTags);
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -86,7 +85,7 @@ class _MainScreenState extends State<MainScreen>
                 ),
                 TextButton(
                   onPressed: () {
-                    setState(() => _selectedTags = tempSelectedTags);
+                    appState.setSelectedTags(tempSelectedTags);
                     Navigator.of(context).pop();
                   },
                   child: const Text('Apply'),
@@ -159,11 +158,10 @@ class _MainScreenState extends State<MainScreen>
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (_selectedTags.isNotEmpty)
+                        if (appState.selectedTags.isNotEmpty)
                           Chip(
-                            label: Text('${_selectedTags.length}'),
-                            onDeleted: () =>
-                                setState(() => _selectedTags.clear()),
+                            label: Text('${appState.selectedTags.length}'),
+                            onDeleted: () => appState.clearSelectedTags(),
                           ),
                         IconButton(
                           icon: const Icon(Icons.filter_list),
@@ -188,7 +186,7 @@ class _MainScreenState extends State<MainScreen>
                   children: [
                     ClipsTab(
                       searchQuery: _searchQuery,
-                      selectedTags: _selectedTags,
+                      selectedTags: appState.selectedTags,
                     ),
                     VideosTab(searchQuery: _searchQuery),
                     PlaylistsTab(searchQuery: _searchQuery),
