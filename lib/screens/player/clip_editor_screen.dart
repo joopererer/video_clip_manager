@@ -12,12 +12,17 @@ import '../../widgets/custom_progress_bar.dart';
 import '../../services/thumbnail_service.dart';
 import '../../main.dart'; // for formatDuration
 
-class PlayPauseIntent extends Intent {
-  const PlayPauseIntent();
-}
-
+// --- 用于键盘操作的意图(Intent)类 ---
 class SaveIntent extends Intent {
   const SaveIntent();
+}
+
+class TogglePlayPauseIntent extends Intent {
+  const TogglePlayPauseIntent();
+}
+
+class ExitFullscreenIntent extends Intent {
+  const ExitFullscreenIntent();
 }
 
 class ClipEditorScreen extends StatefulWidget {
@@ -31,6 +36,8 @@ class ClipEditorScreen extends StatefulWidget {
 }
 
 class _ClipEditorScreenState extends State<ClipEditorScreen> {
+  final GlobalKey<VideoState> _videoKey = GlobalKey<VideoState>();
+
   late final Player player;
   late final VideoController controller;
 
@@ -43,9 +50,9 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
 
   final _nameController = TextEditingController();
   final _notesController = TextEditingController();
-
   final _newTagController = TextEditingController();
   final _tagFocusNode = FocusNode();
+  final _videoFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -90,9 +97,12 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     _notesController.dispose();
     _newTagController.dispose();
     _tagFocusNode.dispose();
+    _videoFocusNode.dispose();
     super.dispose();
   }
 
+  // ... [此处省略所有未改变的辅助方法，如 _saveClip, _buildRatingBar 等]
+  // ... [您可以从您自己的文件中保留这部分代码]
   void _updateControllersAndPreviewFromClip() {
     _nameController.text = _currentClip.name;
     _notesController.text = _currentClip.notes ?? '';
@@ -152,7 +162,6 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     });
   }
 
-  // REFACTORED: Created a generic internal method to generate thumbnails.
   Future<void> _generateCoverAtTime(Duration time) async {
     setState(() {
       _isSettingCover = true;
@@ -212,12 +221,10 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     }
   }
 
-  // MODIFIED: This now calls the generic internal method.
   Future<void> _setCoverFromCurrentFrame() async {
     await _generateCoverAtTime(player.state.position);
   }
 
-  // MODIFIED: This now also calls the generic internal method.
   Future<void> _resetCoverToStartTime() async {
     await _generateCoverAtTime(_currentClip.startTime);
   }
@@ -404,7 +411,6 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
         padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
-            // MODIFIED: Button layout changed.
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -575,113 +581,135 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
           : LogicalKeyboardKey.control,
       LogicalKeyboardKey.keyS,
     );
-    final playPauseShortcut = LogicalKeySet(LogicalKeyboardKey.space);
 
+    // NEW: 使用 RawKeyboardListener 来捕获全局按键事件
     return Shortcuts(
-      shortcuts: <LogicalKeySet, Intent>{
-        saveShortcut: const SaveIntent(),
-        playPauseShortcut: const PlayPauseIntent(),
-      },
+      // 我们仍然为其他快捷键保留Shortcuts
+      shortcuts: <LogicalKeySet, Intent>{saveShortcut: const SaveIntent()},
       child: Actions(
         actions: <Type, Action<Intent>>{
           SaveIntent: CallbackAction<SaveIntent>(
-            onInvoke: (SaveIntent intent) => _saveClip(),
-          ),
-          PlayPauseIntent: CallbackAction<PlayPauseIntent>(
-            onInvoke: (PlayPauseIntent intent) => player.playOrPause(),
+            onInvoke: (Intent intent) => _saveClip(),
           ),
         },
-        child: Focus(
-          autofocus: true,
-          child: Scaffold(
-            appBar: AppBar(
-              title: Text(_isNewClip ? 'Create Clip' : 'Edit Clip'),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  tooltip: 'Reset Fields',
-                  onPressed: _resetFields,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.save),
-                  tooltip: 'Save Clip (Ctrl+S)',
-                  onPressed: _saveClip,
-                ),
-              ],
-            ),
-            body: Column(
-              children: [
-                Expanded(
-                  child: Card(
-                    elevation: 4.0,
-                    margin: const EdgeInsets.all(8.0),
-                    clipBehavior: Clip.antiAlias,
-                    child: Video(
-                      controller: controller,
-                      controls: (state) => CustomPlayerControls(
-                        player: player,
-                        isFullscreen: state.isFullscreen(),
-                        onToggleFullscreen: state.toggleFullscreen,
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(_isNewClip ? 'Create Clip' : 'Edit Clip'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Reset Fields',
+                onPressed: _resetFields,
+              ),
+              IconButton(
+                icon: const Icon(Icons.save),
+                tooltip: 'Save Clip (Ctrl+S)',
+                onPressed: _saveClip,
+              ),
+            ],
+          ),
+          body: Column(
+            children: [
+              Expanded(
+                child: Card(
+                  elevation: 4.0,
+                  margin: const EdgeInsets.all(8.0),
+                  clipBehavior: Clip.antiAlias,
+                  child: Focus(
+                    focusNode: _videoFocusNode,
+                    child: Shortcuts(
+                      shortcuts: <LogicalKeySet, Intent>{
+                        LogicalKeySet(LogicalKeyboardKey.space):
+                            const TogglePlayPauseIntent(),
+                      },
+                      child: Actions(
+                        actions: <Type, Action<Intent>>{
+                          TogglePlayPauseIntent:
+                              CallbackAction<TogglePlayPauseIntent>(
+                                onInvoke: (Intent intent) {
+                                  player.playOrPause();
+                                  return null;
+                                },
+                              ),
+                        },
+                        child: GestureDetector(
+                          onTap: () {
+                            if (!_videoFocusNode.hasFocus) {
+                              FocusScope.of(
+                                context,
+                              ).requestFocus(_videoFocusNode);
+                            }
+                            player.playOrPause();
+                          },
+                          child: Video(
+                            key: _videoKey,
+                            controller: controller,
+                            controls: (state) => CustomPlayerControls(
+                              player: player,
+                              isFullscreen: state.isFullscreen(),
+                              onToggleFullscreen: state.toggleFullscreen,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-                CustomProgressBar(
-                  player: player,
-                  startTime: _currentClip.startTime,
-                  endTime: _currentClip.endTime,
-                  onSetStart: (time) =>
-                      setState(() => _currentClip.startTime = time),
-                  onSetEnd: (time) =>
-                      setState(() => _currentClip.endTime = time),
-                ),
-                _buildClippingControls(),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TextField(
-                          controller: _nameController,
-                          decoration: const InputDecoration(
-                            labelText: 'Clip Name',
-                            border: OutlineInputBorder(),
+              ),
+              CustomProgressBar(
+                player: player,
+                startTime: _currentClip.startTime,
+                endTime: _currentClip.endTime,
+                onSetStart: (time) =>
+                    setState(() => _currentClip.startTime = time),
+                onSetEnd: (time) => setState(() => _currentClip.endTime = time),
+              ),
+              _buildClippingControls(),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Clip Name',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildTagEditor(appState),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _notesController,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Notes',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildFavoriteButton(),
+                              _buildRatingBar(),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        _buildTagEditor(appState),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _notesController,
-                          maxLines: 2,
-                          decoration: const InputDecoration(
-                            labelText: 'Notes',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8.0),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                _buildFavoriteButton(),
-                                _buildRatingBar(),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildCoverControls(),
-                        const SizedBox(height: 20),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildCoverControls(),
+                      const SizedBox(height: 20),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -709,10 +737,20 @@ class _CustomPlayerControlsState extends State<CustomPlayerControls> {
   bool _areControlsVisible = true;
   double _currentVolume = 1.0;
 
+  // NEW: 为控件自身创建一个焦点节点
+  final FocusNode _controlsFocusNode = FocusNode();
+
   @override
   void initState() {
     super.initState();
     _currentVolume = widget.player.state.volume / 100.0;
+  }
+
+  @override
+  void dispose() {
+    // NEW: 记得销毁
+    _controlsFocusNode.dispose();
+    super.dispose();
   }
 
   void _toggleControlsVisibility() {
@@ -723,41 +761,55 @@ class _CustomPlayerControlsState extends State<CustomPlayerControls> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _toggleControlsVisibility,
-      child: Stack(
-        children: [
-          Container(color: Colors.transparent),
-          StreamBuilder<bool>(
-            stream: widget.player.stream.playing,
-            initialData: widget.player.state.playing,
-            builder: (context, snapshot) {
-              final isPlaying = snapshot.data ?? false;
-              return AnimatedOpacity(
-                opacity: _areControlsVisible ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 200),
-                child: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black38,
-                        Colors.transparent,
-                        Colors.black54,
-                      ],
+    // NEW: 在最外层包裹一个 RawKeyboardListener
+    return RawKeyboardListener(
+      focusNode: _controlsFocusNode,
+      autofocus: true, // 非常关键，让它一显示就尝试获取焦点
+      onKey: (RawKeyEvent event) {
+        if (event is RawKeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          print("--- ESCAPE KEY DETECTED BY *CONTROLS* LISTENER ---");
+          widget.onToggleFullscreen();
+        }
+      },
+      child: GestureDetector(
+        onTap: _toggleControlsVisibility,
+        child: Stack(
+          children: [
+            Container(color: Colors.transparent),
+            StreamBuilder<bool>(
+              stream: widget.player.stream.playing,
+              initialData: widget.player.state.playing,
+              builder: (context, snapshot) {
+                final isPlaying = snapshot.data ?? false;
+                return AnimatedOpacity(
+                  opacity: _areControlsVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black38,
+                          Colors.transparent,
+                          Colors.black54,
+                        ],
+                      ),
                     ),
+                    // _buildControlsContent 方法无需改动
+                    child: _buildControlsContent(context, isPlaying),
                   ),
-                  child: _buildControlsContent(context, isPlaying),
-                ),
-              );
-            },
-          ),
-        ],
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 
+  // 这个方法原封不动
   Widget _buildControlsContent(BuildContext context, bool isPlaying) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
