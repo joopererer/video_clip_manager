@@ -8,7 +8,7 @@ A Flutter application for managing video clips with advanced editing capabilitie
 - Load and manage video clips from JSON files
 - Create and edit video clips with precise time controls
 - Generate thumbnails for clips
-- Tag-based organization system
+- Tag-based organization system with automatic colorization
 - Playlist management
 - Advanced search and filter functionality
   - Text search across clip names, notes, and file paths
@@ -39,7 +39,7 @@ The clip playback screen has been completely redesigned with advanced features:
 
 #### Information Display
 - **Time Range**: Shows start time, end time, and total duration
-- **Tags and Notes**: Displays clip metadata when available
+- **Tags and Notes**: Displays clip metadata when available, with colored tag chips
 - **Video File**: Shows the source video filename
 - **Enhanced Layout**: Larger window (720x680) for better viewing experience
 
@@ -64,6 +64,7 @@ The clip playback screen has been completely redesigned with advanced features:
 - **Star Rating System**: Click on stars to rate clips (1-5 stars, click again to remove rating)
 - **Favorite System**: Heart icon to mark/unmark clips as favorites
 - **Enhanced Information Display**: Shows start time, end time, duration, and tags
+- **Tag Colorization**: Each tag displays with a unique, consistent color based on its content
 - **Direct Editing**: Click edit button to open clip editor
 - **Quick Actions**: Play, edit, and delete buttons for each clip
 

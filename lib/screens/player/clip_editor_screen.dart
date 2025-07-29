@@ -12,6 +12,7 @@ import '../../data/models.dart';
 import '../../data/app_state.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../../services/thumbnail_service.dart';
+import '../../utils/tag_utils.dart';
 import '../../main.dart';
 
 // --- Keyboard Intent Classes (Unchanged) ---
@@ -596,9 +597,8 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
             spacing: 6.0,
             runSpacing: 0.0,
             children: _formClip.tags.map((tag) {
-              return Chip(
-                label: Text(tag),
-                onDeleted: () {
+              return GestureDetector(
+                onTap: () {
                   setState(() {
                     // CORRECTION: Créer une nouvelle liste et un nouveau clip
                     final newTags = List<String>.from(_formClip.tags)
@@ -606,6 +606,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                     _formClip = _formClip.copyWith(tags: newTags);
                   });
                 },
+                child: buildTagChip(tag),
               );
             }).toList(),
           ),
@@ -911,10 +912,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                             runSpacing: 4,
                             children: clip.tags
                                 .map(
-                                  (t) => Chip(
-                                    label: Text(t),
-                                    visualDensity: VisualDensity.compact,
-                                  ),
+                                  (t) => buildTagChip(t),
                                 )
                                 .toList(),
                           ),

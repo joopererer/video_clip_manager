@@ -11,6 +11,9 @@ import '../../data/models.dart';
 import '../../data/app_state.dart';
 import 'clip_editor_screen.dart';
 import '../tabs/clips_tab.dart';
+import '../../utils/tag_utils.dart';
+
+
 
 class ClipPlaybackScreen extends StatefulWidget {
   final VideoClip clip;
@@ -721,28 +724,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   }
 
   Widget _buildTagChip(String tag) {
-    return GestureDetector(
-      onTap: () => _filterByTag(tag),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.blue.shade100.withValues(alpha: 0.3),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Colors.blue.shade300.withValues(alpha: 0.5),
-            width: 1,
-          ),
-        ),
-        child: Text(
-          tag,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.blue.shade700,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
+    return buildTagChipWithTap(tag, () => _filterByTag(tag));
   }
 }
 

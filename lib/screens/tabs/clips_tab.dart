@@ -6,6 +6,7 @@ import '../../data/models.dart';
 import '../player/clip_editor_screen.dart';
 import '../player/clip_playback_screen.dart';
 import '../../widgets/clip_thumbnail.dart';
+import '../../utils/tag_utils.dart';
 
 // 排序选项枚举
 enum SortOption {
@@ -22,6 +23,8 @@ enum SortOption {
   final String label;
   final IconData icon;
 }
+
+
 
 class ClipsTab extends StatefulWidget {
   final String searchQuery;
@@ -593,7 +596,7 @@ class _ClipListItemState extends State<ClipListItem> {
         child: InkWell(
           onTap: widget.onPlay,
           child: Container(
-            height: 80, // 调整高度
+            height: 90, // 增加高度以避免溢出
             padding: const EdgeInsets.all(12.0),
             child: Row(
               children: [
@@ -601,7 +604,7 @@ class _ClipListItemState extends State<ClipListItem> {
                 RepaintBoundary(
                   child: Container(
                     width: 80, // 调整略缩图宽度
-                    height: 56, // 保持16:9比例
+                    height: 66, // 增加略缩图高度以匹配容器
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(6),
                       color: Colors.grey.shade200,
@@ -619,6 +622,7 @@ class _ClipListItemState extends State<ClipListItem> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         // 标题
                         Text(
@@ -642,14 +646,10 @@ class _ClipListItemState extends State<ClipListItem> {
                         ),
                         if (widget.clip.tags.isNotEmpty) ...[
                           const SizedBox(height: 2),
-                          Text(
-                            'Tags: ${widget.clip.tags.join(', ')}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey,
-                            ),
+                          Wrap(
+                            spacing: 4,
+                            runSpacing: 2,
+                            children: widget.clip.tags.map((tag) => buildTagChip(tag)).toList(),
                           ),
                         ],
                       ],

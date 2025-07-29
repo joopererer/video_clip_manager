@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/app_state.dart';
+import '../utils/tag_utils.dart';
 import 'tabs/clips_tab.dart';
 import 'tabs/videos_tab.dart';
 import 'tabs/playlists_tab.dart';
@@ -63,7 +64,7 @@ class _MainScreenState extends State<MainScreen>
                         itemBuilder: (context, index) {
                           final tag = allTags[index];
                           return CheckboxListTile(
-                            title: Text(tag),
+                            title: buildTagText(tag),
                             value: tempSelectedTags.contains(tag),
                             onChanged: (isSelected) {
                               setDialogState(() {
