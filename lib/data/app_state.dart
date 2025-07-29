@@ -140,7 +140,7 @@ class AppState extends ChangeNotifier {
     try {
       await _thumbnailService.clearCache();
       for (final clip in _clips) {
-        clip.thumbnailPath = null;
+        clip.copyWith(thumbnailPath: null);
       }
       // 注意：这里需要一个 notifyListeners() 来让UI立即移除旧图片，显示加载指示器
       notifyListeners();
@@ -161,7 +161,14 @@ class AppState extends ChangeNotifier {
     for (final clip in _clips) {
       final thumbPath = _thumbnailService.getThumbnailPath(clip.id);
       if (await File(thumbPath).exists()) {
-        clip.thumbnailPath = thumbPath;
+        // Trouvez l'index du clip dans votre liste `_clips`
+        final index = _clips.indexWhere((c) => c.id == clip.id);
+        if (index != -1) {
+          // Créez une nouvelle instance avec le thumbnailPath mis à jour
+          final updatedClip = _clips[index].copyWith(thumbnailPath: thumbPath);
+          // Remplacez l'ancien clip par le nouveau dans la liste
+          _clips[index] = updatedClip;
+        }
       } else {
         clipsToGenerate.add(clip);
       }

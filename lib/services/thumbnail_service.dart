@@ -116,7 +116,14 @@ class ThumbnailService {
             if (data != null) {
               final thumbPath = getThumbnailPath(clip.id);
               await File(thumbPath).writeAsBytes(data);
-              clip.thumbnailPath = thumbPath;
+              // Trouvez l'index du clip dans votre liste `_clips`
+              final index = clipsForVideo.indexWhere((c) => c.id == clip.id);
+              if (index != -1) {
+                // Créez une nouvelle instance avec le thumbnailPath mis à jour
+                final updatedClip = clipsForVideo[index].copyWith(thumbnailPath: thumbPath);
+                // Remplacez l'ancien clip par le nouveau dans la liste
+                clipsForVideo[index] = updatedClip;
+              }
               onUpdate();
             }
           } catch (e) {

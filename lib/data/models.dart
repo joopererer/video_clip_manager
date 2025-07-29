@@ -1,52 +1,49 @@
-class VideoClip {
+import 'package:equatable/equatable.dart';
+
+// 2. La classe hérite de Equatable
+class VideoClip extends Equatable {
+  // 3. Toutes les propriétés sont maintenant 'final'
   final String id;
-  String name;
-  String videoPath;
-  Duration startTime;
-  Duration endTime;
-  Duration coverFrameTime;
-  List<String> tags; // This property itself is fine.
-  String? notes;
-  int rating;
-  bool isFavorite;
+  final String name;
+  final String videoPath;
+  final Duration startTime;
+  final Duration endTime;
+  final Duration coverFrameTime;
+  final List<String> tags;
+  final String? notes;
+  final int rating;
+  final bool isFavorite;
+  final String? thumbnailPath;
 
-  String? thumbnailPath;
-
-  // MODIFIED: The constructor is changed to ensure `tags` is always a modifiable list.
-  VideoClip({
+  // Le constructeur devient 'const'
+  const VideoClip({
     required this.id,
-    required this.name,
+    this.name = '',
     required this.videoPath,
-    required this.startTime,
-    required this.endTime,
-    required this.coverFrameTime,
-    List<String> tags = const [], // The parameter can have a const default...
+    this.startTime = Duration.zero,
+    this.endTime = Duration.zero,
+    this.coverFrameTime = Duration.zero,
+    this.tags = const [],
     this.notes,
     this.rating = 0,
     this.isFavorite = false,
     this.thumbnailPath,
-  }) : tags = List.from(
-         tags,
-       ); // ...but the property is initialized with a NEW, MODIFIABLE list.
+  });
 
   factory VideoClip.fromJson(Map<String, dynamic> json) {
     final startTime = Duration(milliseconds: json['start'] ?? 0);
     return VideoClip(
-      id:
-          json['id'] ??
-          'clip_${DateTime.now().millisecondsSinceEpoch}_${json['videoPath']?.hashCode}',
+      id: json['id'] ?? 'clip_${DateTime.now().millisecondsSinceEpoch}_${json['videoPath']?.hashCode}',
       name: json['label'] ?? 'Untitled Clip',
       videoPath: json['videoPath'] ?? '',
       startTime: startTime,
       endTime: Duration(milliseconds: json['end'] ?? 0),
-      coverFrameTime: Duration(
-        milliseconds: json['coverFrameTime'] ?? startTime.inMilliseconds,
-      ),
-      // This already correctly creates a modifiable list from JSON.
+      coverFrameTime: Duration(milliseconds: json['coverFrameTime'] ?? startTime.inMilliseconds),
       tags: List<String>.from(json['tags'] ?? []),
       notes: json['note'],
       rating: json['rating'] ?? 0,
       isFavorite: json['isFavorite'] ?? false,
+      thumbnailPath: json['thumbnailPath'], // Assurez-vous que le thumbnailPath est aussi dans fromJson si besoin
     );
   }
 
@@ -62,6 +59,7 @@ class VideoClip {
       'note': notes,
       'rating': rating,
       'isFavorite': isFavorite,
+      'thumbnailPath': thumbnailPath, // Et dans toJson
     };
   }
 
@@ -85,14 +83,29 @@ class VideoClip {
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       coverFrameTime: coverFrameTime ?? this.coverFrameTime,
-      // When copying, we also ensure the list is new and modifiable.
-      tags: tags ?? List.from(this.tags),
+      tags: tags ?? this.tags,
       notes: notes ?? this.notes,
       rating: rating ?? this.rating,
       isFavorite: isFavorite ?? this.isFavorite,
       thumbnailPath: thumbnailPath ?? this.thumbnailPath,
     );
   }
+
+  // 4. On définit la liste des propriétés pour la comparaison
+  @override
+  List<Object?> get props => [
+    id,
+    name,
+    videoPath,
+    startTime,
+    endTime,
+    coverFrameTime,
+    tags,
+    notes,
+    rating,
+    isFavorite,
+    thumbnailPath,
+  ];
 }
 
 class OriginalVideo {

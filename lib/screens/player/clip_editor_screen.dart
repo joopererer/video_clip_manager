@@ -67,6 +67,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
   final _videoFocusNode = FocusNode();
   final ItemScrollController _itemScrollController = ItemScrollController();
   final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
+  final FocusNode _formFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -75,16 +76,30 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     controller = VideoController(player);
 
     if (widget.clipToEdit != null) {
-      // Si un clip est passé en paramètre, on commence en mode édition sur ce clip
       _startEditing(widget.clipToEdit!, fromInit: true);
     } else {
-      // Sinon, on commence en mode "création"
       _resetFormToBlank();
     }
 
     player.open(Media(widget.video.path), play: false).then((_) {
       if (!mounted) return;
       setState(() {});
+    });
+
+    // NOUVEAU: Ajout de listeners pour synchroniser le nom et les notes avec _formClip
+    _nameController.addListener(() {
+      if (_formClip.name != _nameController.text) {
+        setState(() {
+          _formClip = _formClip.copyWith(name: _nameController.text);
+        });
+      }
+    });
+    _notesController.addListener(() {
+      if (_formClip.notes != _notesController.text) {
+        setState(() {
+          _formClip = _formClip.copyWith(notes: _notesController.text);
+        });
+      }
     });
   }
 
@@ -97,6 +112,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     _newTagController.dispose();
     _tagFocusNode.dispose();
     _videoFocusNode.dispose();
+    _formFocusNode.dispose();
     super.dispose();
   }
 
@@ -114,26 +130,24 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
         coverFrameTime: Duration.zero,
       );
       _formClip = newClip;
-      _updateControllersAndPreviewFromClip();
+      _updateControllersAndPreviewFromClip(true); // MODIFIÉ: Force la mise à jour des controllers
     });
   }
 
   void _startEditing(VideoClip clipToEdit, {bool fromInit = false}) {
     setState(() {
+      // Stocke la version originale et crée une copie pour le formulaire
       _editingClip = clipToEdit;
       _formClip = clipToEdit.copyWith();
-      _updateControllersAndPreviewFromClip();
+      _updateControllersAndPreviewFromClip(true); // MODIFIÉ: Force la mise à jour des controllers
       player.seek(clipToEdit.startTime);
     });
 
-    // On fait défiler la liste pour afficher le clip en cours d'édition
     final appState = context.read<AppState>();
     final clipsForThisVideo = appState.clips.where((c) => c.videoPath == widget.video.path).toList();
     final index = clipsForThisVideo.indexWhere((c) => c.id == clipToEdit.id);
 
     if (index != -1) {
-      // Utilise un post-frame callback si appelé depuis initState
-      // pour s'assurer que la liste est construite avant de défiler.
       if (fromInit) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _itemScrollController.scrollTo(
@@ -161,14 +175,37 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     }
   }
 
-  void _updateControllersAndPreviewFromClip() {
-    _nameController.text = _formClip.name;
-    _notesController.text = _formClip.notes ?? '';
+  // MODIFIÉ: La méthode peut forcer la mise à jour des controllers texte
+  void _updateControllersAndPreviewFromClip([bool forceUpdate = false]) {
+    // Met à jour les controllers uniquement si le texte est différent ou si c'est forcé
+    if (forceUpdate || _nameController.text != _formClip.name) {
+      _nameController.text = _formClip.name;
+    }
+    if (forceUpdate || _notesController.text != (_formClip.notes ?? '')) {
+      _notesController.text = _formClip.notes ?? '';
+    }
     _coverPreviewPath = _formClip.thumbnailPath;
+  }
+
+  // NOUVEAU: Méthode pour annuler les changements dans le formulaire
+  void _resetFormChanges() {
+    if (_editingClip == null) return;
+    setState(() {
+      _formClip = _editingClip!.copyWith();
+      _updateControllersAndPreviewFromClip(true); // Force la mise à jour
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Changes discarded.'), backgroundColor: Colors.grey),
+    );
   }
 
   Future<void> _saveOrUpdateClip() async {
     if (_isSaving) return;
+
+    // Le nom et les notes sont déjà synchronisés, on les récupère directement depuis _formClip
+    if (_formClip.name.trim().isEmpty) {
+      _formClip = _formClip.copyWith(name: 'Untitled Clip');
+    }
 
     if (_formClip.endTime <= _formClip.startTime) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -181,30 +218,28 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     }
 
     setState(() => _isSaving = true);
-
     final appState = context.read<AppState>();
 
-    _formClip.name = _nameController.text.trim().isNotEmpty
-        ? _nameController.text.trim()
-        : 'Untitled Clip';
-    _formClip.notes = _notesController.text.trim();
-
+    // Génération de la miniature si nécessaire
     if (_formClip.thumbnailPath == null || !await File(_formClip.thumbnailPath!).exists() || (_editingClip != null && _formClip.coverFrameTime != _editingClip!.coverFrameTime)) {
       if (_formClip.coverFrameTime == Duration.zero) {
-        _formClip.coverFrameTime = _formClip.startTime;
+        _formClip = _formClip.copyWith(coverFrameTime: _formClip.startTime);
       }
       final thumbnailService = context.read<ThumbnailService>();
-      _formClip.thumbnailPath = await thumbnailService.generateThumbnail(
+      final newThumbPath = await thumbnailService.generateThumbnail(
         widget.video.path,
         _formClip.coverFrameTime,
         _formClip.id,
       );
+      _formClip = _formClip.copyWith(thumbnailPath: newThumbPath);
     }
 
     if (_editingClip == null) {
       await appState.addClip(_formClip);
     } else {
       await appState.updateClip(_formClip);
+      // Mettre à jour _editingClip pour refléter l'état sauvegardé
+      _editingClip = _formClip.copyWith();
     }
 
     if (mounted) {
@@ -214,9 +249,10 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
           backgroundColor: Colors.green[700],
         ),
       );
-      _resetFormToBlank();
+      if (_editingClip == null) {
+        _resetFormToBlank();
+      }
     }
-
     setState(() => _isSaving = false);
   }
 
@@ -250,15 +286,14 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     );
   }
 
-  // --- HELPER & UI METHODS ---
-
   void _setStartTimeFromPlayer() {
     final time = player.state.position;
     setState(() {
       if (_formClip.endTime != Duration.zero && time > _formClip.endTime) {
-        _formClip.startTime = _formClip.endTime;
+        // On remplace la variable _formClip par une nouvelle copie
+        _formClip = _formClip.copyWith(startTime: _formClip.endTime);
       } else {
-        _formClip.startTime = time;
+        _formClip = _formClip.copyWith(startTime: time);
       }
     });
   }
@@ -267,9 +302,10 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     final time = player.state.position;
     setState(() {
       if (time < _formClip.startTime) {
-        _formClip.endTime = _formClip.startTime;
+        // On remplace la variable _formClip par une nouvelle copie
+        _formClip = _formClip.copyWith(endTime: _formClip.startTime);
       } else {
-        _formClip.endTime = time;
+        _formClip = _formClip.copyWith(endTime: time);
       }
     });
   }
@@ -324,9 +360,6 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     await _generateCoverAtTime(_formClip.startTime);
   }
 
-  // --- WIDGET BUILDER METHODS ---
-  // The implementations of these builders are mostly unchanged, just ensure they use _formClip.
-
   Widget _buildRatingBar() {
     return Column(
       children: [
@@ -341,8 +374,11 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
               ),
               onPressed: () {
                 setState(() {
-                  _formClip.rating = (_formClip.rating == index + 1) ? 0 : index + 1;
+                  final newRating = (_formClip.rating == index + 1) ? 0 : index + 1;
+                  _formClip = _formClip.copyWith(rating: newRating);
                 });
+                // Redonner le focus au formulaire
+                _formFocusNode.requestFocus();
               },
             );
           }),
@@ -364,8 +400,10 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
           ),
           onPressed: () {
             setState(() {
-              _formClip.isFavorite = !_formClip.isFavorite;
+              _formClip = _formClip.copyWith(isFavorite: !_formClip.isFavorite);
             });
+            // Redonner le focus au formulaire
+            _formFocusNode.requestFocus();
           },
         ),
       ],
@@ -496,7 +534,11 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
               return Chip(
                 label: Text(tag),
                 onDeleted: () {
-                  setState(() => _formClip.tags.remove(tag));
+                  setState(() {
+                    // CORRECTION: Créer une nouvelle liste et un nouveau clip
+                    final newTags = List<String>.from(_formClip.tags)..remove(tag);
+                    _formClip = _formClip.copyWith(tags: newTags);
+                  });
                 },
               );
             }).toList(),
@@ -514,7 +556,9 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
           onSelected: (String selection) {
             setState(() {
               if (selection.isNotEmpty && !_formClip.tags.contains(selection)) {
-                _formClip.tags.add(selection);
+                // CORRECTION: Créer une nouvelle liste et un nouveau clip
+                final newTags = List<String>.from(_formClip.tags)..add(selection);
+                _formClip = _formClip.copyWith(tags: newTags);
               }
             });
             _newTagController.clear();
@@ -529,7 +573,9 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                 final newTag = value.trim();
                 setState(() {
                   if (newTag.isNotEmpty && !_formClip.tags.contains(newTag)) {
-                    _formClip.tags.add(newTag);
+                    // CORRECTION: Créer une nouvelle liste et un nouveau clip
+                    final newTags = List<String>.from(_formClip.tags)..add(newTag);
+                    _formClip = _formClip.copyWith(tags: newTags);
                   }
                 });
                 controller.clear();
@@ -564,7 +610,6 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     );
   }
 
-  /// The left panel containing the player and all editor controls.
   Widget _buildEditorPanel(AppState appState) {
     return Column(
       children: [
@@ -589,11 +634,14 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                     },
                     child: Video(
                       key: _videoKey, controller: controller,
-                      controls: (state) => CustomPlayerControls(
-                        player: player,
-                        isFullscreen: state.isFullscreen(),
-                        onToggleFullscreen: state.toggleFullscreen,
-                      ),
+                      controls: (state) {
+                        if (!state.mounted) return const SizedBox.shrink();
+                        return CustomPlayerControls(
+                          player: player,
+                          isFullscreen: state.isFullscreen(),
+                          onToggleFullscreen: state.toggleFullscreen,
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -605,20 +653,17 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
           stream: player.stream.duration,
           initialData: player.state.duration,
           builder: (context, snapshot) {
-            // La condition est maintenant de vérifier si la durée est supérieure à zéro
             final isReady = (snapshot.data ?? Duration.zero) > Duration.zero;
 
             if (isReady) {
-              // Une fois prêt, on affiche la vraie barre de progression
               return CustomProgressBar(
                 player: player,
                 startTime: _formClip.startTime,
                 endTime: _formClip.endTime,
-                onSetStart: (time) => setState(() => _formClip.startTime = time),
-                onSetEnd: (time) => setState(() => _formClip.endTime = time),
+                onSetStart: (time) => setState(() => _formClip = _formClip.copyWith(startTime: time)),
+                onSetEnd: (time) => setState(() => _formClip = _formClip.copyWith(endTime: time)),
               );
             }
-            // Tant que le lecteur n'a pas communiqué sa durée, on affiche un indicateur de chargement
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 20.0),
               child: Center(child: CircularProgressIndicator()),
@@ -628,40 +673,43 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
         _buildClippingControls(),
         Expanded(
           flex: 3,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (_editingClip != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12.0),
-                    child: Chip(
-                      label: Text('Editing: ${_editingClip!.name}'),
-                      backgroundColor: Colors.orange.shade100,
-                      onDeleted: _resetFormToBlank,
-                      deleteIcon: const Icon(Icons.cancel),
+          child: Focus(
+            focusNode: _formFocusNode,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_editingClip != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12.0),
+                      child: Chip(
+                        label: Text('Editing: ${_editingClip!.name}'),
+                        backgroundColor: Colors.orange.shade100,
+                        onDeleted: _resetFormToBlank,
+                        deleteIcon: const Icon(Icons.cancel),
+                      ),
+                    ),
+                  TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Clip Name', border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  _buildTagEditor(appState),
+                  const SizedBox(height: 12),
+                  TextField(controller: _notesController, maxLines: 2, decoration: const InputDecoration(labelText: 'Notes', border: OutlineInputBorder())),
+                  const SizedBox(height: 16),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [_buildRatingBar(), _buildFavoriteButton()],
+                      ),
                     ),
                   ),
-                TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Clip Name', border: OutlineInputBorder())),
-                const SizedBox(height: 12),
-                _buildTagEditor(appState),
-                const SizedBox(height: 12),
-                TextField(controller: _notesController, maxLines: 2, decoration: const InputDecoration(labelText: 'Notes', border: OutlineInputBorder())),
-                const SizedBox(height: 16),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [_buildFavoriteButton(), _buildRatingBar()],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _buildCoverControls(),
-                const SizedBox(height: 20),
-              ],
+                  const SizedBox(height: 16),
+                  _buildCoverControls(),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
           ),
         ),
@@ -671,6 +719,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
 
   /// The right panel displaying the list of saved clips for this video.
   Widget _buildClipList(AppState appState) {
+    // Le reste de cette méthode est identique à la version précédente
     final clipsForThisVideo = appState.clips.where((c) => c.videoPath == widget.video.path).toList();
 
     return Scaffold(
@@ -683,10 +732,10 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
       body: clipsForThisVideo.isEmpty
           ? const Center(child: Text('No clips created yet.\nUse the panel on the left to create one.', textAlign: TextAlign.center))
           : ScrollablePositionedList.builder(
-            itemCount: clipsForThisVideo.length,
-            itemScrollController: _itemScrollController,
-            itemPositionsListener: _itemPositionsListener,
-            itemBuilder: (context, index) {
+        itemCount: clipsForThisVideo.length,
+        itemScrollController: _itemScrollController,
+        itemPositionsListener: _itemPositionsListener,
+        itemBuilder: (context, index) {
           final clip = clipsForThisVideo[index];
           final isEditingThis = _editingClip?.id == clip.id;
           final duration = clip.endTime - clip.startTime;
@@ -706,7 +755,6 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                       : Container(width: 100, height: 56, color: Colors.grey.shade300, child: const Icon(Icons.movie_creation_outlined)),
                   title: Text(clip.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(
-                    // **CORRECTION 2 :** Appel de la fonction sans le paramètre 'showMilliseconds'.
                     '${formatDuration(clip.startTime)} - ${formatDuration(clip.endTime)} (${formatDuration(duration)})',
                     style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                   ),
@@ -720,6 +768,41 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                       children: clip.tags.map((t) => Chip(label: Text(t), visualDensity: VisualDensity.compact)).toList(),
                     ),
                   ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Row(
+                        children: List.generate(5, (starIndex) {
+                          return IconButton(
+                            icon: Icon(
+                              starIndex < clip.rating ? Icons.star : Icons.star_border,
+                              color: starIndex < clip.rating ? Colors.amber.shade600 : Theme.of(context).disabledColor,
+                            ),
+                            onPressed: () {
+                              final newRating = clip.rating == starIndex + 1 ? 0 : starIndex + 1;
+                              final updatedClip = clip.copyWith(rating: newRating);
+                              context.read<AppState>().updateClip(updatedClip);
+                            },
+                          );
+                        }),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: 'Toggle Favorite',
+                        icon: Icon(
+                          clip.isFavorite ? Icons.favorite : Icons.favorite_border,
+                          color: clip.isFavorite ? Colors.redAccent : Theme.of(context).disabledColor,
+                        ),
+                        onPressed: () {
+                          final updatedClip = clip.copyWith(isFavorite: !clip.isFavorite);
+                          context.read<AppState>().updateClip(updatedClip);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
                 const Divider(height: 1),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -754,6 +837,48 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     final appState = context.watch<AppState>();
     final isEditing = _editingClip != null;
 
+    // --- LOGIQUE DE SYNCHRONISATION CORRIGÉE ---
+    if (isEditing) {
+      try {
+        final latestClipVersionInState = appState.clips.firstWhere((c) => c.id == _editingClip!.id);
+
+        // On compare la version dans l'état global avec la version originale de notre session d'édition (_editingClip).
+        // Cette condition n'est vraie que si une modification a eu lieu DEPUIS LA LISTE DE DROITE.
+        if (latestClipVersionInState != _editingClip) {
+
+          // Un changement externe a eu lieu. On met à jour l'éditeur pour refléter ce changement.
+          // On utilise addPostFrameCallback pour éviter un setState pendant un build.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+
+            // C'est une bonne pratique d'informer l'utilisateur.
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Clip data refreshed due to external changes.'),
+                backgroundColor: Colors.blueAccent,
+              ),
+            );
+
+            setState(() {
+              // On met à jour la "base" de l'édition.
+              _editingClip = latestClipVersionInState.copyWith();
+              // On réinitialise le formulaire avec cette nouvelle base.
+              _formClip = latestClipVersionInState.copyWith();
+              // On force la mise à jour des contrôleurs de texte.
+              _updateControllersAndPreviewFromClip(true);
+            });
+          });
+        }
+      } catch (e) {
+        // Le clip a probablement été supprimé. On réinitialise le formulaire.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _resetFormToBlank();
+        });
+      }
+    }
+
+    // Détermine si des changements non sauvegardés existent
+    final bool hasChanges = isEditing && _formClip != _editingClip;
+
     final saveShortcut = LogicalKeySet(
       defaultTargetPlatform == TargetPlatform.macOS ? LogicalKeyboardKey.meta : LogicalKeyboardKey.control,
       LogicalKeyboardKey.keyS,
@@ -775,15 +900,25 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                   label: const Text('New Clip'),
                   onPressed: _resetFormToBlank,
                 ),
+              const SizedBox(width: 8),
+              if (isEditing)
+                TextButton.icon(
+                  icon: const Icon(Icons.undo),
+                  label: const Text('Reset'),
+                  onPressed: hasChanges ? _resetFormChanges : null,
+                  style: TextButton.styleFrom(
+                    foregroundColor: hasChanges ? Colors.orange.shade700 : Colors.grey,
+                  ),
+                ),
               const SizedBox(width: 16),
               ElevatedButton.icon(
                 icon: _isSaving
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : Icon(isEditing ? Icons.check_circle_outline : Icons.save),
                 label: Text(isEditing ? 'Update' : 'Save New'),
-                onPressed: _isSaving ? null : _saveOrUpdateClip,
+                onPressed: (_isSaving || (isEditing && !hasChanges)) ? null : _saveOrUpdateClip,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isEditing ? Colors.orange.shade800 : Colors.green.shade700,
+                  backgroundColor: isEditing ? (hasChanges ? Colors.orange.shade800 : Colors.grey) : Colors.green.shade700,
                   foregroundColor: Colors.white,
                 ),
               ),
@@ -792,9 +927,8 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
           ),
           body: MultiSplitView(
             controller: _splitViewController,
-            // **CORRECTION 1 :** Utilisation de `Theme.of(context)` au lieu de `themeData` pour accéder à `colorScheme`.
             dividerBuilder: (axis, index, resizable, dragging, highlighted, themeData) =>
-                Container(color: dragging ? Theme.of(context).colorScheme.primaryContainer : null, width: 8, child: Icon(Icons.drag_indicator, size: 16)),
+                Container(color: dragging ? Theme.of(context).colorScheme.primaryContainer : null, width: 8, child: const Icon(Icons.drag_indicator, size: 16)),
             builder: (context, area) {
               if (area.data == 'editor') {
                 return _buildEditorPanel(appState);
