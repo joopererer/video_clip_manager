@@ -23,6 +23,29 @@ class ThumbnailService {
     return p.join(_thumbnailDir, '$clipId.jpg');
   }
 
+  /// 根据数据库文件路径获取对应的缩略图目录
+  String getThumbnailDirForDatabase(String dbPath) {
+    final dbDir = p.dirname(dbPath);
+    return p.join(dbDir, 'Thumbnails');
+  }
+
+  /// 根据数据库文件路径和clipId获取缩略图路径
+  String getThumbnailPathForDatabase(String dbPath, String clipId) {
+    final thumbDir = getThumbnailDirForDatabase(dbPath);
+    return p.join(thumbDir, '$clipId.jpg');
+  }
+
+  /// 将完整路径转换为相对路径（只保留文件名）
+  String getThumbnailFileName(String clipId) {
+    return '$clipId.jpg';
+  }
+
+  /// 从相对路径构建完整路径
+  String buildThumbnailPath(String dbPath, String thumbnailFileName) {
+    final thumbDir = getThumbnailDirForDatabase(dbPath);
+    return p.join(thumbDir, thumbnailFileName);
+  }
+
   Future<void> clearCache() async {
     // 确保播放器已停止并释放了可能锁定的文件资源
     await player.stop();
@@ -60,6 +83,10 @@ class ThumbnailService {
   ) async {
     final thumbPath = getThumbnailPath(clipId);
     final thumbFile = File(thumbPath);
+    
+    // 确保缩略图目录存在
+    final thumbDir = p.dirname(thumbPath);
+    await Directory(thumbDir).create(recursive: true);
 
     try {
       if (_currentlyOpenVideoPath != videoPath) {

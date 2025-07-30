@@ -1,6 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../data/models.dart';
+import '../data/app_state.dart';
+import '../services/thumbnail_service.dart';
+import '../services/path_service.dart';
 
 class ClipThumbnail extends StatefulWidget {
   final VideoClip clip;
@@ -52,10 +56,30 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
       return;
     }
 
+    // 构建完整的缩略图路径
+    String fullThumbPath;
+    if (!widget.clip.thumbnailPath!.contains('\\') && !widget.clip.thumbnailPath!.contains('/')) {
+      // 相对路径（只有文件名），构建完整路径
+      final appState = context.read<AppState>();
+      if (appState.currentDbFullPath != null) {
+        fullThumbPath = appState.thumbnailService.buildThumbnailPath(appState.currentDbFullPath!, widget.clip.thumbnailPath!);
+      } else {
+        // 没有数据库路径，无法构建完整路径
+        setState(() {
+          _fileExists = false;
+          _isLoading = false;
+        });
+        return;
+      }
+    } else {
+      // 完整路径，直接使用
+      fullThumbPath = widget.clip.thumbnailPath!;
+    }
+
     // 检查缓存
-    if (_fileExistsCache.containsKey(widget.clip.thumbnailPath)) {
+    if (_fileExistsCache.containsKey(fullThumbPath)) {
       setState(() {
-        _fileExists = _fileExistsCache[widget.clip.thumbnailPath];
+        _fileExists = _fileExistsCache[fullThumbPath];
         _isLoading = false;
       });
       return;
@@ -66,10 +90,10 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
     });
 
     try {
-      final exists = await File(widget.clip.thumbnailPath!).exists();
+      final exists = await File(fullThumbPath).exists();
       if (mounted) {
         // 更新缓存
-        _fileExistsCache[widget.clip.thumbnailPath!] = exists;
+        _fileExistsCache[fullThumbPath] = exists;
         setState(() {
           _fileExists = exists;
           _isLoading = false;
@@ -78,7 +102,7 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
     } catch (e) {
       if (mounted) {
         // 缓存错误结果
-        _fileExistsCache[widget.clip.thumbnailPath!] = false;
+        _fileExistsCache[fullThumbPath] = false;
         setState(() {
           _fileExists = false;
           _isLoading = false;
@@ -101,22 +125,43 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
     if (path == null || _isLoading) {
       child = Center(child: CircularProgressIndicator(strokeWidth: 2.0));
     } else if (_fileExists == true) {
-      // 计算合适的缓存尺寸
-      double displayWidth = widget.width ?? widget.size ?? 200;
-      double displayHeight = widget.height ?? widget.size ?? 200;
-      int cacheWidth = (displayWidth * 2).toInt(); // 2倍尺寸确保清晰度
-      int cacheHeight = (displayHeight * 2).toInt();
+      // 构建完整的缩略图路径
+      String? fullThumbPath;
+      if (!path.contains('\\') && !path.contains('/')) {
+        // 相对路径（只有文件名），构建完整路径
+        final appState = context.read<AppState>();
+        if (appState.currentDbFullPath != null) {
+          fullThumbPath = appState.thumbnailService.buildThumbnailPath(appState.currentDbFullPath!, path);
+        } else {
+          // 没有数据库路径，无法构建完整路径
+          child = Center(child: placeholder);
+        }
+      } else {
+        // 完整路径，直接使用
+        fullThumbPath = path;
+      }
       
-      child = Image.file(
-        File(path),
-        fit: BoxFit.cover,
-        width: double.infinity,
-        height: double.infinity,
-        errorBuilder: (c, e, s) => Center(child: placeholder),
-        // 使用计算出的缓存参数
-        cacheWidth: cacheWidth,
-        cacheHeight: cacheHeight,
-      );
+      // 只有在有完整路径时才创建图片
+      if (fullThumbPath != null) {
+        // 计算合适的缓存尺寸
+        double displayWidth = widget.width ?? widget.size ?? 200;
+        double displayHeight = widget.height ?? widget.size ?? 200;
+        int cacheWidth = (displayWidth * 2).toInt(); // 2倍尺寸确保清晰度
+        int cacheHeight = (displayHeight * 2).toInt();
+        
+        child = Image.file(
+          File(fullThumbPath),
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (c, e, s) => Center(child: placeholder),
+          // 使用计算出的缓存参数
+          cacheWidth: cacheWidth,
+          cacheHeight: cacheHeight,
+        );
+      } else {
+        child = Center(child: placeholder);
+      }
     } else {
       child = Center(child: placeholder);
     }

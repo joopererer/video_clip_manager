@@ -24,6 +24,9 @@ class _MainScreenState extends State<MainScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      setState(() {}); // 当tab切换时触发UI更新
+    });
     _searchController.addListener(
       () => setState(() => _searchQuery = _searchController.text),
     );
@@ -333,28 +336,28 @@ class _MainScreenState extends State<MainScreen>
                     suffixIcon: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // 标签过滤
-                        if (appState.selectedTags.isNotEmpty)
+                        // 标签过滤 - 只在clips tab显示
+                        if (_tabController.index == 0 && appState.selectedTags.isNotEmpty)
                           Chip(
                             label: Text('${appState.selectedTags.length}'),
                             onDeleted: () => appState.clearSelectedTags(),
                           ),
-                                    // 星级过滤
-            if (appState.selectedRating != null)
-              Chip(
-                label: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    appState.selectedRating == 0
-                        ? const Icon(Icons.star_border, size: 16, color: Colors.grey)
-                        : const Icon(Icons.star, size: 16, color: Colors.amber),
-                    Text(appState.selectedRating == 0 ? 'No Rating' : '${appState.selectedRating}'),
-                  ],
-                ),
-                onDeleted: () => appState.clearSelectedRating(),
-              ),
-                        // 爱心收藏过滤
-                        if (appState.selectedFavorite != null)
+                        // 星级过滤 - 只在clips tab显示
+                        if (_tabController.index == 0 && appState.selectedRating != null)
+                          Chip(
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                appState.selectedRating == 0
+                                    ? const Icon(Icons.star_border, size: 16, color: Colors.grey)
+                                    : const Icon(Icons.star, size: 16, color: Colors.amber),
+                                Text(appState.selectedRating == 0 ? 'No Rating' : '${appState.selectedRating}'),
+                              ],
+                            ),
+                            onDeleted: () => appState.clearSelectedRating(),
+                          ),
+                        // 爱心收藏过滤 - 只在clips tab显示
+                        if (_tabController.index == 0 && appState.selectedFavorite != null)
                           Chip(
                             label: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -369,75 +372,76 @@ class _MainScreenState extends State<MainScreen>
                             ),
                             onDeleted: () => appState.clearSelectedFavorite(),
                           ),
-                        // 过滤按钮
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.filter_list),
-                          onSelected: (value) {
-                            switch (value) {
-                              case 'tags':
-                                _showTagFilterDialog();
-                                break;
-                              case 'rating':
-                                _showRatingFilterDialog();
-                                break;
-                              case 'favorite':
-                                _showFavoriteFilterDialog();
-                                break;
-                              case 'clear_all':
-                                appState.clearAllFilters();
-                                break;
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem<String>(
-                              value: 'tags',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.label),
-                                  SizedBox(width: 8),
-                                  Text('Filter by Tags'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem<String>(
-                              value: 'rating',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.star),
-                                  SizedBox(width: 8),
-                                  Text('Filter by Rating'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem<String>(
-                              value: 'favorite',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.favorite),
-                                  SizedBox(width: 8),
-                                  Text('Filter by Favorite'),
-                                ],
-                              ),
-                            ),
-                            if (appState.selectedTags.isNotEmpty || 
-                                appState.selectedRating != null || 
-                                appState.selectedFavorite != null)
-                              const PopupMenuDivider(),
-                            if (appState.selectedTags.isNotEmpty || 
-                                appState.selectedRating != null || 
-                                appState.selectedFavorite != null)
+                        // 过滤按钮 - 只在clips tab显示
+                        if (_tabController.index == 0)
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.filter_list),
+                            onSelected: (value) {
+                              switch (value) {
+                                case 'tags':
+                                  _showTagFilterDialog();
+                                  break;
+                                case 'rating':
+                                  _showRatingFilterDialog();
+                                  break;
+                                case 'favorite':
+                                  _showFavoriteFilterDialog();
+                                  break;
+                                case 'clear_all':
+                                  appState.clearAllFilters();
+                                  break;
+                              }
+                            },
+                            itemBuilder: (context) => [
                               const PopupMenuItem<String>(
-                                value: 'clear_all',
+                                value: 'tags',
                                 child: Row(
                                   children: [
-                                    Icon(Icons.clear_all),
+                                    Icon(Icons.label),
                                     SizedBox(width: 8),
-                                    Text('Clear All Filters'),
+                                    Text('Filter by Tags'),
                                   ],
                                 ),
                               ),
-                          ],
-                        ),
+                              const PopupMenuItem<String>(
+                                value: 'rating',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.star),
+                                    SizedBox(width: 8),
+                                    Text('Filter by Rating'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem<String>(
+                                value: 'favorite',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.favorite),
+                                    SizedBox(width: 8),
+                                    Text('Filter by Favorite'),
+                                  ],
+                                ),
+                              ),
+                              if (appState.selectedTags.isNotEmpty || 
+                                  appState.selectedRating != null || 
+                                  appState.selectedFavorite != null)
+                                const PopupMenuDivider(),
+                              if (appState.selectedTags.isNotEmpty || 
+                                  appState.selectedRating != null || 
+                                  appState.selectedFavorite != null)
+                                const PopupMenuItem<String>(
+                                  value: 'clear_all',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.clear_all),
+                                      SizedBox(width: 8),
+                                      Text('Clear All Filters'),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
                         if (_searchQuery.isNotEmpty)
                           IconButton(
                             icon: const Icon(Icons.clear),
@@ -461,7 +465,12 @@ class _MainScreenState extends State<MainScreen>
                       selectedRating: appState.selectedRating,
                       selectedFavorite: appState.selectedFavorite,
                     ),
-                    VideosTab(searchQuery: _searchQuery),
+                    VideosTab(
+                      searchQuery: _searchQuery,
+                      selectedTags: appState.selectedTags,
+                      selectedRating: appState.selectedRating,
+                      selectedFavorite: appState.selectedFavorite,
+                    ),
                     PlaylistsTab(searchQuery: _searchQuery),
                   ],
                 ),

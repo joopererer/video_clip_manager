@@ -112,8 +112,62 @@ class OriginalVideo {
   final String id;
   final String path;
   String name;
+  Duration? duration;
+  String? thumbnailPath;
+  Map<String, dynamic> metadata; // 存储视频元数据，如演员、年份、系列等
 
-  OriginalVideo({required this.id, required this.path, required this.name});
+  OriginalVideo({
+    required this.id, 
+    required this.path, 
+    required this.name,
+    this.duration,
+    this.thumbnailPath,
+    this.metadata = const {},
+  });
+
+  // 添加copyWith方法
+  OriginalVideo copyWith({
+    String? id,
+    String? path,
+    String? name,
+    Duration? duration,
+    String? thumbnailPath,
+    Map<String, dynamic>? metadata,
+  }) {
+    return OriginalVideo(
+      id: id ?? this.id,
+      path: path ?? this.path,
+      name: name ?? this.name,
+      duration: duration ?? this.duration,
+      thumbnailPath: thumbnailPath ?? this.thumbnailPath,
+      metadata: metadata ?? this.metadata,
+    );
+  }
+
+  // 添加JSON序列化方法
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'path': path,
+      'name': name,
+      'duration': duration?.inMilliseconds,
+      'thumbnailPath': thumbnailPath,
+      'metadata': metadata,
+    };
+  }
+
+  factory OriginalVideo.fromJson(Map<String, dynamic> json) {
+    return OriginalVideo(
+      id: json['id'] ?? '',
+      path: json['path'] ?? '',
+      name: json['name'] ?? '',
+      duration: json['duration'] != null 
+          ? Duration(milliseconds: json['duration']) 
+          : null,
+      thumbnailPath: json['thumbnailPath'],
+      metadata: Map<String, dynamic>.from(json['metadata'] ?? {}),
+    );
+  }
 }
 
 class Playlist {

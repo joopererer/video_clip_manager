@@ -9,6 +9,7 @@ import 'models.dart';
 import 'data_service.dart';
 import '../services/path_service.dart';
 import '../services/thumbnail_service.dart';
+import '../services/video_metadata_service.dart';
 
 const String _prefsKeyDbPath = 'db_path';
 
@@ -17,6 +18,7 @@ class AppState extends ChangeNotifier {
   final PathService _pathService;
   final ThumbnailService _thumbnailService;
   late final DataService _dataService;
+  late final VideoMetadataService _videoMetadataService;
 
   List<VideoClip> _clips = [];
   List<OriginalVideo> _originalVideos = [];
@@ -52,6 +54,8 @@ class AppState extends ChangeNotifier {
   String get currentDbPath => _currentDbPath != null
       ? p.basename(_currentDbPath!)
       : 'No Database Loaded';
+  String? get currentDbFullPath => _currentDbPath;
+  ThumbnailService get thumbnailService => _thumbnailService;
   bool get clipsIsGridView => _clipsIsGridView;
   bool get videosIsGridView => _videosIsGridView;
   List<String> get selectedTags => List.unmodifiable(_selectedTags);
@@ -66,6 +70,7 @@ class AppState extends ChangeNotifier {
        _pathService = pathService,
        _thumbnailService = thumbnailService {
     _dataService = DataService(pathService: _pathService);
+    _videoMetadataService = VideoMetadataService(thumbnailService: _thumbnailService);
     _clipsIsGridView = _prefs.getBool('clipsIsGridView') ?? false;
     _videosIsGridView = _prefs.getBool('videosIsGridView') ?? false;
   }
@@ -169,9 +174,16 @@ class AppState extends ChangeNotifier {
       }
       debugPrint("Loading database from: $_currentDbPath");
 
-      final loadedClips = await _dataService.loadClipsFromPath(_currentDbPath!);
-      _clips = loadedClips;
-      _generateOriginalVideos();
+      final result = await _dataService.loadDataFromPath(_currentDbPath!);
+      _clips = result.clips ?? [];
+      
+      if (result.videos != null) {
+        _originalVideos = result.videos!;
+      } else {
+        // 兼容旧格式，从clips生成videos
+        _generateOriginalVideos();
+      }
+      
       await _populateAllThumbnails();
     } catch (e) {
       debugPrint("Error during initial load: $e");
@@ -188,7 +200,13 @@ class AppState extends ChangeNotifier {
         _clips = result.clips!;
         _currentDbPath = result.path;
         await _prefs.setString(_prefsKeyDbPath, _currentDbPath!);
-        _generateOriginalVideos();
+        
+        if (result.videos != null) {
+          _originalVideos = result.videos!;
+        } else {
+          _generateOriginalVideos();
+        }
+        
         notifyListeners();
         await _populateAllThumbnails();
         return "${result.clips!.length} clips loaded from ${p.basename(result.path!)}.";
@@ -231,14 +249,87 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
+      debugPrint('=== Starting forceRefreshThumbnails ===');
+      debugPrint('Clips count: ${_clips.length}');
+      debugPrint('Videos count: ${_originalVideos.length}');
+      
+      // 1. 清空 Thumbnail 目录
+      debugPrint('Step 1: Clearing thumbnail directories...');
+      
+      // 清除默认缩略图目录
       await _thumbnailService.clearCache();
-      for (final clip in _clips) {
-        clip.copyWith(thumbnailPath: null);
+      
+      // 清除当前数据库对应的缩略图目录
+      if (_currentDbPath != null) {
+        final thumbDir = _thumbnailService.getThumbnailDirForDatabase(_currentDbPath!);
+        final dir = Directory(thumbDir);
+        if (await dir.exists()) {
+          final files = dir.list();
+          await for (final file in files) {
+            try {
+              await file.delete();
+              debugPrint('Deleted thumbnail file: ${file.path}');
+            } catch (e) {
+              debugPrint('Failed to delete file ${file.path}: $e');
+            }
+          }
+        }
       }
-      // 注意：这里需要一个 notifyListeners() 来让UI立即移除旧图片，显示加载指示器
+      
+      // 2. 重新生成 clip 封面图
+      debugPrint('Step 2: Generating clip thumbnails...');
+      if (_clips.isNotEmpty) {
+        await _thumbnailService.generateThumbnailsInBatch(_clips, () {
+          notifyListeners();
+        });
+      }
+      
+      // 3. 重新生成 video 封面图
+      debugPrint('Step 3: Generating video thumbnails...');
+      if (_originalVideos.isNotEmpty) {
+        // 创建新的视频列表，重置所有元数据
+        final resetVideos = <OriginalVideo>[];
+        for (int i = 0; i < _originalVideos.length; i++) {
+          final originalVideo = _originalVideos[i];
+          final resetVideo = OriginalVideo(
+            id: originalVideo.id,
+            path: originalVideo.path,
+            name: originalVideo.name,
+            duration: null,
+            thumbnailPath: null,
+            metadata: originalVideo.metadata,
+          );
+          resetVideos.add(resetVideo);
+          debugPrint('Reset video ${resetVideo.name}: thumbnailPath=null, duration=null');
+        }
+        
+        // 验证重置是否生效
+        debugPrint('=== Verifying reset ===');
+        for (int i = 0; i < resetVideos.length; i++) {
+          final video = resetVideos[i];
+          debugPrint('Video ${i + 1}: ${video.name} - duration: ${video.duration}, thumbnailPath: ${video.thumbnailPath}');
+        }
+        debugPrint('=== End verification ===');
+        
+        await _videoMetadataService.processVideoMetadata(
+          resetVideos,
+          (index, updatedVideo) {
+            // 找到对应的 video 在 _originalVideos 中的索引
+            final videoIndex = _originalVideos.indexWhere((v) => v.id == updatedVideo.id);
+            if (videoIndex != -1) {
+              _originalVideos[videoIndex] = updatedVideo;
+              debugPrint('Updated video ${updatedVideo.name} with thumbnail: ${updatedVideo.thumbnailPath}');
+              notifyListeners();
+            }
+          },
+        );
+      }
+      
+      // 4. 通知界面刷新
+      debugPrint('Step 4: Notifying UI to refresh...');
       notifyListeners();
-
-      await _populateAllThumbnails();
+      
+      debugPrint('=== Finished forceRefreshThumbnails ===');
     } catch (e) {
       debugPrint("Error forcing thumbnail refresh: $e");
       // 这里可以添加一个向用户显示错误的功能
@@ -249,39 +340,116 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> _populateAllThumbnails() async {
-    // 这个函数不应该管理 _isGeneratingThumbnails 状态
+    debugPrint('=== Starting _populateAllThumbnails ===');
+    
     final clipsToGenerate = <VideoClip>[];
+    final videosToGenerate = <OriginalVideo>[];
+    
+    // 处理 clips 的缩略图
     for (final clip in _clips) {
-      final thumbPath = _thumbnailService.getThumbnailPath(clip.id);
-      if (await File(thumbPath).exists()) {
-        // Trouvez l'index du clip dans votre liste `_clips`
-        final index = _clips.indexWhere((c) => c.id == clip.id);
-        if (index != -1) {
-          // Créez une nouvelle instance avec le thumbnailPath mis à jour
-          final updatedClip = _clips[index].copyWith(thumbnailPath: thumbPath);
-          // Remplacez l'ancien clip par le nouveau dans la liste
-          _clips[index] = updatedClip;
-        }
-      } else {
+      if (clip.thumbnailPath == null) {
+        // 没有缩略图，需要生成
         clipsToGenerate.add(clip);
+        debugPrint('Clip ${clip.name} needs thumbnail generation');
+      } else {
+        // 检查现有缩略图是否存在
+        String fullThumbPath;
+        if (!clip.thumbnailPath!.contains('\\') && !clip.thumbnailPath!.contains('/')) {
+          // 相对路径，构建完整路径
+          fullThumbPath = _thumbnailService.buildThumbnailPath(_currentDbPath!, clip.thumbnailPath!);
+        } else {
+          // 完整路径，直接使用
+          fullThumbPath = clip.thumbnailPath!;
+        }
+        
+        if (await File(fullThumbPath).exists()) {
+          // 缩略图存在，更新为相对路径
+          final index = _clips.indexWhere((c) => c.id == clip.id);
+          if (index != -1) {
+            final thumbnailFileName = _thumbnailService.getThumbnailFileName(clip.id);
+            _clips[index] = _clips[index].copyWith(thumbnailPath: thumbnailFileName);
+            debugPrint('Clip ${clip.name} thumbnail exists, updated path');
+          }
+        } else {
+          // 缩略图不存在，需要生成
+          clipsToGenerate.add(clip);
+          debugPrint('Clip ${clip.name} thumbnail missing, needs generation');
+        }
       }
     }
+
+    // 处理 originalVideos 的缩略图
+    for (final video in _originalVideos) {
+      if (video.thumbnailPath == null) {
+        // 没有缩略图，需要生成
+        videosToGenerate.add(video);
+        debugPrint('Video ${video.name} needs thumbnail generation');
+      } else {
+        // 检查现有缩略图是否存在
+        String fullThumbPath;
+        if (!video.thumbnailPath!.contains('\\') && !video.thumbnailPath!.contains('/')) {
+          // 相对路径，构建完整路径
+          fullThumbPath = _thumbnailService.buildThumbnailPath(_currentDbPath!, video.thumbnailPath!);
+        } else {
+          // 完整路径，直接使用
+          fullThumbPath = video.thumbnailPath!;
+        }
+        
+        if (await File(fullThumbPath).exists()) {
+          // 缩略图存在，更新为相对路径
+          final index = _originalVideos.indexWhere((v) => v.id == video.id);
+          if (index != -1) {
+            final thumbnailFileName = _thumbnailService.getThumbnailFileName(video.id);
+            _originalVideos[index] = _originalVideos[index].copyWith(thumbnailPath: thumbnailFileName);
+            debugPrint('Video ${video.name} thumbnail exists, updated path');
+          }
+        } else {
+          // 缩略图不存在，需要生成
+          videosToGenerate.add(video);
+          debugPrint('Video ${video.name} thumbnail missing, needs generation');
+        }
+      }
+    }
+
+    debugPrint('Clips to generate: ${clipsToGenerate.length}');
+    debugPrint('Videos to generate: ${videosToGenerate.length}');
 
     // 立即更新那些已经有缓存的缩略图
     notifyListeners();
 
+    // 生成缺失的 clips 缩略图
     if (clipsToGenerate.isNotEmpty) {
+      debugPrint('Generating clips thumbnails...');
       await _thumbnailService.generateThumbnailsInBatch(clipsToGenerate, () {
         notifyListeners();
       });
     }
+    
+    // 生成缺失的 videos 缩略图
+    if (videosToGenerate.isNotEmpty) {
+      debugPrint('Generating videos thumbnails...');
+      await _videoMetadataService.processVideoMetadata(
+        videosToGenerate,
+        (index, updatedVideo) {
+          // 找到对应的 video 在 _originalVideos 中的索引
+          final videoIndex = _originalVideos.indexWhere((v) => v.id == updatedVideo.id);
+          if (videoIndex != -1) {
+            _originalVideos[videoIndex] = updatedVideo;
+            debugPrint('Updated video ${updatedVideo.name} with thumbnail: ${updatedVideo.thumbnailPath}');
+            notifyListeners();
+          }
+        },
+      );
+    }
+    
+    debugPrint('=== Finished _populateAllThumbnails ===');
   }
 
   Future<void> _save() async {
     if (_currentDbPath == null) return;
     _isSaving = true;
     notifyListeners();
-    await _dataService.saveClipsToPath(_clips, _currentDbPath!);
+    await _dataService.saveDataToPath(_clips, _originalVideos, _currentDbPath!);
     _isSaving = false;
     _hasUnsavedChanges = false;
     notifyListeners();
@@ -311,14 +479,30 @@ class AppState extends ChangeNotifier {
     for (var clip in _clips) {
       (videoMap[clip.videoPath] ??= []).add(clip);
     }
-    _originalVideos = videoMap.entries.map((entry) {
+    
+    // 创建新的视频列表，但保留现有的元数据
+    final newVideos = <OriginalVideo>[];
+    for (final entry in videoMap.entries) {
       final path = entry.key;
-      return OriginalVideo(
-        id: 'vid_${path.hashCode}',
-        path: path,
-        name: p.basename(path),
-      );
-    }).toList();
+      final videoId = 'vid_${path.hashCode}';
+      
+      // 查找现有的视频对象，保留其元数据
+      final existingVideo = _originalVideos.where((v) => v.path == path).firstOrNull;
+      
+      if (existingVideo != null) {
+        // 保留现有的元数据
+        newVideos.add(existingVideo);
+      } else {
+        // 创建新的视频对象
+        newVideos.add(OriginalVideo(
+          id: videoId,
+          path: path,
+          name: p.basename(path),
+        ));
+      }
+    }
+    
+    _originalVideos = newVideos;
   }
 
   Future<void> addClip(VideoClip clip) async {
@@ -378,16 +562,17 @@ class AppState extends ChangeNotifier {
     final favorite = selectedFavorite ?? _selectedFavorite;
     
     return _clips.where((clip) {
-      final query = searchQuery.toLowerCase();
-      final textMatch =
-          query.isEmpty ||
-              clip.name.toLowerCase().contains(query) ||
-              (clip.notes?.toLowerCase().contains(query) ?? false) ||
-              clip.videoPath.toLowerCase().contains(query);
+      // 文本搜索匹配
+      bool textMatch = true;
+      if (searchQuery.isNotEmpty) {
+        final query = searchQuery.toLowerCase();
+        textMatch = clip.name.toLowerCase().contains(query) ||
+                   (clip.notes?.toLowerCase().contains(query) ?? false) ||
+                   clip.videoPath.toLowerCase().contains(query);
+      }
 
-      final tagMatch =
-          tags.isEmpty ||
-              tags.every((tag) => clip.tags.contains(tag));
+      // 标签匹配
+      final tagMatch = tags.isEmpty || tags.every((tag) => clip.tags.contains(tag));
 
       // 星级匹配逻辑：
       // rating == null: 不过滤星级
@@ -401,6 +586,83 @@ class AppState extends ChangeNotifier {
     }).toList();
   }
 
+  // 获取过滤后的视频列表
+  List<OriginalVideo> getFilteredVideos({
+    String searchQuery = '',
+  }) {
+    if (searchQuery.isEmpty) {
+      return _originalVideos;
+    }
+    
+    final query = searchQuery.toLowerCase();
+    return _originalVideos.where((video) {
+      return video.name.toLowerCase().contains(query) ||
+             video.path.toLowerCase().contains(query);
+    }).toList();
+  }
+
+  // 处理视频元数据
+  Future<void> processVideoMetadata() async {
+    await _videoMetadataService.processVideoMetadata(
+      _originalVideos,
+      (index, updatedVideo) {
+        _originalVideos[index] = updatedVideo;
+        notifyListeners();
+      },
+    );
+    // 保存更新后的视频数据
+    _scheduleSave();
+  }
+
+  // 更新单个视频的元数据
+  Future<void> updateVideoMetadata(String videoId) async {
+    final index = _originalVideos.indexWhere((v) => v.id == videoId);
+    if (index != -1) {
+      final video = _originalVideos[index];
+      debugPrint('Updating metadata for video: ${video.name}');
+      debugPrint('Current thumbnailPath: ${video.thumbnailPath}');
+      
+      final metadata = await _videoMetadataService.getVideoMetadata(video.path);
+      String? thumbnailPath;
+      
+      if (video.thumbnailPath == null) {
+        debugPrint('Generating thumbnail for video: ${video.name}');
+        thumbnailPath = await _videoMetadataService.generateVideoThumbnail(video.path, video.id);
+        debugPrint('Generated thumbnailPath: $thumbnailPath');
+      }
+
+      final updatedVideo = video.copyWith(
+        duration: metadata.duration,
+        thumbnailPath: thumbnailPath ?? video.thumbnailPath,
+        metadata: metadata.metadata,
+      );
+      
+      debugPrint('Updated video thumbnailPath: ${updatedVideo.thumbnailPath}');
+
+      _originalVideos[index] = updatedVideo;
+      notifyListeners();
+      // 保存更新后的视频数据
+      _scheduleSave();
+    }
+  }
+
+  // 添加原始视频
+  void addOriginalVideo(OriginalVideo video) {
+    // 检查是否已存在
+    if (!_originalVideos.any((v) => v.path == video.path)) {
+      _originalVideos.add(video);
+      notifyListeners();
+    }
+  }
+
+  // 更新原始视频
+  void updateOriginalVideo(int index, OriginalVideo updatedVideo) {
+    if (index >= 0 && index < _originalVideos.length) {
+      _originalVideos[index] = updatedVideo;
+      notifyListeners();
+    }
+  }
+
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
@@ -409,6 +671,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _saveTimer?.cancel();
+    _videoMetadataService.dispose();
     super.dispose();
   }
 }
