@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:desktop_drop/desktop_drop.dart';
+import 'package:path/path.dart' as p;
+import 'package:cross_file/cross_file.dart';
 
 import '../data/app_state.dart';
+import '../data/models.dart';
 import '../utils/tag_utils.dart';
 import 'tabs/clips_tab.dart';
 import 'tabs/videos_tab.dart';
@@ -19,6 +23,7 @@ class _MainScreenState extends State<MainScreen>
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _isDraggingFile = false;
 
   @override
   void initState() {
@@ -44,6 +49,48 @@ class _MainScreenState extends State<MainScreen>
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _handleVideoDrop(List<XFile> files) {
+    final appState = context.read<AppState>();
+    
+    for (final file in files) {
+      final path = file.path.toLowerCase();
+      if (path.endsWith('.mp4') ||
+          path.endsWith('.avi') ||
+          path.endsWith('.mkv') ||
+          path.endsWith('.mov') ||
+          path.endsWith('.wmv') ||
+          path.endsWith('.flv') ||
+          path.endsWith('.webm')) {
+        _addVideoFromPath(file.path, appState);
+      }
+    }
+  }
+
+  Future<void> _addVideoFromPath(String videoPath, AppState appState) async {
+    final videoName = p.basename(videoPath);
+    final videoId = 'vid_${videoPath.hashCode}';
+
+    // 检查视频是否已存在
+    if (appState.originalVideos.any((v) => v.path == videoPath)) {
+      _showSnackBar('Video "$videoName" already exists');
+      return;
+    }
+
+    final video = OriginalVideo(
+      id: videoId,
+      path: videoPath,
+      name: videoName,
+    );
+
+    // 添加到视频列表
+    appState.addOriginalVideo(video);
+
+    // 处理元数据
+    await appState.updateVideoMetadata(videoId);
+    
+    _showSnackBar('Added video: $videoName');
   }
 
   void _showTagFilterDialog() {
@@ -322,185 +369,230 @@ class _MainScreenState extends State<MainScreen>
           ],
         ),
       ),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    labelText: 'Search...',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // 标签过滤 - 只在clips tab显示
-                        if (_tabController.index == 0 && appState.selectedTags.isNotEmpty)
-                          Chip(
-                            label: Text('${appState.selectedTags.length}'),
-                            onDeleted: () => appState.clearSelectedTags(),
-                          ),
-                        // 星级过滤 - 只在clips tab显示
-                        if (_tabController.index == 0 && appState.selectedRating != null)
-                          Chip(
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                appState.selectedRating == 0
-                                    ? const Icon(Icons.star_border, size: 16, color: Colors.grey)
-                                    : const Icon(Icons.star, size: 16, color: Colors.amber),
-                                Text(appState.selectedRating == 0 ? 'No Rating' : '${appState.selectedRating}'),
-                              ],
+      body: DropTarget(
+        onDragDone: (details) {
+          _handleVideoDrop(details.files);
+          setState(() {
+            _isDraggingFile = false;
+          });
+        },
+        onDragEntered: (details) {
+          setState(() {
+            _isDraggingFile = true;
+          });
+        },
+        onDragExited: (details) {
+          setState(() {
+            _isDraggingFile = false;
+          });
+        },
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      labelText: 'Search...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 标签过滤 - 只在clips tab显示
+                          if (_tabController.index == 0 && appState.selectedTags.isNotEmpty)
+                            Chip(
+                              label: Text('${appState.selectedTags.length}'),
+                              onDeleted: () => appState.clearSelectedTags(),
                             ),
-                            onDeleted: () => appState.clearSelectedRating(),
-                          ),
-                        // 爱心收藏过滤 - 只在clips tab显示
-                        if (_tabController.index == 0 && appState.selectedFavorite != null)
-                          Chip(
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  appState.selectedFavorite! ? Icons.favorite : Icons.favorite_border,
-                                  size: 16,
-                                  color: appState.selectedFavorite! ? Colors.red : Colors.grey,
-                                ),
-                                Text(appState.selectedFavorite! ? 'Fav' : 'Not Fav'),
-                              ],
+                          // 星级过滤 - 只在clips tab显示
+                          if (_tabController.index == 0 && appState.selectedRating != null)
+                            Chip(
+                              label: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  appState.selectedRating == 0
+                                      ? const Icon(Icons.star_border, size: 16, color: Colors.grey)
+                                      : const Icon(Icons.star, size: 16, color: Colors.amber),
+                                  Text(appState.selectedRating == 0 ? 'No Rating' : '${appState.selectedRating}'),
+                                ],
+                              ),
+                              onDeleted: () => appState.clearSelectedRating(),
                             ),
-                            onDeleted: () => appState.clearSelectedFavorite(),
-                          ),
-                        // 过滤按钮 - 只在clips tab显示
-                        if (_tabController.index == 0)
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.filter_list),
-                            onSelected: (value) {
-                              switch (value) {
-                                case 'tags':
-                                  _showTagFilterDialog();
-                                  break;
-                                case 'rating':
-                                  _showRatingFilterDialog();
-                                  break;
-                                case 'favorite':
-                                  _showFavoriteFilterDialog();
-                                  break;
-                                case 'clear_all':
-                                  appState.clearAllFilters();
-                                  break;
-                              }
-                            },
-                            itemBuilder: (context) => [
-                              const PopupMenuItem<String>(
-                                value: 'tags',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.label),
-                                    SizedBox(width: 8),
-                                    Text('Filter by Tags'),
-                                  ],
-                                ),
+                          // 爱心收藏过滤 - 只在clips tab显示
+                          if (_tabController.index == 0 && appState.selectedFavorite != null)
+                            Chip(
+                              label: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    appState.selectedFavorite! ? Icons.favorite : Icons.favorite_border,
+                                    size: 16,
+                                    color: appState.selectedFavorite! ? Colors.red : Colors.grey,
+                                  ),
+                                  Text(appState.selectedFavorite! ? 'Fav' : 'Not Fav'),
+                                ],
                               ),
-                              const PopupMenuItem<String>(
-                                value: 'rating',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.star),
-                                    SizedBox(width: 8),
-                                    Text('Filter by Rating'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem<String>(
-                                value: 'favorite',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.favorite),
-                                    SizedBox(width: 8),
-                                    Text('Filter by Favorite'),
-                                  ],
-                                ),
-                              ),
-                              if (appState.selectedTags.isNotEmpty || 
-                                  appState.selectedRating != null || 
-                                  appState.selectedFavorite != null)
-                                const PopupMenuDivider(),
-                              if (appState.selectedTags.isNotEmpty || 
-                                  appState.selectedRating != null || 
-                                  appState.selectedFavorite != null)
+                              onDeleted: () => appState.clearSelectedFavorite(),
+                            ),
+                          // 过滤按钮 - 只在clips tab显示
+                          if (_tabController.index == 0)
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.filter_list),
+                              onSelected: (value) {
+                                switch (value) {
+                                  case 'tags':
+                                    _showTagFilterDialog();
+                                    break;
+                                  case 'rating':
+                                    _showRatingFilterDialog();
+                                    break;
+                                  case 'favorite':
+                                    _showFavoriteFilterDialog();
+                                    break;
+                                  case 'clear_all':
+                                    appState.clearAllFilters();
+                                    break;
+                                }
+                              },
+                              itemBuilder: (context) => [
                                 const PopupMenuItem<String>(
-                                  value: 'clear_all',
+                                  value: 'tags',
                                   child: Row(
                                     children: [
-                                      Icon(Icons.clear_all),
+                                      Icon(Icons.label),
                                       SizedBox(width: 8),
-                                      Text('Clear All Filters'),
+                                      Text('Filter by Tags'),
                                     ],
                                   ),
                                 ),
-                            ],
-                          ),
-                        if (_searchQuery.isNotEmpty)
-                          IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () => _searchController.clear(),
-                          ),
-                      ],
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8.0),
+                                const PopupMenuItem<String>(
+                                  value: 'rating',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.star),
+                                      SizedBox(width: 8),
+                                      Text('Filter by Rating'),
+                                    ],
+                                  ),
+                                ),
+                                const PopupMenuItem<String>(
+                                  value: 'favorite',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.favorite),
+                                      SizedBox(width: 8),
+                                      Text('Filter by Favorite'),
+                                    ],
+                                  ),
+                                ),
+                                if (appState.selectedTags.isNotEmpty || 
+                                    appState.selectedRating != null || 
+                                    appState.selectedFavorite != null)
+                                  const PopupMenuDivider(),
+                                if (appState.selectedTags.isNotEmpty || 
+                                    appState.selectedRating != null || 
+                                    appState.selectedFavorite != null)
+                                  const PopupMenuItem<String>(
+                                    value: 'clear_all',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.clear_all),
+                                        SizedBox(width: 8),
+                                        Text('Clear All Filters'),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          if (_searchQuery.isNotEmpty)
+                            IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => _searchController.clear(),
+                            ),
+                        ],
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    ClipsTab(
-                      searchQuery: _searchQuery,
-                      selectedTags: appState.selectedTags,
-                      selectedRating: appState.selectedRating,
-                      selectedFavorite: appState.selectedFavorite,
-                    ),
-                    VideosTab(
-                      searchQuery: _searchQuery,
-                      selectedTags: appState.selectedTags,
-                      selectedRating: appState.selectedRating,
-                      selectedFavorite: appState.selectedFavorite,
-                    ),
-                    PlaylistsTab(searchQuery: _searchQuery),
-                  ],
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      ClipsTab(
+                        searchQuery: _searchQuery,
+                        selectedTags: appState.selectedTags,
+                        selectedRating: appState.selectedRating,
+                        selectedFavorite: appState.selectedFavorite,
+                      ),
+                      VideosTab(
+                        searchQuery: _searchQuery,
+                        selectedTags: appState.selectedTags,
+                        selectedRating: appState.selectedRating,
+                        selectedFavorite: appState.selectedFavorite,
+                      ),
+                      PlaylistsTab(searchQuery: _searchQuery),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          if (appState.isLoading ||
-              appState.isSaving ||
-              appState.isGeneratingThumbnails)
-            Container(
-              color: Colors.black.withValues(alpha: 0.5),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 16),
-                    Text(
-                      appState.isSaving
-                          ? 'Saving...'
-                          : (appState.isGeneratingThumbnails
-                                ? 'Generating Thumbnails...'
-                                : 'Loading...'),
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                    ),
-                  ],
-                ),
-              ),
+              ],
             ),
-        ],
+            // 全局拖拽覆盖层
+            if (_isDraggingFile)
+              Container(
+                color: Colors.blue.withValues(alpha: 0.3),
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.cloud_upload,
+                        size: 64,
+                        color: Colors.blue,
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'Drop video files here to add',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            // 加载状态覆盖层
+            if (appState.isLoading ||
+                appState.isSaving ||
+                appState.isGeneratingThumbnails)
+              Container(
+                color: Colors.black.withValues(alpha: 0.5),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text(
+                        appState.isSaving
+                            ? 'Saving...'
+                            : (appState.isGeneratingThumbnails
+                                  ? 'Generating Thumbnails...'
+                                  : 'Loading...'),
+                        style: const TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
