@@ -11,7 +11,6 @@ import '../../data/models.dart';
 import '../player/clip_editor_screen.dart';
 import '../../widgets/video_thumbnail.dart';
 import '../../services/video_metadata_service.dart';
-import '../../widgets/video_metadata_dialog.dart';
 import '../../widgets/draggable_video_source.dart';
 
 class VideosTab extends StatefulWidget {
@@ -705,91 +704,5 @@ class _VideosTabState extends State<VideosTab> {
     );
   }
 
-  void _showVideoInfo(BuildContext context, OriginalVideo video) {
-    final metadata = VideoMetadata(metadata: video.metadata);
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(video.name),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (video.duration != null) ...[
-                const Text(
-                  'Duration:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(_formatDuration(video.duration!)),
-                const SizedBox(height: 16),
-              ],
-              const Text(
-                'Path:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text(video.path, style: const TextStyle(fontSize: 12)),
-              const SizedBox(height: 16),
-              if (metadata.actors.isNotEmpty) ...[
-                const Text(
-                  'Actors:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(metadata.actors.join(', ')),
-                const SizedBox(height: 16),
-              ],
-              if (metadata.year != null) ...[
-                const Text(
-                  'Year:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(metadata.year.toString()),
-                const SizedBox(height: 16),
-              ],
-              if (metadata.series != null) ...[
-                const Text(
-                  'Series:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(metadata.series!),
-                const SizedBox(height: 16),
-              ],
-              if (metadata.description != null) ...[
-                const Text(
-                  'Description:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(metadata.description!),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _editVideoMetadata(BuildContext context, OriginalVideo video) {
-    showDialog(
-      context: context,
-      builder: (context) => VideoMetadataDialog(
-        video: video,
-        onSave: (updatedVideo) {
-          final appState = context.read<AppState>();
-          final index = appState.originalVideos.indexWhere(
-            (v) => v.id == video.id,
-          );
-          if (index != -1) {
-            appState.updateOriginalVideo(index, updatedVideo);
-          }
-        },
-      ),
-    );
-  }
 }
