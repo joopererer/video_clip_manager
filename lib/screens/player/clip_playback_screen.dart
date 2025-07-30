@@ -12,7 +12,7 @@ import '../../data/app_state.dart';
 import 'clip_editor_screen.dart';
 import '../tabs/clips_tab.dart';
 import '../../utils/tag_utils.dart';
-
+import '../../widgets/custom_progress_bar.dart'; // 添加自定义进度条导入
 
 
 class ClipPlaybackScreen extends StatefulWidget {
@@ -47,6 +47,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   bool _isPlaying = false;
   late VideoClip _currentClip; // 使用late关键字，在initState中初始化
   bool _showHints = false; // 控制提示显示
+  bool _showCustomProgressBar = true; // 控制是否显示自定义进度条
+  bool _showClipRelativeProgress = true; // 控制是否显示clip相对进度
 
   @override
   void initState() {
@@ -357,6 +359,20 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
             _showHints = !_showHints;
           });
           break;
+        case 'P':
+        case 'p':
+          // P键：切换自定义进度条显示
+          setState(() {
+            _showCustomProgressBar = !_showCustomProgressBar;
+          });
+          break;
+        case 'T':
+        case 't':
+          // T键：切换clip相对进度显示
+          setState(() {
+            _showClipRelativeProgress = !_showClipRelativeProgress;
+          });
+          break;
       }
     }
   }
@@ -407,6 +423,32 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                         color: _showHints ? Colors.blue : Colors.grey,
                       ),
                       tooltip: 'Keyboard Shortcuts (F1)',
+                    ),
+                    // 自定义进度条切换按钮
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _showCustomProgressBar = !_showCustomProgressBar;
+                        });
+                      },
+                      icon: Icon(
+                        _showCustomProgressBar ? Icons.timeline : Icons.timeline_outlined,
+                        color: _showCustomProgressBar ? Colors.green : Colors.grey,
+                      ),
+                      tooltip: 'Toggle Custom Progress Bar (P)',
+                    ),
+                    // Clip相对进度切换按钮
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _showClipRelativeProgress = !_showClipRelativeProgress;
+                        });
+                      },
+                      icon: Icon(
+                        _showClipRelativeProgress ? Icons.crop_square : Icons.crop_square_outlined,
+                        color: _showClipRelativeProgress ? Colors.purple : Colors.grey,
+                      ),
+                      tooltip: 'Toggle Clip Relative Progress (T)',
                     ),
                     // 编辑按钮移到右上角
                     IconButton(
@@ -480,6 +522,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                               _buildShortcutHint('← / A', 'Previous'),
                               _buildShortcutHint('→ / D', 'Next'),
                               _buildShortcutHint('E', 'Edit'),
+                              _buildShortcutHint('P', 'Toggle Progress Bar'),
+                              _buildShortcutHint('T', 'Toggle Clip Progress'),
                               _buildShortcutHint('F1', 'Toggle Hints'),
                             ],
                           ),
@@ -489,7 +533,72 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
+            
+            // 自定义进度条 - 显示起始和终止标记
+            if (_showCustomProgressBar)
+              Column(
+                children: [
+                  // 简化的Clip信息
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.timer, size: 16, color: Colors.blue),
+                        const SizedBox(width: 4),
+                        Text(
+                          _showClipRelativeProgress 
+                              ? 'Clip: ${formatDuration(currentClip.endTime - currentClip.startTime)}'
+                              : 'Video: ${formatDuration(currentClip.startTime)} - ${formatDuration(currentClip.endTime)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blue.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // 进度条
+                  StreamBuilder<Duration>(
+                    stream: player.stream.duration,
+                    initialData: player.state.duration,
+                    builder: (context, snapshot) {
+                      final totalDuration = snapshot.data ?? Duration.zero;
+                      if (totalDuration == Duration.zero) {
+                        return const SizedBox(height: 48);
+                      }
+                      
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 8),
+                        child: CustomProgressBar(
+                          player: player,
+                          startTime: currentClip.startTime,
+                          endTime: currentClip.endTime,
+                          onSetStart: (time) {
+                            // 播放模式下不需要修改clip，这里只是为了满足接口要求
+                          },
+                          onSetEnd: (time) {
+                            // 播放模式下不需要修改clip，这里只是为了满足接口要求
+                          },
+                          showThumbnailPreview: true,
+                          isPlaybackMode: true, // 启用播放模式
+                          showClipRelativeProgress: _showClipRelativeProgress, // 使用状态变量
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            const SizedBox(height: 8),
             
             // 导航按钮行 - 前一个和下一个按钮放在一起
             Row(
