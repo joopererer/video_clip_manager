@@ -693,11 +693,13 @@ class AppState extends ChangeNotifier {
     final index = _playlists.indexWhere((p) => p.id == playlistId);
     if (index != -1) {
       final playlist = _playlists[index];
+      
       final updatedPlaylist = playlist.copyWith(
         name: name ?? playlist.name,
-        description: description ?? playlist.description,
+        description: description, // 直接使用传入的 description，允许设置为 null
         updatedAt: DateTime.now(),
       );
+      
       _playlists[index] = updatedPlaylist;
       notifyListeners();
       _scheduleSave();

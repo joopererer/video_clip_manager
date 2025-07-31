@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../widgets/playlist_dialog.dart';
+import '../playlist/playlist_management_screen.dart';
 
 class PlaylistsTab extends StatelessWidget {
   final String searchQuery;
@@ -36,7 +37,11 @@ class PlaylistsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, AppState appState, List<Playlist> playlists) {
+  Widget _buildHeader(
+    BuildContext context,
+    AppState appState,
+    List<Playlist> playlists,
+  ) {
     final totalDuration = playlists.fold<Duration>(
       Duration.zero,
       (total, playlist) => total + playlist.totalDuration,
@@ -59,7 +64,11 @@ class PlaylistsTab extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                _buildInfoItem('播放列表', '${playlists.length}', Icons.playlist_play),
+                _buildInfoItem(
+                  '播放列表',
+                  '${playlists.length}',
+                  Icons.playlist_play,
+                ),
                 const SizedBox(width: 16),
                 _buildInfoItem(
                   '总时长',
@@ -99,11 +108,7 @@ class PlaylistsTab extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.playlist_play,
-            size: 64,
-            color: Colors.grey.shade400,
-          ),
+          Icon(Icons.playlist_play, size: 64, color: Colors.grey.shade400),
           const SizedBox(height: 16),
           Text(
             '暂无播放列表',
@@ -119,7 +124,11 @@ class PlaylistsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildPlaylistList(BuildContext context, AppState appState, List<Playlist> playlists) {
+  Widget _buildPlaylistList(
+    BuildContext context,
+    AppState appState,
+    List<Playlist> playlists,
+  ) {
     return ListView.builder(
       padding: const EdgeInsets.all(8.0),
       itemCount: playlists.length,
@@ -130,87 +139,172 @@ class PlaylistsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildPlaylistCard(BuildContext context, AppState appState, Playlist playlist) {
+  Widget _buildPlaylistCard(
+    BuildContext context,
+    AppState appState,
+    Playlist playlist,
+  ) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4.0),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Colors.purple.shade100,
-          child: Icon(
-            Icons.playlist_play,
-            color: Colors.purple.shade600,
+      child: InkWell(
+        onTap: () => _playPlaylist(context, appState, playlist),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Colors.purple.shade100,
+                radius: 20,
+                child: Icon(
+                  Icons.playlist_play,
+                  color: Colors.purple.shade600,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 第一行：标题和菜单按钮
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            playlist.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert, size: 20),
+                          onSelected: (value) => _handlePlaylistAction(
+                            context,
+                            appState,
+                            playlist,
+                            value,
+                          ),
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'play',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.play_arrow, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('播放'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('编辑'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'manage',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.list, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('管理片段'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.delete,
+                                    color: Colors.red,
+                                    size: 18,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    '删除',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    // 第二行：描述（如果有）
+                    if (playlist.description != null && playlist.description!.isNotEmpty) ...[
+                      Text(
+                        playlist.description!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    // 第三行：统计信息
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.video_library,
+                          size: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${playlist.clipCount} 个片段',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Icon(
+                          Icons.access_time,
+                          size: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatDuration(playlist.totalDuration),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    // 第四行：时间轴
+                    _buildPlaylistTimeline(context, playlist),
+                    const SizedBox(height: 4),
+                    // 第五行：创建时间
+                    Text(
+                      '创建于 ${_formatDate(playlist.createdAt)}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        title: Text(
-          playlist.name,
-          style: const TextStyle(fontWeight: FontWeight.w500),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (playlist.description != null) ...[
-              Text(
-                playlist.description!,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-              ),
-              const SizedBox(height: 4),
-            ],
-            Text(
-              '${playlist.clipCount} 个片段 • ${_formatDuration(playlist.totalDuration)}',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-            ),
-            Text(
-              '创建于 ${_formatDate(playlist.createdAt)}',
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
-            ),
-          ],
-        ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) => _handlePlaylistAction(context, appState, playlist, value),
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'play',
-              child: Row(
-                children: [
-                  Icon(Icons.play_arrow),
-                  SizedBox(width: 8),
-                  Text('播放'),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'edit',
-              child: Row(
-                children: [
-                  Icon(Icons.edit),
-                  SizedBox(width: 8),
-                  Text('编辑'),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'manage',
-              child: Row(
-                children: [
-                  Icon(Icons.list),
-                  SizedBox(width: 8),
-                  Text('管理片段'),
-                ],
-              ),
-            ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Row(
-                children: [
-                  Icon(Icons.delete, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text('删除', style: TextStyle(color: Colors.red)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        onTap: () => _playPlaylist(context, appState, playlist),
       ),
     );
   }
@@ -219,11 +313,11 @@ class PlaylistsTab extends StatelessWidget {
     if (searchQuery.isEmpty) {
       return playlists;
     }
-    
+
     final query = searchQuery.toLowerCase();
     return playlists.where((playlist) {
       return playlist.name.toLowerCase().contains(query) ||
-             (playlist.description?.toLowerCase().contains(query) ?? false);
+          (playlist.description?.toLowerCase().contains(query) ?? false);
     }).toList();
   }
 
@@ -241,6 +335,67 @@ class PlaylistsTab extends StatelessWidget {
 
   String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildPlaylistTimeline(BuildContext context, Playlist playlist) {
+    if (playlist.items.isEmpty) {
+      return Container(
+        height: 20,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Center(
+          child: Text(
+            '暂无片段',
+            style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+          ),
+        ),
+      );
+    }
+
+    final appState = context.read<AppState>();
+    final itemsWithClips = appState.getPlaylistItemsWithClips(playlist.id);
+    final totalDuration = playlist.totalDuration;
+
+    return Container(
+      height: 20,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.grey.shade300, width: 0.5),
+      ),
+      child: Row(
+        children: itemsWithClips.map((itemWithClip) {
+          final clip = itemWithClip.clip;
+          final effectiveDuration = itemWithClip.effectiveDuration;
+          final widthRatio =
+              effectiveDuration.inMilliseconds / totalDuration.inMilliseconds;
+
+          return Expanded(
+            flex: (widthRatio * 100).round(),
+            child: Container(
+              margin: const EdgeInsets.all(1),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade400,
+                borderRadius: BorderRadius.circular(2),
+              ),
+              child: Center(
+                child: Text(
+                  '${clip.name.split('.').first}',
+                  style: const TextStyle(
+                    fontSize: 8,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 
   Future<void> _createPlaylist(BuildContext context) async {
@@ -280,14 +435,22 @@ class PlaylistsTab extends StatelessWidget {
     }
   }
 
-  void _playPlaylist(BuildContext context, AppState appState, Playlist playlist) {
+  void _playPlaylist(
+    BuildContext context,
+    AppState appState,
+    Playlist playlist,
+  ) {
     // TODO: 实现播放列表播放功能
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('播放列表 "${playlist.name}" 播放功能即将推出')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('播放列表 "${playlist.name}" 播放功能即将推出')));
   }
 
-  Future<void> _editPlaylist(BuildContext context, AppState appState, Playlist playlist) async {
+  Future<void> _editPlaylist(
+    BuildContext context,
+    AppState appState,
+    Playlist playlist,
+  ) async {
     final result = await showDialog<Map<String, String?>>(
       context: context,
       builder: (context) => PlaylistDialog(playlist: playlist),
@@ -302,14 +465,23 @@ class PlaylistsTab extends StatelessWidget {
     }
   }
 
-  void _managePlaylist(BuildContext context, AppState appState, Playlist playlist) {
-    // TODO: 实现播放列表管理功能
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('播放列表 "${playlist.name}" 管理功能即将推出')),
+  void _managePlaylist(
+    BuildContext context,
+    AppState appState,
+    Playlist playlist,
+  ) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PlaylistManagementScreen(playlist: playlist),
+      ),
     );
   }
 
-  Future<void> _deletePlaylist(BuildContext context, AppState appState, Playlist playlist) async {
+  Future<void> _deletePlaylist(
+    BuildContext context,
+    AppState appState,
+    Playlist playlist,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

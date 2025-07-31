@@ -85,6 +85,8 @@ class _PlaylistDialogState extends State<PlaylistDialog> {
                       ? null
                       : _descriptionController.text.trim();
                   
+
+                  
                   Navigator.of(context).pop(<String, String?>{
                     'name': name,
                     'description': description,

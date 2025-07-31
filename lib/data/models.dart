@@ -286,7 +286,7 @@ class Playlist extends Equatable {
     return Playlist(
       id: id ?? this.id,
       name: name ?? this.name,
-      description: description ?? this.description,
+      description: description, // 直接使用传入的 description，允许设置为 null
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       items: items ?? this.items,
