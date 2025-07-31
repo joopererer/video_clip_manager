@@ -22,6 +22,7 @@ class AppState extends ChangeNotifier {
 
   List<VideoClip> _clips = [];
   List<OriginalVideo> _originalVideos = [];
+  List<Playlist> _playlists = [];
 
   String? _currentDbPath;
   bool _isLoading = false;
@@ -47,6 +48,7 @@ class AppState extends ChangeNotifier {
   UnmodifiableListView<VideoClip> get clips => UnmodifiableListView(_clips);
   UnmodifiableListView<OriginalVideo> get originalVideos =>
       UnmodifiableListView(_originalVideos);
+  UnmodifiableListView<Playlist> get playlists => UnmodifiableListView(_playlists);
 
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
@@ -184,6 +186,10 @@ class AppState extends ChangeNotifier {
         _generateOriginalVideos();
       }
       
+      if (result.playlists != null) {
+        _playlists = result.playlists!;
+      }
+      
       await _populateAllThumbnails();
     } catch (e) {
       debugPrint("Error during initial load: $e");
@@ -205,6 +211,10 @@ class AppState extends ChangeNotifier {
           _originalVideos = result.videos!;
         } else {
           _generateOriginalVideos();
+        }
+        
+        if (result.playlists != null) {
+          _playlists = result.playlists!;
         }
         
         notifyListeners();
@@ -449,7 +459,7 @@ class AppState extends ChangeNotifier {
     if (_currentDbPath == null) return;
     _isSaving = true;
     notifyListeners();
-    await _dataService.saveDataToPath(_clips, _originalVideos, _currentDbPath!);
+    await _dataService.saveDataToPath(_clips, _originalVideos, _playlists, _currentDbPath!);
     _isSaving = false;
     _hasUnsavedChanges = false;
     notifyListeners();
@@ -666,6 +676,129 @@ class AppState extends ChangeNotifier {
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
+  }
+
+  // ========== Playlist 管理方法 ==========
+
+  /// 创建新的播放列表
+  void createPlaylist(String name, {String? description}) {
+    final playlist = Playlist.create(name: name, description: description);
+    _playlists.add(playlist);
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// 更新播放列表
+  void updatePlaylist(String playlistId, {String? name, String? description}) {
+    final index = _playlists.indexWhere((p) => p.id == playlistId);
+    if (index != -1) {
+      final playlist = _playlists[index];
+      final updatedPlaylist = playlist.copyWith(
+        name: name ?? playlist.name,
+        description: description ?? playlist.description,
+        updatedAt: DateTime.now(),
+      );
+      _playlists[index] = updatedPlaylist;
+      notifyListeners();
+      _scheduleSave();
+    }
+  }
+
+  /// 删除播放列表
+  void deletePlaylist(String playlistId) {
+    _playlists.removeWhere((p) => p.id == playlistId);
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// 添加 clip 到播放列表
+  void addClipToPlaylist(String playlistId, String clipId, {
+    Duration? customStartTime,
+    Duration? customEndTime,
+  }) {
+    final index = _playlists.indexWhere((p) => p.id == playlistId);
+    if (index != -1) {
+      final playlist = _playlists[index];
+      
+      // 找到对应的 clip 来计算时长
+      final clip = _clips.firstWhere((c) => c.id == clipId);
+      final clipDuration = clip.endTime - clip.startTime;
+      
+      // 计算实际播放时长
+      Duration actualDuration;
+      if (customStartTime != null && customEndTime != null) {
+        actualDuration = customEndTime - customStartTime;
+      } else {
+        actualDuration = clipDuration;
+      }
+      
+      print('addClipToPlaylist: clipId=$clipId, clipDuration=$clipDuration, actualDuration=$actualDuration');
+      
+      // 创建 PlaylistItem 并手动设置时长
+      final newItem = PlaylistItem(
+        id: 'item_${DateTime.now().millisecondsSinceEpoch}',
+        clipId: clipId,
+        order: playlist.items.length,
+        customStartTime: customStartTime,
+        customEndTime: customEndTime,
+        duration: actualDuration,
+      );
+      
+      final updatedPlaylist = playlist.copyWith(
+        items: [...playlist.items, newItem],
+        updatedAt: DateTime.now(),
+      );
+      
+      print('addClipToPlaylist: playlist.totalDuration before=${playlist.totalDuration}, after=${updatedPlaylist.totalDuration}');
+      
+      _playlists[index] = updatedPlaylist;
+      notifyListeners();
+      _scheduleSave();
+    }
+  }
+
+  /// 从播放列表移除 clip
+  void removeClipFromPlaylist(String playlistId, String clipId) {
+    final index = _playlists.indexWhere((p) => p.id == playlistId);
+    if (index != -1) {
+      final playlist = _playlists[index];
+      final updatedPlaylist = playlist.removeClip(clipId);
+      _playlists[index] = updatedPlaylist;
+      notifyListeners();
+      _scheduleSave();
+    }
+  }
+
+  /// 重新排序播放列表项
+  void reorderPlaylistItems(String playlistId, int oldIndex, int newIndex) {
+    final index = _playlists.indexWhere((p) => p.id == playlistId);
+    if (index != -1) {
+      final playlist = _playlists[index];
+      final updatedPlaylist = playlist.reorderItems(oldIndex, newIndex);
+      _playlists[index] = updatedPlaylist;
+      notifyListeners();
+      _scheduleSave();
+    }
+  }
+
+  /// 获取播放列表中的 clips
+  List<VideoClip> getPlaylistClips(String playlistId) {
+    final playlist = _playlists.firstWhere((p) => p.id == playlistId);
+    return playlist.items.map((item) {
+      return _clips.firstWhere((clip) => clip.id == item.clipId);
+    }).toList();
+  }
+
+  /// 获取播放列表项（包含 clip 信息）
+  List<PlaylistItemWithClip> getPlaylistItemsWithClips(String playlistId) {
+    final playlist = _playlists.firstWhere((p) => p.id == playlistId);
+    return playlist.items.map((item) {
+      final clip = _clips.firstWhere((clip) => clip.id == item.clipId);
+      return PlaylistItemWithClip(
+        item: item,
+        clip: clip,
+      );
+    }).toList();
   }
   
   @override

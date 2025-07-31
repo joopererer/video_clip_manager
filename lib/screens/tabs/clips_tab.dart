@@ -6,6 +6,7 @@ import '../../data/models.dart';
 import '../player/clip_editor_screen.dart';
 import '../player/clip_playback_screen.dart';
 import '../../widgets/clip_thumbnail.dart';
+import '../../widgets/add_to_playlist_dialog.dart';
 import '../../utils/tag_utils.dart';
 
 // 排序选项枚举
@@ -354,6 +355,14 @@ class _ClipsTabState extends State<ClipsTab> {
                     children: [
                       IconButton(
                         icon: const Icon(
+                          Icons.playlist_add,
+                          color: Colors.green,
+                          size: 18,
+                        ),
+                        onPressed: () => _showAddToPlaylistDialog(context, clip),
+                      ),
+                      IconButton(
+                        icon: const Icon(
                           Icons.edit,
                           color: Colors.white,
                           size: 18,
@@ -501,6 +510,13 @@ class _ClipsTabState extends State<ClipsTab> {
     );
   }
 
+  void _showAddToPlaylistDialog(BuildContext context, VideoClip clip) {
+    showDialog(
+      context: context,
+      builder: (context) => AddToPlaylistDialog(clip: clip),
+    );
+  }
+
   void _deleteClip(BuildContext context, VideoClip clip, AppState appState) {
     showDialog(
       context: context,
@@ -584,6 +600,13 @@ class _ClipListItemState extends State<ClipListItem> {
     _ratingNotifier.dispose();
     _favoriteNotifier.dispose();
     super.dispose();
+  }
+
+  void _showAddToPlaylistDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AddToPlaylistDialog(clip: widget.clip),
+    );
   }
 
   @override
@@ -701,7 +724,16 @@ class _ClipListItemState extends State<ClipListItem> {
                   },
                 ),
                 const SizedBox(width: 16), // 5. <空白> 区域
-                // 6. 编辑按钮
+                // 6. 添加到播放列表按钮
+                IconButton(
+                  icon: const Icon(Icons.playlist_add, color: Colors.green, size: 20),
+                  onPressed: () => _showAddToPlaylistDialog(context),
+                  tooltip: 'Add to Playlist',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 4),
+                // 7. 编辑按钮
                 IconButton(
                   icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
                   onPressed: widget.onEdit,
@@ -710,7 +742,7 @@ class _ClipListItemState extends State<ClipListItem> {
                   constraints: const BoxConstraints(),
                 ),
                 const SizedBox(width: 4),
-                // 7. 删除按钮
+                // 8. 删除按钮
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
                   onPressed: widget.onDelete,
