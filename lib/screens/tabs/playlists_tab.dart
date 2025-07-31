@@ -4,12 +4,20 @@ import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../widgets/playlist_dialog.dart';
 import '../../widgets/playlist_timeline_view.dart';
+import '../../widgets/clip_thumbnail.dart';
 import '../playlist/playlist_management_screen.dart';
 import '../player/playlist_playback_screen.dart';
 
-class PlaylistsTab extends StatelessWidget {
+class PlaylistsTab extends StatefulWidget {
   final String searchQuery;
   const PlaylistsTab({super.key, required this.searchQuery});
+
+  @override
+  State<PlaylistsTab> createState() => _PlaylistsTabState();
+}
+
+class _PlaylistsTabState extends State<PlaylistsTab> {
+  bool _isGridView = false;
 
   @override
   Widget build(BuildContext context) {
@@ -22,9 +30,12 @@ class PlaylistsTab extends StatelessWidget {
           return Column(
             children: [
               _buildHeader(context, appState, filteredPlaylists),
+              _buildViewToggle(),
               Expanded(
                 child: filteredPlaylists.isEmpty
                     ? _buildEmptyState()
+                    : _isGridView
+                    ? _buildPlaylistGrid(context, appState, filteredPlaylists)
                     : _buildPlaylistList(context, appState, filteredPlaylists),
               ),
             ],
@@ -105,6 +116,26 @@ class PlaylistsTab extends StatelessWidget {
     );
   }
 
+  Widget _buildViewToggle() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          IconButton(
+            icon: Icon(_isGridView ? Icons.list : Icons.grid_view),
+            onPressed: () {
+              setState(() {
+                _isGridView = !_isGridView;
+              });
+            },
+            tooltip: _isGridView ? '列表视图' : '网格视图',
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -137,6 +168,27 @@ class PlaylistsTab extends StatelessWidget {
       itemBuilder: (context, index) {
         final playlist = playlists[index];
         return _buildPlaylistCard(context, appState, playlist);
+      },
+    );
+  }
+
+  Widget _buildPlaylistGrid(
+    BuildContext context,
+    AppState appState,
+    List<Playlist> playlists,
+  ) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(8.0),
+             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+         crossAxisCount: 3,
+         childAspectRatio: 1.1,
+         crossAxisSpacing: 8.0,
+         mainAxisSpacing: 8.0,
+       ),
+      itemCount: playlists.length,
+      itemBuilder: (context, index) {
+        final playlist = playlists[index];
+        return _buildPlaylistGridCard(context, appState, playlist);
       },
     );
   }
@@ -245,7 +297,8 @@ class PlaylistsTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     // 第二行：描述（如果有）
-                    if (playlist.description != null && playlist.description!.isNotEmpty) ...[
+                    if (playlist.description != null &&
+                        playlist.description!.isNotEmpty) ...[
                       Text(
                         playlist.description!,
                         style: TextStyle(
@@ -311,12 +364,207 @@ class PlaylistsTab extends StatelessWidget {
     );
   }
 
+  Widget _buildPlaylistGridCard(
+    BuildContext context,
+    AppState appState,
+    Playlist playlist,
+  ) {
+    final itemsWithClips = appState.getPlaylistItemsWithClips(playlist.id);
+
+    return Card(
+      child: InkWell(
+        onTap: () => _playPlaylist(context, appState, playlist),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+                         // 叠放的缩略图区域
+             Expanded(
+               flex: 4,
+               child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(4),
+                    topRight: Radius.circular(4),
+                  ),
+                ),
+                child: itemsWithClips.isEmpty
+                    ? Center(
+                        child: Icon(
+                          Icons.playlist_play,
+                          size: 32,
+                          color: Colors.grey.shade400,
+                        ),
+                      )
+                    : Stack(
+                        children: [
+                          // 背景缩略图（第一个clip）
+                          if (itemsWithClips.isNotEmpty)
+                            Positioned.fill(
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(4),
+                                  topRight: Radius.circular(4),
+                                ),
+                                child: ClipThumbnail(
+                                  clip: itemsWithClips.first.clip,
+                                ),
+                              ),
+                            ),
+                          // 叠放的小缩略图
+                          if (itemsWithClips.length > 1)
+                            ...itemsWithClips
+                                .skip(1)
+                                .take(3)
+                                .toList()
+                                .asMap()
+                                .entries
+                                .map((entry) {
+                                  final index = entry.key;
+                                  final itemWithClip = entry.value;
+                                  return Positioned(
+                                    top: 8.0 + (index * 20.0),
+                                    right: 8.0 + (index * 15.0),
+                                    child: Container(
+                                      width: 40,
+                                      height: 25,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(2),
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 1,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                              0.2,
+                                            ),
+                                            blurRadius: 2,
+                                            offset: const Offset(0, 1),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(2),
+                                        child: ClipThumbnail(
+                                          clip: itemWithClip.clip,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                })
+                                .toList(),
+                          // 播放列表信息覆盖层
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.black.withOpacity(0.7),
+                                  ],
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.playlist_play,
+                                    size: 16,
+                                    color: Colors.white,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      playlist.name,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+                         // 信息区域
+             Expanded(
+               flex: 1,
+               child: Padding(
+                 padding: const EdgeInsets.all(6.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                                         Text(
+                       playlist.name,
+                       style: const TextStyle(
+                         fontWeight: FontWeight.w600,
+                         fontSize: 12,
+                       ),
+                       maxLines: 1,
+                       overflow: TextOverflow.ellipsis,
+                     ),
+                     const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.video_library,
+                          size: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${playlist.clipCount}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.access_time,
+                          size: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          _formatDuration(playlist.totalDuration),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   List<Playlist> _getFilteredPlaylists(List<Playlist> playlists) {
-    if (searchQuery.isEmpty) {
+    if (widget.searchQuery.isEmpty) {
       return playlists;
     }
 
-    final query = searchQuery.toLowerCase();
+    final query = widget.searchQuery.toLowerCase();
     return playlists.where((playlist) {
       return playlist.name.toLowerCase().contains(query) ||
           (playlist.description?.toLowerCase().contains(query) ?? false);

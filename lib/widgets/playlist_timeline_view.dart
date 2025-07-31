@@ -36,10 +36,7 @@ class PlaylistTimelineView extends StatelessWidget {
         child: Center(
           child: Text(
             '暂无片段',
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 14,
-            ),
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
           ),
         ),
       );
@@ -57,74 +54,31 @@ class PlaylistTimelineView extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey.shade300),
       ),
-      child: Row(
-        children: [
-                     // 轨道标签
-           Container(
-             width: 80,
-             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-             decoration: BoxDecoration(
-               color: Colors.blue.shade50,
-               borderRadius: const BorderRadius.only(
-                 topLeft: Radius.circular(8),
-                 bottomLeft: Radius.circular(8),
-               ),
-               border: Border(
-                 right: BorderSide(color: Colors.grey.shade300),
-               ),
-             ),
-             child: Row(
-               mainAxisAlignment: MainAxisAlignment.center,
-               children: [
-                 Icon(
-                   Icons.timeline,
-                   size: 12,
-                   color: Colors.blue.shade600,
-                 ),
-                 const SizedBox(width: 4),
-                 Text(
-                   '轨道',
-                   style: TextStyle(
-                     fontSize: 10,
-                     color: Colors.blue.shade600,
-                     fontWeight: FontWeight.w500,
-                   ),
-                 ),
-               ],
-             ),
-           ),
-          // 轨道内容
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(8),
-                  bottomRight: Radius.circular(8),
-                ),
-              ),
-                             child: Row(
-                 children: items.asMap().entries.map((entry) {
-                   final index = entry.key;
-                   final itemWithClip = entry.value;
-                   final item = itemWithClip.item;
-                   final clip = itemWithClip.clip;
-                   
-                   // 计算宽度比例
-                   final durationRatio = itemWithClip.effectiveDuration.inMilliseconds / 
-                                       totalDuration.inMilliseconds;
-                   
-                   return _buildTimelineItem(
-                     context,
-                     index,
-                     itemWithClip,
-                     durationRatio,
-                   );
-                 }).toList(),
-               ),
-            ),
-          ),
-        ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: items.asMap().entries.map((entry) {
+            final index = entry.key;
+            final itemWithClip = entry.value;
+            final item = itemWithClip.item;
+            final clip = itemWithClip.clip;
+
+            // 计算宽度比例
+            final durationRatio =
+                itemWithClip.effectiveDuration.inMilliseconds /
+                totalDuration.inMilliseconds;
+
+            return _buildTimelineItem(
+              context,
+              index,
+              itemWithClip,
+              durationRatio,
+            );
+          }).toList(),
+        ),
       ),
     );
   }
@@ -138,19 +92,40 @@ class PlaylistTimelineView extends StatelessWidget {
     final item = itemWithClip.item;
     final clip = itemWithClip.clip;
     final isSelected = selectedIndex == index;
-    
-    // 根据时长生成颜色
-    final colors = [
-      Colors.blue.shade400,
-      Colors.green.shade400,
-      Colors.orange.shade400,
-      Colors.purple.shade400,
-      Colors.red.shade400,
-      Colors.teal.shade400,
-      Colors.indigo.shade400,
-      Colors.pink.shade400,
-    ];
-    final color = colors[index % colors.length];
+
+         // 根据clip ID生成颜色，确保颜色跟随clip而不是位置
+     // 使用更多的颜色变体，并优化选择算法以确保相邻clip颜色有区别
+     final colors = [
+       Colors.blue.shade400,
+       Colors.green.shade400,
+       Colors.orange.shade400,
+       Colors.purple.shade400,
+       Colors.red.shade400,
+       Colors.teal.shade400,
+       Colors.indigo.shade400,
+       Colors.pink.shade400,
+       Colors.blue.shade600,
+       Colors.green.shade600,
+       Colors.orange.shade600,
+       Colors.purple.shade600,
+       Colors.red.shade600,
+       Colors.teal.shade600,
+       Colors.indigo.shade600,
+       Colors.pink.shade600,
+       Colors.blue.shade300,
+       Colors.green.shade300,
+       Colors.orange.shade300,
+       Colors.purple.shade300,
+       Colors.red.shade300,
+       Colors.teal.shade300,
+       Colors.indigo.shade300,
+       Colors.pink.shade300,
+     ];
+     
+     // 使用更复杂的哈希算法来确保颜色分布更均匀
+     final hash = clip.id.hashCode.abs();
+     final colorIndex = (hash * 7 + hash ~/ 7) % colors.length;
+     final color = colors[colorIndex];
 
     return Expanded(
       flex: (durationRatio * 1000).round(),
@@ -170,9 +145,7 @@ class PlaylistTimelineView extends StatelessWidget {
             children: [
               // 背景纹理
               Positioned.fill(
-                child: CustomPaint(
-                  painter: TimelineItemPainter(color: color),
-                ),
+                child: CustomPaint(painter: TimelineItemPainter(color: color)),
               ),
               // 内容
               Padding(
@@ -233,11 +206,7 @@ class PlaylistTimelineView extends StatelessWidget {
                       shape: BoxShape.circle,
                       border: Border.all(color: color, width: 1),
                     ),
-                    child: Icon(
-                      Icons.check,
-                      size: 6,
-                      color: color,
-                    ),
+                    child: Icon(Icons.check, size: 6, color: color),
                   ),
                 ),
             ],
@@ -275,12 +244,10 @@ class TimelineItemPainter extends CustomPainter {
       path.moveTo(i.toDouble(), 0);
       path.lineTo(i.toDouble() - size.height, size.height);
     }
-    
+
     canvas.drawPath(path, paint);
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
- 
