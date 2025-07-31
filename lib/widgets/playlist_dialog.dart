@@ -22,9 +22,6 @@ class _PlaylistDialogState extends State<PlaylistDialog> {
     // Add listeners to trigger setState when text changes, enabling/disabling the button
     _nameController.addListener(_onInputChanged);
     _descriptionController.addListener(_onInputChanged);
-    
-    // Debug: Print initial state
-    print('PlaylistDialog initState: name="${_nameController.text}", isEditing=${widget.playlist != null}');
   }
 
   @override
@@ -40,7 +37,6 @@ class _PlaylistDialogState extends State<PlaylistDialog> {
   // Method to call setState when input changes
   void _onInputChanged() {
     if (mounted) {
-      print('PlaylistDialog _onInputChanged: name="${_nameController.text}", isEmpty=${_nameController.text.trim().isEmpty}');
       setState(() {});
     }
   }
@@ -49,9 +45,6 @@ class _PlaylistDialogState extends State<PlaylistDialog> {
   Widget build(BuildContext context) {
     final isEditing = widget.playlist != null;
     final isButtonEnabled = _nameController.text.trim().isNotEmpty;
-    
-    // Debug: Print build state
-    print('PlaylistDialog build: isEditing=$isEditing, isButtonEnabled=$isButtonEnabled');
     
     return AlertDialog(
       title: Text(isEditing ? '编辑播放列表' : '创建播放列表'),
@@ -81,10 +74,7 @@ class _PlaylistDialogState extends State<PlaylistDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: () {
-            print('PlaylistDialog: Cancel button pressed');
-            Navigator.of(context).pop();
-          },
+          onPressed: () => Navigator.of(context).pop(),
           child: const Text('取消'),
         ),
         ElevatedButton(
@@ -94,8 +84,6 @@ class _PlaylistDialogState extends State<PlaylistDialog> {
                   final description = _descriptionController.text.trim().isEmpty
                       ? null
                       : _descriptionController.text.trim();
-                  
-                  print('PlaylistDialog: ${isEditing ? "Save" : "Create"} button pressed - name="$name", description="$description"');
                   
                   Navigator.of(context).pop(<String, String?>{
                     'name': name,

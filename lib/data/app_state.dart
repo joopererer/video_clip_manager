@@ -732,8 +732,6 @@ class AppState extends ChangeNotifier {
         actualDuration = clipDuration;
       }
       
-      print('addClipToPlaylist: clipId=$clipId, clipDuration=$clipDuration, actualDuration=$actualDuration');
-      
       // 创建 PlaylistItem 并手动设置时长
       final newItem = PlaylistItem(
         id: 'item_${DateTime.now().millisecondsSinceEpoch}',
@@ -748,8 +746,6 @@ class AppState extends ChangeNotifier {
         items: [...playlist.items, newItem],
         updatedAt: DateTime.now(),
       );
-      
-      print('addClipToPlaylist: playlist.totalDuration before=${playlist.totalDuration}, after=${updatedPlaylist.totalDuration}');
       
       _playlists[index] = updatedPlaylist;
       notifyListeners();
