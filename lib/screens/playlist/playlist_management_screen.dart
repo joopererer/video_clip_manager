@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../widgets/clip_thumbnail.dart';
+import '../player/playlist_playback_screen.dart';
 
 class PlaylistManagementScreen extends StatefulWidget {
   final Playlist playlist;
@@ -15,17 +16,54 @@ class PlaylistManagementScreen extends StatefulWidget {
 }
 
 class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
-  late List<PlaylistItemWithClip> _items;
+  List<PlaylistItemWithClip> _items = [];
+  List<PlaylistItemWithClip> _originalItems = [];
+  bool _hasChanges = false;
 
   @override
   void initState() {
     super.initState();
-    _refreshItems();
+    // 延迟初始化，确保 context 可用
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshItems();
+    });
   }
 
   void _refreshItems() {
+    if (!mounted) return;
     final appState = context.read<AppState>();
     _items = appState.getPlaylistItemsWithClips(widget.playlist.id);
+    _originalItems = List.from(_items);
+    _hasChanges = false;
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _refreshFromExternalChanges() {
+    if (!mounted) return;
+    final appState = context.read<AppState>();
+    final newItems = appState.getPlaylistItemsWithClips(widget.playlist.id);
+    
+    // 检查是否有外部变化
+    if (_items.length != newItems.length || 
+        !_items.every((item) => newItems.any((newItem) => newItem.item.id == item.item.id))) {
+      setState(() {
+        _items = newItems;
+        _originalItems = List.from(_items);
+        _hasChanges = false;
+      });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 只在依赖项变化时检查外部变化，避免拖拽时被干扰
+    // 确保 _items 已经初始化
+    if (_items.isNotEmpty && !_hasChanges && mounted) {
+      _refreshFromExternalChanges();
+    }
   }
 
   String _formatDuration(Duration duration) {
@@ -34,19 +72,110 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
+  void _onReorder(int oldIndex, int newIndex) {
+    setState(() {
+      if (oldIndex < newIndex) {
+        newIndex -= 1;
+      }
+      final item = _items.removeAt(oldIndex);
+      _items.insert(newIndex, item);
+      _hasChanges = true;
+    });
+  }
+
+  void _saveChanges() {
+    final appState = context.read<AppState>();
+    
+    // 计算新的顺序
+    for (int i = 0; i < _items.length; i++) {
+      final currentIndex = _originalItems.indexWhere((item) => item.item.id == _items[i].item.id);
+      if (currentIndex != i) {
+        appState.reorderPlaylistItems(widget.playlist.id, currentIndex, i);
+        break; // 一次只处理一个移动
+      }
+    }
+    
+    setState(() {
+      _hasChanges = false;
+      _originalItems = List.from(_items);
+    });
+    // 强制刷新界面
+    if (mounted) {
+      setState(() {});
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('播放列表顺序已保存')),
+    );
+  }
+
+  void _saveChangesWithoutReset() {
+    final appState = context.read<AppState>();
+    
+    // 计算新的顺序
+    for (int i = 0; i < _items.length; i++) {
+      final currentIndex = _originalItems.indexWhere((item) => item.item.id == _items[i].item.id);
+      if (currentIndex != i) {
+        appState.reorderPlaylistItems(widget.playlist.id, currentIndex, i);
+        break; // 一次只处理一个移动
+      }
+    }
+    
+    // 不重置 _hasChanges，保持按钮显示
+    // 注意：不更新 _originalItems，保持真正的原始状态用于重置
+    // 强制刷新界面
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _resetChanges() {
+    setState(() {
+      _items = List.from(_originalItems);
+      _hasChanges = false;
+    });
+    // 强制刷新界面
+    if (mounted) {
+      setState(() {});
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已重置为原始顺序')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('管理播放列表: ${widget.playlist.name}'),
         actions: [
+          if (_hasChanges) ...[
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _resetChanges,
+              tooltip: '重置',
+            ),
+            IconButton(
+              icon: const Icon(Icons.save),
+              onPressed: _saveChanges,
+              tooltip: '保存',
+            ),
+          ],
           IconButton(
             icon: const Icon(Icons.play_arrow),
             onPressed: () {
-              // TODO: 实现播放列表播放功能
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('播放列表 "${widget.playlist.name}" 播放功能即将推出'),
+              // 如果有未保存的更改，先保存但不重置状态
+              if (_hasChanges) {
+                _saveChangesWithoutReset();
+              }
+              
+              // 使用当前状态创建播放列表副本
+              final currentPlaylist = widget.playlist.copyWith(
+                items: _items.map((itemWithClip) => itemWithClip.item).toList(),
+              );
+              
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => PlaylistPlaybackScreen(playlist: currentPlaylist),
                 ),
               );
             },
@@ -54,43 +183,35 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
           ),
         ],
       ),
-      body: Consumer<AppState>(
-        builder: (context, appState, child) {
-          _refreshItems();
-
-          if (_items.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.playlist_play,
-                    size: 64,
-                    color: Colors.grey.shade400,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    '播放列表为空',
-                    style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '添加一些片段来开始创建播放列表',
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return Column(
-            children: [
-              _buildPlaylistInfo(),
-              Expanded(child: _buildPlaylistItems()),
-            ],
-          );
-        },
-      ),
+             body: _items.isEmpty
+           ? Center(
+               child: Column(
+                 mainAxisAlignment: MainAxisAlignment.center,
+                 children: [
+                   Icon(
+                     Icons.playlist_play,
+                     size: 64,
+                     color: Colors.grey.shade400,
+                   ),
+                   const SizedBox(height: 16),
+                   Text(
+                     '播放列表为空',
+                     style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+                   ),
+                   const SizedBox(height: 8),
+                   Text(
+                     '添加一些片段来开始创建播放列表',
+                     style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                   ),
+                 ],
+               ),
+             )
+           : Column(
+               children: [
+                 _buildPlaylistInfo(),
+                 Expanded(child: _buildPlaylistItems()),
+               ],
+             ),
     );
   }
 
@@ -166,19 +287,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
   Widget _buildPlaylistItems() {
     return ReorderableListView.builder(
       itemCount: _items.length,
-      onReorder: (oldIndex, newIndex) {
-        setState(() {
-          if (oldIndex < newIndex) {
-            newIndex -= 1;
-          }
-          final item = _items.removeAt(oldIndex);
-          _items.insert(newIndex, item);
-        });
-
-        // 更新播放列表中的顺序
-        final appState = context.read<AppState>();
-        appState.reorderPlaylistItems(widget.playlist.id, oldIndex, newIndex);
-      },
+      onReorder: _onReorder,
       itemBuilder: (context, index) {
         final itemWithClip = _items[index];
         return _buildPlaylistItem(itemWithClip, index);

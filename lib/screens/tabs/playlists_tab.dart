@@ -4,6 +4,7 @@ import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../widgets/playlist_dialog.dart';
 import '../playlist/playlist_management_screen.dart';
+import '../player/playlist_playback_screen.dart';
 
 class PlaylistsTab extends StatelessWidget {
   final String searchQuery;
@@ -440,10 +441,11 @@ class PlaylistsTab extends StatelessWidget {
     AppState appState,
     Playlist playlist,
   ) {
-    // TODO: 实现播放列表播放功能
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('播放列表 "${playlist.name}" 播放功能即将推出')));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PlaylistPlaybackScreen(playlist: playlist),
+      ),
+    );
   }
 
   Future<void> _editPlaylist(

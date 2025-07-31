@@ -84,10 +84,11 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       if(widget.showThumbnailPreview) _thumbnailData = null;
     });
 
-    // On ne lance la mise à jour de l'aperçu que si c'est activé
-    if (widget.showThumbnailPreview) {
+    // 只在编辑模式下才进行预览seek，播放模式下只显示悬停位置
+    if (widget.showThumbnailPreview && !widget.isPlaybackMode) {
       _updatePreview(hoverTime);
-    } else {
+    } else if (!widget.isPlaybackMode) {
+      // 只在非播放模式下才进行seek预览
       widget.player.seek(hoverTime);
     }
   }
