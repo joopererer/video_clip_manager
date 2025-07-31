@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../widgets/playlist_dialog.dart';
+import '../../widgets/playlist_timeline_view.dart';
 import '../playlist/playlist_management_screen.dart';
 import '../player/playlist_playback_screen.dart';
 
@@ -341,7 +342,7 @@ class PlaylistsTab extends StatelessWidget {
   Widget _buildPlaylistTimeline(BuildContext context, Playlist playlist) {
     if (playlist.items.isEmpty) {
       return Container(
-        height: 20,
+        height: 30,
         decoration: BoxDecoration(
           color: Colors.grey.shade200,
           borderRadius: BorderRadius.circular(4),
@@ -357,45 +358,13 @@ class PlaylistsTab extends StatelessWidget {
 
     final appState = context.read<AppState>();
     final itemsWithClips = appState.getPlaylistItemsWithClips(playlist.id);
-    final totalDuration = playlist.totalDuration;
 
-    return Container(
-      height: 20,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.grey.shade300, width: 0.5),
-      ),
-      child: Row(
-        children: itemsWithClips.map((itemWithClip) {
-          final clip = itemWithClip.clip;
-          final effectiveDuration = itemWithClip.effectiveDuration;
-          final widthRatio =
-              effectiveDuration.inMilliseconds / totalDuration.inMilliseconds;
-
-          return Expanded(
-            flex: (widthRatio * 100).round(),
-            child: Container(
-              margin: const EdgeInsets.all(1),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade400,
-                borderRadius: BorderRadius.circular(2),
-              ),
-              child: Center(
-                child: Text(
-                  '${clip.name.split('.').first}',
-                  style: const TextStyle(
-                    fontSize: 8,
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+    return PlaylistTimelineView(
+      items: itemsWithClips,
+      height: 30,
+      showDuration: false,
+      showNames: true,
+      enableReorder: false,
     );
   }
 

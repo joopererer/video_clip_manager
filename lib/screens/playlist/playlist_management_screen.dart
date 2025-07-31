@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../widgets/clip_thumbnail.dart';
+import '../../widgets/playlist_timeline_view.dart';
 import '../player/playlist_playback_screen.dart';
 
 class PlaylistManagementScreen extends StatefulWidget {
@@ -19,6 +20,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
   List<PlaylistItemWithClip> _items = [];
   List<PlaylistItemWithClip> _originalItems = [];
   bool _hasChanges = false;
+  int? _selectedItemIndex;
 
   @override
   void initState() {
@@ -206,12 +208,14 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
                  ],
                ),
              )
-           : Column(
-               children: [
-                 _buildPlaylistInfo(),
-                 Expanded(child: _buildPlaylistItems()),
-               ],
-             ),
+                       : Column(
+                children: [
+                  _buildPlaylistInfo(),
+                  _buildTimelineView(),
+                  const SizedBox(height: 16),
+                  Expanded(child: _buildPlaylistItems()),
+                ],
+              ),
     );
   }
 
@@ -284,6 +288,63 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
     );
   }
 
+  Widget _buildTimelineView() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.timeline,
+                size: 16,
+                color: Colors.blue.shade600,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '轨道视图',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue.shade600,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '总时长: ${_formatDuration(widget.playlist.totalDuration)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+                     PlaylistTimelineView(
+             items: _items,
+             height: 80,
+             showDuration: true,
+             showNames: true,
+             selectedIndex: _selectedItemIndex,
+             onItemTap: (index) {
+               setState(() {
+                 _selectedItemIndex = index;
+               });
+               // 滚动到对应的列表项
+               _scrollToItem(index);
+             },
+           ),
+        ],
+      ),
+    );
+  }
+
+  void _scrollToItem(int index) {
+    // TODO: 实现滚动到指定列表项的功能
+    // 这需要给 ReorderableListView 添加一个 GlobalKey
+  }
+
   Widget _buildPlaylistItems() {
     return ReorderableListView.builder(
       itemCount: _items.length,
@@ -309,13 +370,34 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
             context,
           ).showSnackBar(SnackBar(content: Text('播放片段: ${clip.name}')));
         },
-        child: Container(
-          height: 80, // 固定高度
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              SizedBox(width: 60, height: 40, child: ClipThumbnail(clip: clip)),
-              const SizedBox(width: 12),
+                 child: Container(
+           height: 80, // 固定高度
+           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+           child: Row(
+             children: [
+               // 序号
+               Container(
+                 width: 30,
+                 height: 30,
+                 decoration: BoxDecoration(
+                   color: Colors.blue.shade100,
+                   shape: BoxShape.circle,
+                   border: Border.all(color: Colors.blue.shade300),
+                 ),
+                 child: Center(
+                   child: Text(
+                     '${index + 1}',
+                     style: TextStyle(
+                       fontSize: 12,
+                       fontWeight: FontWeight.bold,
+                       color: Colors.blue.shade700,
+                     ),
+                   ),
+                 ),
+               ),
+               const SizedBox(width: 12),
+               SizedBox(width: 60, height: 40, child: ClipThumbnail(clip: clip)),
+               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
