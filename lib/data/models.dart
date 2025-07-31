@@ -254,6 +254,20 @@ class Playlist extends Equatable {
     );
   }
 
+  /// 移除特定的播放列表项
+  Playlist removeItem(String itemId) {
+    final newItems = items.where((item) => item.id != itemId).toList();
+    // 重新排序
+    for (int i = 0; i < newItems.length; i++) {
+      newItems[i] = newItems[i].copyWith(order: i);
+    }
+    
+    return copyWith(
+      items: newItems,
+      updatedAt: DateTime.now(),
+    );
+  }
+
   /// 重新排序播放列表项
   Playlist reorderItems(int oldIndex, int newIndex) {
     if (oldIndex < newIndex) {

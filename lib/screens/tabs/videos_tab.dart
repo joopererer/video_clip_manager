@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:cross_file/cross_file.dart';
 
 import '../../data/app_state.dart';
 import '../../data/models.dart';
@@ -661,8 +660,6 @@ class _VideosTabState extends State<VideosTab> {
     );
 
     if (result != null && result.files.isNotEmpty) {
-      final appState = context.read<AppState>();
-
       for (final file in result.files) {
         if (file.path != null) {
           await _addVideoFromPath(file.path!);
@@ -703,6 +700,4 @@ class _VideosTabState extends State<VideosTab> {
       MaterialPageRoute(builder: (context) => ClipEditorScreen(video: video)),
     );
   }
-
-
 }

@@ -8,6 +8,39 @@ import '../../widgets/clip_thumbnail.dart';
 import '../playlist/playlist_management_screen.dart';
 import '../player/playlist_playback_screen.dart';
 
+class _PlaylistCardBase extends StatelessWidget {
+  final Playlist playlist;
+  final bool isSelected;
+  final Widget child;
+  final VoidCallback onTap;
+  final ValueChanged<bool> onHover;
+
+  const _PlaylistCardBase({
+    required this.playlist,
+    required this.isSelected,
+    required this.child,
+    required this.onTap,
+    required this.onHover,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      margin: const EdgeInsets.symmetric(vertical: 4.0),
+      color: isSelected ? Colors.purple.shade50 : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: isSelected ? Colors.purple.shade300 : Colors.grey.shade300,
+          width: isSelected ? 1.5 : 1,
+        ),
+      ),
+      child: InkWell(onTap: onTap, onHover: onHover, child: child),
+    );
+  }
+}
+
 class PlaylistsTab extends StatefulWidget {
   final String searchQuery;
   const PlaylistsTab({super.key, required this.searchQuery});
@@ -17,30 +50,31 @@ class PlaylistsTab extends StatefulWidget {
 }
 
 class _PlaylistsTabState extends State<PlaylistsTab> {
-  bool _isGridView = false;
+  String? _selectedPlaylistId;
+
+  final Map<String, String> _sortOptions = {
+    'name': '按名称',
+    'date': '按创建时间',
+    'duration': '按时长',
+  };
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Consumer<AppState>(
-        builder: (context, appState, child) {
-          final playlists = appState.playlists;
-          final filteredPlaylists = _getFilteredPlaylists(playlists);
+    final appState = context.watch<AppState>();
+    final filteredPlaylists = _getFilteredPlaylists(appState.playlists);
 
-          return Column(
-            children: [
-              _buildHeader(context, appState, filteredPlaylists),
-              _buildViewToggle(),
-              Expanded(
-                child: filteredPlaylists.isEmpty
-                    ? _buildEmptyState()
-                    : _isGridView
-                    ? _buildPlaylistGrid(context, appState, filteredPlaylists)
-                    : _buildPlaylistList(context, appState, filteredPlaylists),
-              ),
-            ],
-          );
-        },
+    return Scaffold(
+      body: Column(
+        children: [
+          _buildHeader(context, appState, filteredPlaylists),
+          Expanded(
+            child: filteredPlaylists.isEmpty
+                ? _buildEmptyState()
+                : appState.playlistsIsGridView
+                ? _buildPlaylistGrid(context, appState, filteredPlaylists)
+                : _buildPlaylistList(context, appState, filteredPlaylists),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _createPlaylist(context),
@@ -74,23 +108,76 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
       ),
       child: Row(
         children: [
+          // 播放列表统计信息
           Expanded(
-            child: Row(
+            child: Wrap(
+              // 使用 Wrap 可以在小屏幕上自动换行
+              spacing: 16.0,
+              runSpacing: 8.0,
               children: [
                 _buildInfoItem(
                   '播放列表',
                   '${playlists.length}',
                   Icons.playlist_play,
+                  Colors.purple.shade600,
                 ),
                 const SizedBox(width: 16),
                 _buildInfoItem(
                   '总时长',
                   _formatDuration(totalDuration),
                   Icons.access_time,
+                  Colors.blue.shade600,
                 ),
                 const SizedBox(width: 16),
-                _buildInfoItem('总片段', '$totalClips', Icons.video_library),
+                _buildInfoItem(
+                  '总片段',
+                  '$totalClips',
+                  Icons.video_library,
+                  Colors.green.shade600,
+                ),
               ],
+            ),
+          ),
+
+          // 排序选项
+          _buildHeaderAction(
+            label: '排序:',
+            child: PopupMenuButton<String>(
+              tooltip: '排序方式',
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.sort, size: 18),
+              onSelected: (value) => appState.setPlaylistsSortBy(value),
+              // OPTIMIZED: 使用Map动态生成菜单项
+              itemBuilder: (context) => _sortOptions.entries.map((entry) {
+                return PopupMenuItem<String>(
+                  value: entry.key,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(entry.value),
+                      if (appState.playlistsSortBy == entry.key)
+                        const Icon(Icons.check, size: 16, color: Colors.green),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // 视图模式切换
+          _buildHeaderAction(
+            label: '视图:',
+            child: IconButton(
+              tooltip: '切换视图',
+              padding: EdgeInsets.zero,
+              icon: Icon(
+                appState.playlistsIsGridView ? Icons.list : Icons.grid_view,
+                size: 18,
+              ),
+              onPressed: () =>
+                  appState.setPlaylistsViewMode(!appState.playlistsIsGridView),
             ),
           ),
         ],
@@ -98,11 +185,34 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     );
   }
 
-  Widget _buildInfoItem(String label, String value, IconData icon) {
+  Widget _buildHeaderAction({required String label, required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.purple.shade200, width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12)),
+          SizedBox(width: 32, height: 32, child: child),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoItem(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 16, color: Colors.purple.shade600),
+        Icon(icon, size: 16, color: color),
         const SizedBox(width: 4),
         Text(
           '$label: $value',
@@ -113,26 +223,6 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildViewToggle() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          IconButton(
-            icon: Icon(_isGridView ? Icons.list : Icons.grid_view),
-            onPressed: () {
-              setState(() {
-                _isGridView = !_isGridView;
-              });
-            },
-            tooltip: _isGridView ? '列表视图' : '网格视图',
-          ),
-        ],
-      ),
     );
   }
 
@@ -179,12 +269,12 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
   ) {
     return GridView.builder(
       padding: const EdgeInsets.all(8.0),
-             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-         crossAxisCount: 3,
-         childAspectRatio: 1.1,
-         crossAxisSpacing: 8.0,
-         mainAxisSpacing: 8.0,
-       ),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 5,
+        childAspectRatio: 0.85,
+        crossAxisSpacing: 8.0,
+        mainAxisSpacing: 8.0,
+      ),
       itemCount: playlists.length,
       itemBuilder: (context, index) {
         final playlist = playlists[index];
@@ -198,167 +288,143 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     AppState appState,
     Playlist playlist,
   ) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4.0),
-      child: InkWell(
-        onTap: () => _playPlaylist(context, appState, playlist),
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: Colors.purple.shade100,
-                radius: 20,
-                child: Icon(
-                  Icons.playlist_play,
-                  color: Colors.purple.shade600,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // 第一行：标题和菜单按钮
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            playlist.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+    return _PlaylistCardBase(
+      playlist: playlist,
+      isSelected: _selectedPlaylistId == playlist.id,
+      onTap: () {
+        setState(() => _selectedPlaylistId = playlist.id);
+        _playPlaylist(context, appState, playlist);
+      },
+      onHover: (hovering) {
+        if (hovering) setState(() => _selectedPlaylistId = playlist.id);
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 80,
+              height: 60,
+              child: _buildPlaylistThumbnail(appState, playlist),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          playlist.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert, size: 20),
-                          onSelected: (value) => _handlePlaylistAction(
-                            context,
-                            appState,
-                            playlist,
-                            value,
-                          ),
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'play',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.play_arrow, size: 18),
-                                  SizedBox(width: 8),
-                                  Text('播放'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit, size: 18),
-                                  SizedBox(width: 8),
-                                  Text('编辑'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'manage',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.list, size: 18),
-                                  SizedBox(width: 8),
-                                  Text('管理片段'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.delete,
-                                    color: Colors.red,
-                                    size: 18,
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    '删除',
-                                    style: TextStyle(color: Colors.red),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    // 第二行：描述（如果有）
-                    if (playlist.description != null &&
-                        playlist.description!.isNotEmpty) ...[
-                      Text(
-                        playlist.description!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
+                      _buildActionButton(
+                        icon: Icons.play_arrow,
+                        tooltip: '播放',
+                        onPressed: () => _handlePlaylistAction(
+                          context,
+                          appState,
+                          playlist,
+                          'play',
+                        ),
+                        color: Colors.green.shade600,
+                      ),
+                      const SizedBox(width: 8),
+                      _buildActionButton(
+                        icon: Icons.edit,
+                        tooltip: '编辑',
+                        onPressed: () => _handlePlaylistAction(
+                          context,
+                          appState,
+                          playlist,
+                          'edit',
+                        ),
+                        color: Colors.blue.shade600,
+                      ),
+                      const SizedBox(width: 8),
+                      _buildActionButton(
+                        icon: Icons.list,
+                        tooltip: '管理片段',
+                        onPressed: () => _handlePlaylistAction(
+                          context,
+                          appState,
+                          playlist,
+                          'manage',
+                        ),
+                        color: Colors.orange.shade600,
+                      ),
+                      const SizedBox(width: 8),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert),
+                        onSelected: (value) => _handlePlaylistAction(
+                          context,
+                          appState,
+                          playlist,
+                          value,
+                        ),
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, color: Colors.red, size: 18),
+                                SizedBox(width: 8),
+                                Text('删除', style: TextStyle(color: Colors.red)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
-                    // 第三行：统计信息
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.video_library,
-                          size: 14,
-                          color: Colors.grey.shade600,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${playlist.clipCount} 个片段',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Icon(
-                          Icons.access_time,
-                          size: 14,
-                          color: Colors.grey.shade600,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatDuration(playlist.totalDuration),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    // 第四行：时间轴
-                    _buildPlaylistTimeline(context, playlist),
-                    const SizedBox(height: 4),
-                    // 第五行：创建时间
+                  ),
+                  const SizedBox(height: 8),
+                  if (playlist.description?.isNotEmpty ?? false) ...[
                     Text(
-                      '创建于 ${_formatDate(playlist.createdAt)}',
+                      playlist.description!,
                       style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey.shade400,
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    const SizedBox(height: 8),
                   ],
-                ),
+                  Row(
+                    children: [
+                      _buildStatItem(
+                        Icons.video_library,
+                        '${playlist.clipCount} 个片段',
+                        Colors.blue.shade600,
+                      ),
+                      const SizedBox(width: 16),
+                      _buildStatItem(
+                        Icons.access_time,
+                        _formatDuration(playlist.totalDuration),
+                        Colors.green.shade600,
+                      ),
+                      const SizedBox(width: 16),
+                      _buildStatItem(
+                        Icons.calendar_today,
+                        _formatDate(playlist.createdAt),
+                        Colors.orange.shade600,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildPlaylistTimeline(context, playlist),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -369,206 +435,277 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     AppState appState,
     Playlist playlist,
   ) {
+    final isSelected = _selectedPlaylistId == playlist.id;
     final itemsWithClips = appState.getPlaylistItemsWithClips(playlist.id);
 
-    return Card(
-      child: InkWell(
-        onTap: () => _playPlaylist(context, appState, playlist),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-                         // 叠放的缩略图区域
-             Expanded(
-               flex: 4,
-               child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(4),
-                    topRight: Radius.circular(4),
+    return _PlaylistCardBase(
+      playlist: playlist,
+      isSelected: isSelected,
+      onTap: () {
+        setState(() => _selectedPlaylistId = playlist.id);
+        _playPlaylist(context, appState, playlist);
+      },
+      onHover: (hovering) {
+        if (hovering) setState(() => _selectedPlaylistId = playlist.id);
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 4,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // 如果没有片段，显示占位符
+                if (itemsWithClips.isEmpty)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(8),
+                        topRight: Radius.circular(8),
+                      ),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        Icons.playlist_play,
+                        color: Colors.grey.shade400,
+                        size: 48,
+                      ),
+                    ),
+                  )
+                else
+                  // OPTIMIZED: 调用新的方法来构建复杂缩略图
+                  _buildMultiClipThumbnailStack(itemsWithClips),
+
+                // 播放按钮覆盖
+                Center(
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.purple.shade600.withValues(alpha: 0.9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow,
+                      color: Colors.white,
+                      size: 32,
+                    ),
                   ),
                 ),
-                child: itemsWithClips.isEmpty
-                    ? Center(
-                        child: Icon(
-                          Icons.playlist_play,
-                          size: 32,
-                          color: Colors.grey.shade400,
+                // 操作按钮
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildActionButton(
+                        icon: Icons.edit,
+                        color: Colors.blue.shade600,
+                        tooltip: "编辑",
+                        onPressed: () => _handlePlaylistAction(
+                          context,
+                          appState,
+                          playlist,
+                          'edit',
                         ),
-                      )
-                    : Stack(
-                        children: [
-                          // 背景缩略图（第一个clip）
-                          if (itemsWithClips.isNotEmpty)
-                            Positioned.fill(
-                              child: ClipRRect(
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(4),
-                                  topRight: Radius.circular(4),
-                                ),
-                                child: ClipThumbnail(
-                                  clip: itemsWithClips.first.clip,
-                                ),
-                              ),
-                            ),
-                          // 叠放的小缩略图
-                          if (itemsWithClips.length > 1)
-                            ...itemsWithClips
-                                .skip(1)
-                                .take(3)
-                                .toList()
-                                .asMap()
-                                .entries
-                                .map((entry) {
-                                  final index = entry.key;
-                                  final itemWithClip = entry.value;
-                                  return Positioned(
-                                    top: 8.0 + (index * 20.0),
-                                    right: 8.0 + (index * 15.0),
-                                    child: Container(
-                                      width: 40,
-                                      height: 25,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(2),
-                                        border: Border.all(
-                                          color: Colors.white,
-                                          width: 1,
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.2,
-                                            ),
-                                            blurRadius: 2,
-                                            offset: const Offset(0, 1),
-                                          ),
-                                        ],
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(2),
-                                        child: ClipThumbnail(
-                                          clip: itemWithClip.clip,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                })
-                                .toList(),
-                          // 播放列表信息覆盖层
-                          Positioned(
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.transparent,
-                                    Colors.black.withOpacity(0.7),
-                                  ],
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.playlist_play,
-                                    size: 16,
-                                    color: Colors.white,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                    child: Text(
-                                      playlist.name,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+                        isMini: true,
                       ),
-              ),
+                      const SizedBox(width: 4),
+                      _buildActionButton(
+                        icon: Icons.list,
+                        color: Colors.orange.shade600,
+                        tooltip: "管理片段",
+                        onPressed: () => _handlePlaylistAction(
+                          context,
+                          appState,
+                          playlist,
+                          'manage',
+                        ),
+                        isMini: true,
+                      ),
+                      const SizedBox(width: 4),
+                      _buildActionButton(
+                        icon: Icons.delete,
+                        color: Colors.red.shade600,
+                        tooltip: "删除",
+                        onPressed: () => _handlePlaylistAction(
+                          context,
+                          appState,
+                          playlist,
+                          'delete',
+                        ),
+                        isMini: true,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-                         // 信息区域
-             Expanded(
-               flex: 1,
-               child: Padding(
-                 padding: const EdgeInsets.all(6.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+          // 信息区域
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  playlist.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
                   children: [
-                                         Text(
-                       playlist.name,
-                       style: const TextStyle(
-                         fontWeight: FontWeight.w600,
-                         fontSize: 12,
-                       ),
-                       maxLines: 1,
-                       overflow: TextOverflow.ellipsis,
-                     ),
-                     const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.video_library,
-                          size: 12,
-                          color: Colors.grey.shade600,
+                    Icon(
+                      Icons.video_library,
+                      size: 18,
+                      color: Colors.blue.shade600,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${playlist.clipCount}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.blue.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(
+                      Icons.access_time,
+                      size: 18,
+                      color: Colors.green.shade600,
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        _formatDuration(playlist.totalDuration),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.green.shade600,
+                          fontWeight: FontWeight.w500,
                         ),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${playlist.clipCount}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Icon(
-                          Icons.access_time,
-                          size: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          _formatDuration(playlist.totalDuration),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
                     ),
                   ],
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
+  // OPTIMIZED: 新增方法，用于构建单个堆叠的缩略图，避免代码重复
+  Widget _buildStackedThumbnail({
+    required VideoClip clip,
+    required double width,
+    required double height,
+  }) {
+    return Container(
+      width: width,
+      height: height,
+      margin: const EdgeInsets.only(bottom: 8.0), // 用 margin 代替 SizedBox
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.white, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            // 修正：使用 withOpacity
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 3,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(3),
+        child: ClipThumbnail(clip: clip),
+      ),
+    );
+  }
+
+  // OPTIMIZED: 新增方法，构建完整的多缩略图Stack视图
+  Widget _buildMultiClipThumbnailStack(
+    List<PlaylistItemWithClip> itemsWithClips,
+  ) {
+    // 定义堆叠缩略图的尺寸
+    final stackedSizes = [const Size(100, 70), const Size(80, 64)];
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 1. 背景缩略图 (第一个 Clip)
+        if (itemsWithClips.isNotEmpty)
+          ClipRRect(
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(8),
+              topRight: Radius.circular(8),
+            ),
+            child: ClipThumbnail(clip: itemsWithClips.first.clip),
+          ),
+
+        // 2. 堆叠的缩略图 (从第二个 Clip 开始)
+        if (itemsWithClips.length > 1)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // 使用 for 循环和 take(2) 最多只显示两个堆叠图，保持界面整洁
+                for (var i = 0; i < itemsWithClips.skip(1).take(2).length; i++)
+                  _buildStackedThumbnail(
+                    clip: itemsWithClips[i + 1].clip,
+                    width: stackedSizes[i].width,
+                    height: stackedSizes[i].height,
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
   List<Playlist> _getFilteredPlaylists(List<Playlist> playlists) {
-    if (widget.searchQuery.isEmpty) {
-      return playlists;
+    // 创建可修改的列表副本
+    List<Playlist> filtered = List.from(playlists);
+
+    // 搜索过滤
+    if (widget.searchQuery.isNotEmpty) {
+      final query = widget.searchQuery.toLowerCase();
+      filtered = filtered.where((playlist) {
+        return playlist.name.toLowerCase().contains(query) ||
+            (playlist.description?.toLowerCase().contains(query) ?? false);
+      }).toList();
     }
 
-    final query = widget.searchQuery.toLowerCase();
-    return playlists.where((playlist) {
-      return playlist.name.toLowerCase().contains(query) ||
-          (playlist.description?.toLowerCase().contains(query) ?? false);
-    }).toList();
+    // 排序
+    final appState = context.read<AppState>();
+    switch (appState.playlistsSortBy) {
+      case 'name':
+        filtered.sort((a, b) => a.name.compareTo(b.name));
+        break;
+      case 'date':
+        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
+      case 'duration':
+        filtered.sort((a, b) => b.totalDuration.compareTo(a.totalDuration));
+        break;
+    }
+
+    return filtered;
   }
 
   String _formatDuration(Duration duration) {
@@ -587,13 +724,78 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
+  Widget _buildPlaylistThumbnail(AppState appState, Playlist playlist) {
+    final itemsWithClips = appState.getPlaylistItemsWithClips(playlist.id);
+    if (itemsWithClips.isEmpty) {
+      return Container(
+        color: Colors.grey.shade100,
+        child: Center(
+          child: Icon(
+            Icons.playlist_play,
+            color: Colors.grey.shade400,
+            size: 24,
+          ),
+        ),
+      );
+    }
+    return ClipThumbnail(clip: itemsWithClips.first.clip);
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+    required Color color,
+    bool isMini = false,
+  }) {
+    final size = isMini ? 32.0 : 40.0;
+    final iconSize = isMini ? 16.0 : 20.0;
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: IconButton(
+        tooltip: tooltip,
+        padding: EdgeInsets.zero,
+        icon: Icon(icon, color: color, size: iconSize),
+        onPressed: onPressed,
+        style: IconButton.styleFrom(
+          backgroundColor: color.withValues(alpha: 0.1),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(isMini ? 4 : 8),
+            side: BorderSide(color: color.withValues(alpha: 0.3)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(IconData icon, String text, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 12,
+            color: color,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildPlaylistTimeline(BuildContext context, Playlist playlist) {
     if (playlist.items.isEmpty) {
       return Container(
         height: 30,
         decoration: BoxDecoration(
-          color: Colors.grey.shade200,
+          color: Colors.grey.shade100,
           borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.grey.shade300),
         ),
         child: Center(
           child: Text(
@@ -607,12 +809,19 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     final appState = context.read<AppState>();
     final itemsWithClips = appState.getPlaylistItemsWithClips(playlist.id);
 
-    return PlaylistTimelineView(
-      items: itemsWithClips,
-      height: 30,
-      showDuration: false,
-      showNames: true,
-      enableReorder: false,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: PlaylistTimelineView(
+        items: itemsWithClips,
+        height: 30,
+        showDuration: false,
+        showNames: true,
+        enableReorder: false,
+      ),
     );
   }
 

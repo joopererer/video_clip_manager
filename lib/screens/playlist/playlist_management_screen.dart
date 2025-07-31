@@ -17,9 +17,18 @@ class PlaylistManagementScreen extends StatefulWidget {
 }
 
 class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
-  List<PlaylistItemWithClip> _items = [];
+  // 原始状态（从 AppState 获取的真实数据）
   List<PlaylistItemWithClip> _originalItems = [];
+
+  // 编辑状态（用户正在编辑的副本）
+  List<PlaylistItemWithClip> _editingItems = [];
+
+  // 是否处于编辑模式
+  final bool _isEditing = false;
+
+  // 是否有未保存的更改
   bool _hasChanges = false;
+
   int? _selectedItemIndex;
 
   @override
@@ -34,9 +43,14 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
   void _refreshItems() {
     if (!mounted) return;
     final appState = context.read<AppState>();
-    _items = appState.getPlaylistItemsWithClips(widget.playlist.id);
-    _originalItems = List.from(_items);
-    _hasChanges = false;
+    _originalItems = appState.getPlaylistItemsWithClips(widget.playlist.id);
+
+    // 如果不在编辑模式，同步编辑状态
+    if (!_isEditing) {
+      _editingItems = List.from(_originalItems);
+      _hasChanges = false;
+    }
+
     if (mounted) {
       setState(() {});
     }
@@ -46,14 +60,19 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
     if (!mounted) return;
     final appState = context.read<AppState>();
     final newItems = appState.getPlaylistItemsWithClips(widget.playlist.id);
-    
+
     // 检查是否有外部变化
-    if (_items.length != newItems.length || 
-        !_items.every((item) => newItems.any((newItem) => newItem.item.id == item.item.id))) {
+    if (_originalItems.length != newItems.length ||
+        !_originalItems.every(
+          (item) => newItems.any((newItem) => newItem.item.id == item.item.id),
+        )) {
       setState(() {
-        _items = newItems;
-        _originalItems = List.from(_items);
-        _hasChanges = false;
+        _originalItems = newItems;
+        // 如果不在编辑模式，同步编辑状态
+        if (!_isEditing) {
+          _editingItems = List.from(_originalItems);
+          _hasChanges = false;
+        }
       });
     }
   }
@@ -62,8 +81,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // 只在依赖项变化时检查外部变化，避免拖拽时被干扰
-    // 确保 _items 已经初始化
-    if (_items.isNotEmpty && !_hasChanges && mounted) {
+    if (_originalItems.isNotEmpty && !_hasChanges && mounted) {
       _refreshFromExternalChanges();
     }
   }
@@ -79,73 +97,56 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
       if (oldIndex < newIndex) {
         newIndex -= 1;
       }
-      final item = _items.removeAt(oldIndex);
-      _items.insert(newIndex, item);
+      final item = _editingItems.removeAt(oldIndex);
+      _editingItems.insert(newIndex, item);
       _hasChanges = true;
     });
   }
 
   void _saveChanges() {
     final appState = context.read<AppState>();
-    
-    // 计算新的顺序
-    for (int i = 0; i < _items.length; i++) {
-      final currentIndex = _originalItems.indexWhere((item) => item.item.id == _items[i].item.id);
-      if (currentIndex != i) {
-        appState.reorderPlaylistItems(widget.playlist.id, currentIndex, i);
-        break; // 一次只处理一个移动
-      }
-    }
-    
-    setState(() {
-      _hasChanges = false;
-      _originalItems = List.from(_items);
-    });
-    // 强制刷新界面
-    if (mounted) {
-      setState(() {});
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('播放列表顺序已保存')),
-    );
-  }
 
-  void _saveChangesWithoutReset() {
-    final appState = context.read<AppState>();
-    
-    // 计算新的顺序
-    for (int i = 0; i < _items.length; i++) {
-      final currentIndex = _originalItems.indexWhere((item) => item.item.id == _items[i].item.id);
+    // 计算新的顺序并应用到 AppState
+    for (int i = 0; i < _editingItems.length; i++) {
+      final currentIndex = _originalItems.indexWhere(
+        (item) => item.item.id == _editingItems[i].item.id,
+      );
       if (currentIndex != i) {
         appState.reorderPlaylistItems(widget.playlist.id, currentIndex, i);
         break; // 一次只处理一个移动
       }
     }
-    
-    // 不重置 _hasChanges，保持按钮显示
-    // 注意：不更新 _originalItems，保持真正的原始状态用于重置
-    // 强制刷新界面
-    if (mounted) {
-      setState(() {});
-    }
+
+    // 更新本地状态
+    setState(() {
+      _originalItems = List.from(_editingItems);
+      _hasChanges = false;
+    });
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('播放列表顺序已保存')));
   }
 
   void _resetChanges() {
     setState(() {
-      _items = List.from(_originalItems);
+      _editingItems = List.from(_originalItems);
       _hasChanges = false;
     });
-    // 强制刷新界面
-    if (mounted) {
-      setState(() {});
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已重置为原始顺序')),
-    );
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已重置为原始状态')));
   }
 
   @override
   Widget build(BuildContext context) {
+    // 监听 AppState 变化
+    context.watch<AppState>();
+
+    // 检查外部变化
+    _refreshFromExternalChanges();
+
     return Scaffold(
       appBar: AppBar(
         title: Text('管理播放列表: ${widget.playlist.name}'),
@@ -165,19 +166,17 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
           IconButton(
             icon: const Icon(Icons.play_arrow),
             onPressed: () {
-              // 如果有未保存的更改，先保存但不重置状态
-              if (_hasChanges) {
-                _saveChangesWithoutReset();
-              }
-              
-              // 使用当前状态创建播放列表副本
+              // 使用当前编辑状态创建播放列表副本
               final currentPlaylist = widget.playlist.copyWith(
-                items: _items.map((itemWithClip) => itemWithClip.item).toList(),
+                items: _editingItems
+                    .map((itemWithClip) => itemWithClip.item)
+                    .toList(),
               );
-              
+
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => PlaylistPlaybackScreen(playlist: currentPlaylist),
+                  builder: (context) =>
+                      PlaylistPlaybackScreen(playlist: currentPlaylist),
                 ),
               );
             },
@@ -185,37 +184,37 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
           ),
         ],
       ),
-             body: _items.isEmpty
-           ? Center(
-               child: Column(
-                 mainAxisAlignment: MainAxisAlignment.center,
-                 children: [
-                   Icon(
-                     Icons.playlist_play,
-                     size: 64,
-                     color: Colors.grey.shade400,
-                   ),
-                   const SizedBox(height: 16),
-                   Text(
-                     '播放列表为空',
-                     style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
-                   ),
-                   const SizedBox(height: 8),
-                   Text(
-                     '添加一些片段来开始创建播放列表',
-                     style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-                   ),
-                 ],
-               ),
-             )
-                       : Column(
+      body: _editingItems.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildPlaylistInfo(),
-                  _buildTimelineView(),
+                  Icon(
+                    Icons.playlist_play,
+                    size: 64,
+                    color: Colors.grey.shade400,
+                  ),
                   const SizedBox(height: 16),
-                  Expanded(child: _buildPlaylistItems()),
+                  Text(
+                    '播放列表为空',
+                    style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '添加一些片段来开始创建播放列表',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                  ),
                 ],
               ),
+            )
+          : Column(
+              children: [
+                _buildPlaylistInfo(),
+                _buildTimelineView(),
+                const SizedBox(height: 16),
+                Expanded(child: _buildPlaylistItems()),
+              ],
+            ),
     );
   }
 
@@ -258,7 +257,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '${_items.length} 个片段',
+                      '${_editingItems.length} 个片段',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade700,
@@ -296,11 +295,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.timeline,
-                size: 16,
-                color: Colors.blue.shade600,
-              ),
+              Icon(Icons.timeline, size: 16, color: Colors.blue.shade600),
               const SizedBox(width: 8),
               Text(
                 '轨道视图',
@@ -313,28 +308,25 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
               const Spacer(),
               Text(
                 '总时长: ${_formatDuration(widget.playlist.totalDuration)}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
             ],
           ),
           const SizedBox(height: 8),
-                     PlaylistTimelineView(
-             items: _items,
-             height: 80,
-             showDuration: true,
-             showNames: true,
-             selectedIndex: _selectedItemIndex,
-             onItemTap: (index) {
-               setState(() {
-                 _selectedItemIndex = index;
-               });
-               // 滚动到对应的列表项
-               _scrollToItem(index);
-             },
-           ),
+          PlaylistTimelineView(
+            items: _editingItems,
+            height: 80,
+            showDuration: true,
+            showNames: true,
+            selectedIndex: _selectedItemIndex,
+            onItemTap: (index) {
+              setState(() {
+                _selectedItemIndex = index;
+              });
+              // 滚动到对应的列表项
+              _scrollToItem(index);
+            },
+          ),
         ],
       ),
     );
@@ -346,11 +338,27 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
   }
 
   Widget _buildPlaylistItems() {
+    if (_editingItems.isEmpty) {
+      return const Center(child: Text('播放列表为空'));
+    }
+
     return ReorderableListView.builder(
-      itemCount: _items.length,
+      itemCount: _editingItems.length,
       onReorder: _onReorder,
       itemBuilder: (context, index) {
-        final itemWithClip = _items[index];
+        // 严格的安全检查
+        if (index < 0 || index >= _editingItems.length) {
+          return const SizedBox.shrink();
+        }
+        
+        final itemWithClip = _editingItems[index];
+        if (itemWithClip == null || 
+            itemWithClip.item == null || 
+            itemWithClip.clip == null ||
+            itemWithClip.item.id.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        
         return _buildPlaylistItem(itemWithClip, index);
       },
     );
@@ -370,34 +378,34 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
             context,
           ).showSnackBar(SnackBar(content: Text('播放片段: ${clip.name}')));
         },
-                 child: Container(
-           height: 80, // 固定高度
-           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-           child: Row(
-             children: [
-               // 序号
-               Container(
-                 width: 30,
-                 height: 30,
-                 decoration: BoxDecoration(
-                   color: Colors.blue.shade100,
-                   shape: BoxShape.circle,
-                   border: Border.all(color: Colors.blue.shade300),
-                 ),
-                 child: Center(
-                   child: Text(
-                     '${index + 1}',
-                     style: TextStyle(
-                       fontSize: 12,
-                       fontWeight: FontWeight.bold,
-                       color: Colors.blue.shade700,
-                     ),
-                   ),
-                 ),
-               ),
-               const SizedBox(width: 12),
-               SizedBox(width: 60, height: 40, child: ClipThumbnail(clip: clip)),
-               const SizedBox(width: 12),
+        child: Container(
+          height: 80, // 固定高度
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              // 序号
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade100,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.blue.shade300),
+                ),
+                child: Center(
+                  child: Text(
+                    '${index + 1}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(width: 60, height: 40, child: ClipThumbnail(clip: clip)),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -493,11 +501,13 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              final appState = context.read<AppState>();
-              appState.removeClipFromPlaylist(
-                widget.playlist.id,
-                itemWithClip.clip.id,
-              );
+              // 从编辑状态中移除
+              setState(() {
+                _editingItems.removeWhere(
+                  (item) => item.item.id == itemWithClip.item.id,
+                );
+                _hasChanges = true;
+              });
               Navigator.of(context).pop();
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),

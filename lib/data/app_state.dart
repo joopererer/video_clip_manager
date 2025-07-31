@@ -31,6 +31,8 @@ class AppState extends ChangeNotifier {
 
   bool _clipsIsGridView = false;
   bool _videosIsGridView = false;
+  bool _playlistsIsGridView = false;
+  String _playlistsSortBy = 'name'; // 播放列表排序方式
   
   // 标签过滤相关
   List<String> _selectedTags = [];
@@ -60,6 +62,8 @@ class AppState extends ChangeNotifier {
   ThumbnailService get thumbnailService => _thumbnailService;
   bool get clipsIsGridView => _clipsIsGridView;
   bool get videosIsGridView => _videosIsGridView;
+  bool get playlistsIsGridView => _playlistsIsGridView;
+  String get playlistsSortBy => _playlistsSortBy;
   List<String> get selectedTags => List.unmodifiable(_selectedTags);
   int? get selectedRating => _selectedRating;
   bool? get selectedFavorite => _selectedFavorite;
@@ -75,6 +79,8 @@ class AppState extends ChangeNotifier {
     _videoMetadataService = VideoMetadataService(thumbnailService: _thumbnailService);
     _clipsIsGridView = _prefs.getBool('clipsIsGridView') ?? false;
     _videosIsGridView = _prefs.getBool('videosIsGridView') ?? false;
+    _playlistsIsGridView = _prefs.getBool('playlistsIsGridView') ?? false;
+    _playlistsSortBy = _prefs.getString('playlistsSortBy') ?? 'name';
   }
 
   void setClipsViewMode(bool isGrid) {
@@ -86,6 +92,18 @@ class AppState extends ChangeNotifier {
   void setVideosViewMode(bool isGrid) {
     _videosIsGridView = isGrid;
     _prefs.setBool('videosIsGridView', isGrid);
+    notifyListeners();
+  }
+
+  void setPlaylistsViewMode(bool isGrid) {
+    _playlistsIsGridView = isGrid;
+    _prefs.setBool('playlistsIsGridView', isGrid);
+    notifyListeners();
+  }
+
+  void setPlaylistsSortBy(String sortBy) {
+    _playlistsSortBy = sortBy;
+    _prefs.setString('playlistsSortBy', sortBy);
     notifyListeners();
   }
 
@@ -761,6 +779,18 @@ class AppState extends ChangeNotifier {
     if (index != -1) {
       final playlist = _playlists[index];
       final updatedPlaylist = playlist.removeClip(clipId);
+      _playlists[index] = updatedPlaylist;
+      notifyListeners();
+      _scheduleSave();
+    }
+  }
+
+  /// 从播放列表移除特定的播放列表项
+  void removePlaylistItem(String playlistId, String itemId) {
+    final index = _playlists.indexWhere((p) => p.id == playlistId);
+    if (index != -1) {
+      final playlist = _playlists[index];
+      final updatedPlaylist = playlist.removeItem(itemId);
       _playlists[index] = updatedPlaylist;
       notifyListeners();
       _scheduleSave();

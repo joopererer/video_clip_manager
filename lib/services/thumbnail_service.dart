@@ -8,19 +8,23 @@ import '../data/models.dart';
 
 class ThumbnailService {
   final PathService pathService;
-  late final String _thumbnailDir;
+  String? _thumbnailDir;
 
   final Player player = Player();
   late final VideoController videoController;
   String? _currentlyOpenVideoPath;
 
   ThumbnailService({required this.pathService}) {
-    _thumbnailDir = pathService.getThumbnailDir();
     videoController = VideoController(player);
   }
 
+  String get _thumbnailDirValue {
+    _thumbnailDir ??= pathService.getThumbnailDir();
+    return _thumbnailDir!;
+  }
+
   String getThumbnailPath(String clipId) {
-    return p.join(_thumbnailDir, '$clipId.jpg');
+    return p.join(_thumbnailDirValue, '$clipId.jpg');
   }
 
   /// 根据数据库文件路径获取对应的缩略图目录
@@ -51,7 +55,7 @@ class ThumbnailService {
     await player.stop();
     _currentlyOpenVideoPath = null;
 
-    final dir = Directory(_thumbnailDir);
+    final dir = Directory(_thumbnailDirValue);
     try {
       if (await dir.exists()) {
         // 不删除目录本身，而是删除目录下的所有文件
