@@ -94,7 +94,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
 
   void _onReorder(int oldIndex, int newIndex) {
     setState(() {
-      if (oldIndex < newIndex) {
+      if (newIndex > oldIndex) {
         newIndex -= 1;
       }
       final item = _editingItems.removeAt(oldIndex);
@@ -365,6 +365,14 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
   }
 
   Widget _buildPlaylistItem(PlaylistItemWithClip itemWithClip, int index) {
+    // 严格的安全检查
+    if (itemWithClip == null || 
+        itemWithClip.item == null || 
+        itemWithClip.clip == null ||
+        itemWithClip.item.id.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
     final item = itemWithClip.item;
     final clip = itemWithClip.clip;
 
@@ -442,34 +450,16 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, size: 20),
-                      onPressed: () => _editClipTiming(itemWithClip),
-                      tooltip: '编辑时间',
-                      constraints: const BoxConstraints(
-                        minWidth: 40,
-                        minHeight: 40,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.remove_circle_outline,
-                        size: 20,
-                        color: Colors.red,
-                      ),
-                      onPressed: () => _removeClipFromPlaylist(itemWithClip),
-                      tooltip: '从播放列表移除',
-                      constraints: const BoxConstraints(
-                        minWidth: 40,
-                        minHeight: 40,
-                      ),
-                    ),
-                  ],
+              IconButton(
+                icon: const Icon(
+                  Icons.remove_circle_outline,
+                  size: 20,
+                  color: Colors.red,
+                ),
+                onPressed: () => _removeClipFromPlaylist(itemWithClip),
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
                 ),
               ),
             ],
@@ -479,12 +469,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
     );
   }
 
-  void _editClipTiming(PlaylistItemWithClip itemWithClip) {
-    // TODO: 实现编辑片段时间的功能
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('编辑片段时间功能即将推出')));
-  }
+
 
   void _removeClipFromPlaylist(PlaylistItemWithClip itemWithClip) {
     showDialog(

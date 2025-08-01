@@ -1,152 +1,256 @@
 # Video Clip Manager
 
-A Flutter application for managing video clips with advanced editing capabilities.
+一个基于 Flutter 开发的视频片段管理器，专注于"软截取"和智能收藏管理。
 
-## Features
+## 软件设计理念
 
-### Core Features
-- Load and manage video clips from JSON files
-- Create and edit video clips with precise time controls
-- Generate thumbnails for clips
-- Tag-based organization system with automatic colorization
-- Playlist management
-- Advanced search and filter functionality
-  - Text search across clip names, notes, and file paths
-  - Tag-based filtering with multi-tag support
-  - Star rating filtering (1-5 stars)
-  - Favorite status filtering (favorites only, not favorites, or all)
+### 为什么开发这个应用？
 
-### Enhanced Clips Tab Interface
-The clips tab now features an optimized interface with two display modes:
+在观看视频时，我们经常会遇到这样的情况：
+- 一个长视频中只有几个片段是精华内容
+- 想要收藏这些片段，但不想破坏原视频文件
+- 希望能够将这些片段串联起来，形成连续的播放体验
+- 避免传统视频编辑软件的复杂性和文件损失
 
-### Enhanced Clip Playback Screen
-The clip playback screen has been completely redesigned with advanced features:
+### 核心设计理念
 
-#### Playback Controls
-- **Replay Button**: Instantly restart the clip from the beginning
-- **Play/Pause Toggle**: Control playback with overlay controls on the video
-- **Automatic Loop**: Clips automatically stop at the end time and can be replayed
+#### 1. **软截取 (Soft Clipping)**
+- **不破坏原文件**：通过时间标记来"虚拟截取"片段，原视频文件保持完整
+- **零质量损失**：避免重新编码导致的分辨率损失
+- **快速处理**：无需等待视频重新渲染，即时创建片段
 
-#### Interactive Features
-- **Star Rating System**: Click on stars to rate clips directly from the player
-- **Favorite Toggle**: Heart icon to mark/unmark clips as favorites
-- **Direct Editing**: Edit button to open the clip editor for modifications
+#### 2. **智能收藏管理**
+- **精确时间控制**：毫秒级的开始和结束时间设置
+- **标签系统**：通过颜色编码的标签进行智能分类
+- **评分系统**：1-5星评分和收藏功能
+- **搜索过滤**：多维度搜索和过滤功能
 
-#### Navigation
-- **Previous/Next Buttons**: Navigate between clips in the collection
-- **Seamless Transitions**: Switch between clips without closing the player
-- **Visual Feedback**: Disabled buttons when no previous/next clips available
+#### 3. **播放列表系统**
+- **片段串联**：将多个片段组合成播放列表
+- **连续播放**：无缝切换，模拟完整视频体验
+- **轨道视图**：可视化时间轴，参考专业视频编辑软件设计
+- **拖拽排序**：直观的片段重排序功能
 
-#### Information Display
-- **Time Range**: Shows start time, end time, and total duration
-- **Tags and Notes**: Displays clip metadata when available, with colored tag chips
-- **Video File**: Shows the source video filename
-- **Enhanced Layout**: Larger window (720x680) for better viewing experience
+#### 4. **用户体验优先**
+- **简洁界面**：专注于核心功能，避免复杂操作
+- **即时反馈**：所有操作都有即时的视觉反馈
+- **数据持久化**：自动保存所有设置和状态
+- **跨平台支持**：Windows 桌面应用，未来可扩展到其他平台
 
-#### Technical Features
-- **State Management**: Real-time updates for ratings and favorites
-- **Responsive Design**: Adapts to different screen sizes
-- **Memory Efficient**: Proper cleanup of video resources
-- **Error Handling**: Graceful handling of missing files or navigation errors
+## 技术架构
 
-#### Sorting and Statistics
-- **Advanced Sorting**: 8 different sorting options including:
-  - Name (A-Z / Z-A)
-  - Date Added (Newest / Oldest)
-  - Rating (High to Low / Low to High)
-  - Duration (Long to Short / Short to Long)
-- **Real-time Statistics**: Shows filtered count vs total count (e.g., "15 / 25")
-- **Smart Default**: Sorts by newest clips first by default
-- **Instant Sorting**: Results update immediately when sorting option changes
-- **Beautiful UI**: Modern design with gradients, shadows, and smooth animations
+### 核心技术栈
+- **Flutter 3.32.8**：跨平台 UI 框架
+- **Provider**：状态管理模式
+- **Media Kit**：视频播放和元数据提取
+- **SharedPreferences**：本地数据持久化
 
-#### List View
-- **Star Rating System**: Click on stars to rate clips (1-5 stars, click again to remove rating)
-- **Favorite System**: Heart icon to mark/unmark clips as favorites
-- **Enhanced Information Display**: Shows start time, end time, duration, and tags
-- **Tag Colorization**: Each tag displays with a unique, consistent color based on its content
-- **Direct Editing**: Click edit button to open clip editor
-- **Quick Actions**: Play, edit, and delete buttons for each clip
+### 关键技术实现
 
-#### Grid View
-- **Compact Card Layout**: Visual cards with thumbnails
-- **Interactive Controls**: 
-  - Star rating system with clickable stars
-  - Favorite toggle with heart icon
-  - Play button for quick preview
-  - Edit and delete buttons in header
-- **Visual Indicators**: Favorite clips show heart icon in header
-- **Duration Display**: Shows clip duration in monospace font
-- **Responsive Design**: Adjusts grid size based on screen width
+#### 1. **状态管理模式**
+```dart
+// 编辑模式 + 备份状态设计
+class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
+  List<PlaylistItemWithClip> _editingItems = [];    // 编辑状态（用户正在编辑的副本）
+  List<PlaylistItemWithClip> _originalItems = [];   // 原始状态（从 AppState 获取的真实数据）
+  bool _hasChanges = false;                         // 是否有未保存的更改
+}
+```
 
-### Key Improvements
-1. **Direct Interaction**: Click on stars or heart icons to modify ratings and favorites directly from the clips list
-2. **Advanced Sorting**: Comprehensive sorting options for better organization
-3. **Real-time Statistics**: Always know how many clips are being displayed vs total
-4. **Visual Feedback**: Clear visual indicators for ratings and favorites
-5. **Consistent Design**: Both list and grid views maintain consistent functionality
-6. **Performance**: Optimized rendering with proper state management
-7. **User Experience**: Intuitive controls that don't require opening the editor for simple changes
+#### 2. **懒加载初始化**
+```dart
+// ThumbnailService 懒加载模式
+class ThumbnailService {
+  String? _thumbnailDir; // 改为可空类型
+  
+  String get _thumbnailDirValue { // 懒加载 getter
+    _thumbnailDir ??= pathService.getThumbnailDir();
+    return _thumbnailDir!;
+  }
+}
+```
 
-## Usage
+#### 3. **全局拖拽支持**
+```dart
+// 主屏幕全局拖拽实现
+DropTarget(
+  onDragDone: (details) => _handleVideoDrop(details),
+  child: Scaffold(...)
+)
+```
 
-### Sorting Clips
-- Use the beautiful sorting dropdown menu in the top-left of the clips tab
-- Choose from 8 different sorting options
-- Results update immediately when you change the sort order
-- Default sorting is by newest clips first
-- Modern UI with smooth animations and visual feedback
+#### 4. **数据持久化策略**
+- **JSON 序列化**：视频片段、播放列表等核心数据
+- **SharedPreferences**：UI 状态（视图模式、排序方式等）
+- **文件系统**：缩略图缓存和数据库文件管理
 
-### Rating Clips
-- Click on the star icons in either view mode to set a rating (1-5 stars)
-- Click the same star again to remove the rating
-- Ratings are automatically saved
+### 开发过程中的重要决策
 
-### Favoriting Clips
-- Click the heart icon to toggle favorite status
-- Favorite clips show a red heart icon
-- Favorites are automatically saved
+#### 1. **移除"编辑时间"功能**
+经过深入讨论，决定移除播放列表中的"编辑时间"功能，因为：
+- 违背了"软截取"的设计理念
+- 造成功能重复（已有 clip_editor_screen）
+- 增加不必要的复杂度
+- 可能导致数据一致性问题
 
-### Viewing Statistics
-- The blue badge shows "filtered count / total count"
-- Updates automatically when you search, filter, or sort
-- Helps you understand how many clips match your current criteria
+#### 2. **编辑模式 + 备份状态模式**
+为了解决播放列表管理中的状态同步问题，实现了：
+- 本地编辑状态与全局状态的分离
+- 只有保存时才同步到全局状态
+- 重置功能可以完美恢复到原始状态
+- 避免了复杂的状态同步逻辑
 
-### Switching View Modes
-- Use the view mode toggle button in the top-right corner of the clips tab
-- Choose between list view (detailed) and grid view (visual)
+#### 3. **UI/UX 设计原则**
+- **一致性**：所有标签页保持统一的设计风格
+- **简洁性**：移除冗余功能，专注于核心需求
+- **直观性**：拖拽排序、颜色编码等直观操作
+- **响应性**：所有操作都有即时反馈
 
-### Using the Enhanced Playback Screen
-- **Play Clips**: Click the play button on any clip to open the enhanced playback screen
-- **Replay**: Use the replay button to restart the clip from the beginning
-- **Rate While Playing**: Click on stars to rate clips directly from the player
-- **Toggle Favorites**: Use the heart icon to mark/unmark favorites during playback
-- **Navigate Clips**: Use previous/next buttons to browse through your clip collection
-- **Edit on the Fly**: Click the edit button to open the clip editor for modifications
-- **View Details**: See comprehensive information including time range, tags, and notes
+## 功能特性
 
-### Advanced Filtering
-- **Text Search**: Type in the search bar to filter by clip name, notes, or file path
-- **Tag Filtering**: Click the filter button and select "Filter by Tags" to choose multiple tags
-            - **Rating Filtering**: Click the filter button and select "Filter by Rating" to filter by specific star ratings (including "No Rating" for clips without stars)
-- **Favorite Filtering**: Click the filter button and select "Filter by Favorite" to show only favorites, only non-favorites, or all clips
-- **Combined Filters**: Use multiple filter types simultaneously for precise filtering
-- **Clear Filters**: Use "Clear All Filters" option or click the X on individual filter chips
-- **Visual Indicators**: Active filters are displayed as chips in the search bar with icons and counts
+### 核心功能
+- 加载和管理来自 JSON 文件的视频片段
+- 创建和编辑具有精确时间控制的视频片段
+- 为片段生成缩略图
+- 基于标签的组织系统，支持自动颜色编码
+- 播放列表管理
+- 高级搜索和过滤功能
+  - 跨片段名称、注释和文件路径的文本搜索
+  - 基于标签的过滤，支持多标签
+  - 星级评分过滤（1-5星）
+  - 收藏状态过滤（仅收藏、非收藏或全部）
 
-## Technical Details
+### 增强的片段标签页界面
+片段标签页现在具有优化的界面，支持两种显示模式：
 
-The enhanced clips tab implementation includes:
-- State management through Provider pattern
-- Real-time updates using `context.watch<AppState>()`
-- Optimized UI components with proper gesture detection
-- Consistent styling across both view modes
-- Integration with existing clip editor functionality
+### 增强的片段播放屏幕
+片段播放屏幕已完全重新设计，具有高级功能：
 
-## Development
+#### 播放控制
+- **重播按钮**：立即从开头重新开始片段
+- **播放/暂停切换**：通过视频上的覆盖控制来控制播放
+- **自动循环**：片段在结束时间自动停止，可以重新播放
 
-This project uses:
+#### 交互功能
+- **星级评分系统**：直接从播放器中点击星星来评分片段
+- **收藏切换**：心形图标来标记/取消标记收藏
+- **直接编辑**：编辑按钮打开片段编辑器进行修改
+
+#### 导航
+- **上一个/下一个按钮**：在集合中的片段之间导航
+- **无缝过渡**：无需关闭播放器即可在片段之间切换
+- **视觉反馈**：当没有上一个/下一个片段时禁用按钮
+
+#### 信息显示
+- **时间范围**：显示开始时间、结束时间和总时长
+- **标签和注释**：显示片段元数据（可用时），带有彩色标签芯片
+- **视频文件**：显示源视频文件名
+- **增强布局**：更大的窗口（720x680）以获得更好的观看体验
+
+#### 技术功能
+- **状态管理**：评分和收藏的实时更新
+- **响应式设计**：适应不同的屏幕尺寸
+- **内存效率**：正确清理视频资源
+- **错误处理**：优雅处理缺失文件或导航错误
+
+#### 排序和统计
+- **高级排序**：8种不同的排序选项，包括：
+  - 名称（A-Z / Z-A）
+  - 添加日期（最新 / 最早）
+  - 评分（高到低 / 低到高）
+  - 时长（长到短 / 短到长）
+- **实时统计**：显示过滤计数与总计数（例如，"15 / 25"）
+- **智能默认**：默认按最新片段排序
+- **即时排序**：更改排序选项时结果立即更新
+- **美观的UI**：具有渐变、阴影和平滑动画的现代设计
+
+#### 列表视图
+- **星级评分系统**：点击星星来评分片段（1-5星，再次点击移除评分）
+- **收藏系统**：心形图标来标记/取消标记片段为收藏
+- **增强信息显示**：显示开始时间、结束时间、时长和标签
+- **标签颜色编码**：每个标签根据其内容显示独特的、一致的颜色
+- **直接编辑**：点击编辑按钮打开片段编辑器
+- **快速操作**：每个片段的播放、编辑和删除按钮
+
+#### 网格视图
+- **紧凑卡片布局**：带有缩略图的可视卡片
+- **交互控制**：
+  - 带有可点击星星的星级评分系统
+  - 带有心形图标的收藏切换
+  - 快速预览的播放按钮
+  - 标题中的编辑和删除按钮
+- **视觉指示器**：收藏片段在标题中显示心形图标
+- **时长显示**：以等宽字体显示片段时长
+- **响应式设计**：根据屏幕宽度调整网格大小
+
+### 关键改进
+1. **直接交互**：点击星星或心形图标直接从片段列表修改评分和收藏
+2. **高级排序**：全面的排序选项，更好地组织
+3. **实时统计**：始终知道显示了多少片段与总数
+4. **视觉反馈**：评分和收藏的清晰视觉指示器
+5. **一致设计**：列表和网格视图都保持一致的功能
+6. **性能**：通过适当的状态管理优化渲染
+7. **用户体验**：不需要打开编辑器即可进行简单更改的直观控制
+
+## 使用方法
+
+### 排序片段
+- 使用片段标签页左上角的美观排序下拉菜单
+- 从8种不同的排序选项中选择
+- 更改排序顺序时结果立即更新
+- 默认按最新片段排序
+- 具有平滑动画和视觉反馈的现代UI
+
+### 评分片段
+- 在任一视图模式中点击星星图标设置评分（1-5星）
+- 再次点击同一颗星星移除评分
+- 评分自动保存
+
+### 收藏片段
+- 点击心形图标切换收藏状态
+- 收藏片段显示红色心形图标
+- 收藏自动保存
+
+### 查看统计
+- 蓝色徽章显示"过滤计数 / 总计数"
+- 搜索、过滤或排序时自动更新
+- 帮助您了解有多少片段符合当前条件
+
+### 切换视图模式
+- 使用片段标签页右上角的视图模式切换按钮
+- 在列表视图（详细）和网格视图（可视）之间选择
+
+### 使用增强的播放屏幕
+- **播放片段**：点击任何片段的播放按钮打开增强的播放屏幕
+- **重播**：使用重播按钮从开头重新开始片段
+- **播放时评分**：点击星星直接从播放器评分片段
+- **切换收藏**：使用心形图标在播放期间标记/取消标记收藏
+- **导航片段**：使用上一个/下一个按钮浏览片段集合
+- **即时编辑**：点击编辑按钮打开片段编辑器进行修改
+- **查看详情**：查看包括时间范围、标签和注释在内的综合信息
+
+### 高级过滤
+- **文本搜索**：在搜索栏中输入以按片段名称、注释或文件路径过滤
+- **标签过滤**：点击过滤按钮并选择"按标签过滤"以选择多个标签
+- **评分过滤**：点击过滤按钮并选择"按评分过滤"以按特定星级评分过滤（包括"无评分"用于没有星星的片段）
+- **收藏过滤**：点击过滤按钮并选择"按收藏过滤"以仅显示收藏、仅非收藏或所有片段
+- **组合过滤**：同时使用多种过滤类型进行精确过滤
+- **清除过滤**：使用"清除所有过滤"选项或点击单个过滤芯片上的X
+- **视觉指示器**：活动过滤显示为搜索栏中的芯片，带有图标和计数
+
+## 技术细节
+
+增强的片段标签页实现包括：
+- 通过Provider模式进行状态管理
+- 使用`context.watch<AppState>()`进行实时更新
+- 具有适当手势检测的优化UI组件
+- 两种视图模式的一致样式
+- 与现有片段编辑器功能的集成
+
+## 开发
+
+本项目使用：
 - Flutter 3.32.8
-- Provider for state management
-- Media Kit for video playback
-- Shared Preferences for settings persistence
+- Provider 用于状态管理
+- Media Kit 用于视频播放
+- SharedPreferences 用于设置持久化
