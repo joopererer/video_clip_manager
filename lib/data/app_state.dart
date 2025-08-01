@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'dart:collection';
 import 'package:collection/collection.dart';
+import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async'; // Added for Timer
@@ -11,6 +12,7 @@ import 'data_service.dart';
 import '../services/path_service.dart';
 import '../services/thumbnail_service.dart';
 import '../services/video_metadata_service.dart';
+import '../services/video_metadata_cache.dart';
 
 const String _prefsKeyDbPath = 'db_path';
 
@@ -349,15 +351,19 @@ class AppState extends ChangeNotifier {
         }
         debugPrint('=== End verification ===');
 
-        await _videoMetadataService.processVideoMetadata(resetVideos, (
-          index,
-          updatedVideo,
+        await _videoMetadataService.processVideoMetadataBatch(resetVideos, (
+          result,
         ) {
           // 找到对应的 video 在 _originalVideos 中的索引
           final videoIndex = _originalVideos.indexWhere(
-            (v) => v.id == updatedVideo.id,
+            (v) => v.id == result.videoId,
           );
-          if (videoIndex != -1) {
+          if (videoIndex != -1 && result.success) {
+            final video = _originalVideos[videoIndex];
+            final updatedVideo = video.copyWith(
+              duration: result.duration,
+              thumbnailPath: result.thumbnailPath,
+            );
             _originalVideos[videoIndex] = updatedVideo;
             debugPrint(
               'Updated video ${updatedVideo.name} with thumbnail: ${updatedVideo.thumbnailPath}',
@@ -486,15 +492,19 @@ class AppState extends ChangeNotifier {
     // 生成缺失的 videos 缩略图
     if (videosToGenerate.isNotEmpty) {
       debugPrint('Generating videos thumbnails...');
-      await _videoMetadataService.processVideoMetadata(videosToGenerate, (
-        index,
-        updatedVideo,
+      await _videoMetadataService.processVideoMetadataBatch(videosToGenerate, (
+        result,
       ) {
         // 找到对应的 video 在 _originalVideos 中的索引
         final videoIndex = _originalVideos.indexWhere(
-          (v) => v.id == updatedVideo.id,
+          (v) => v.id == result.videoId,
         );
-        if (videoIndex != -1) {
+        if (videoIndex != -1 && result.success) {
+          final video = _originalVideos[videoIndex];
+          final updatedVideo = video.copyWith(
+            duration: result.duration,
+            thumbnailPath: result.thumbnailPath,
+          );
           _originalVideos[videoIndex] = updatedVideo;
           debugPrint(
             'Updated video ${updatedVideo.name} with thumbnail: ${updatedVideo.thumbnailPath}',
@@ -579,6 +589,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 检查视频是否有可用的元数据
+  bool hasVideoMetadata(OriginalVideo video) {
+    return video.duration != null &&
+        video.duration != Duration.zero &&
+        video.thumbnailPath != null;
+  }
+
   /// 将整个视频创建为一个clip
   Future<void> createClipFromWholeVideo(OriginalVideo video) async {
     // 生成唯一的clip ID
@@ -593,17 +610,29 @@ class AppState extends ChangeNotifier {
         'VideoMetadataService: Getting metadata for whole video clip: ${video.name}',
       );
       try {
-        // 获取视频元数据
-        final metadata = await _videoMetadataService.getVideoMetadata(
-          video.path,
-        );
-        videoDuration = metadata.duration;
-
-        // 生成缩略图
-        thumbnailPath ??= await _videoMetadataService.generateVideoThumbnail(
-          video.path,
-          video.id,
-        );
+        // 获取视频元数据 - 使用新的处理方式
+        await _videoMetadataService.processVideoMetadataBatch([video], (
+          result,
+        ) {
+          // 找到对应的 video 在 _originalVideos 中的索引
+          final videoIndex = _originalVideos.indexWhere(
+            (v) => v.id == result.videoId,
+          );
+          if (videoIndex != -1 && result.success) {
+            final video = _originalVideos[videoIndex];
+            final updatedVideo = video.copyWith(
+              duration: result.duration,
+              thumbnailPath: result.thumbnailPath,
+            );
+            _originalVideos[videoIndex] = updatedVideo;
+            videoDuration = updatedVideo.duration;
+            thumbnailPath = updatedVideo.thumbnailPath;
+            debugPrint(
+              'Updated video ${updatedVideo.name} with duration: ${updatedVideo.duration}, thumbnail: ${updatedVideo.thumbnailPath}',
+            );
+            notifyListeners();
+          }
+        });
 
         // 更新原始视频的元数据
         final videoIndex = _originalVideos.indexWhere((v) => v.id == video.id);
@@ -611,16 +640,21 @@ class AppState extends ChangeNotifier {
           _originalVideos[videoIndex] = video.copyWith(
             duration: videoDuration,
             thumbnailPath: thumbnailPath,
-            metadata: metadata.metadata,
           );
           notifyListeners();
         }
       } catch (e) {
         debugPrint('Error getting metadata for whole video clip: $e');
-        // 如果获取失败，使用默认值
-        videoDuration = Duration.zero;
-        thumbnailPath = video.thumbnailPath;
+        // 如果获取失败，使用默认值，但不创建clip
+        debugPrint('无法获取视频 "${video.name}" 的元数据，请稍后重试');
+        return; // 不创建clip，等待元数据处理完成
       }
+    }
+
+    // 如果还是没有时长信息，不创建clip
+    if (videoDuration == null || videoDuration == Duration.zero) {
+      debugPrint('视频 "${video.name}" 的时长信息不可用，请稍后重试');
+      return;
     }
 
     // 创建clip，整个视频作为片段
@@ -629,7 +663,7 @@ class AppState extends ChangeNotifier {
       name: video.name,
       videoPath: video.path,
       startTime: Duration.zero, // 从视频开始
-      endTime: videoDuration ?? Duration.zero, // 到视频结束
+      endTime: videoDuration!, // 到视频结束
       coverFrameTime: Duration.zero, // 封面时间设为开始
       tags: [],
       notes: '整个视频作为片段',
@@ -731,17 +765,21 @@ class AppState extends ChangeNotifier {
     }).toList();
   }
 
-  // 处理视频元数据
+  // 处理视频元数据（非阻塞）
   Future<void> processVideoMetadata() async {
-    await _videoMetadataService.processVideoMetadata(_originalVideos, (
-      index,
-      updatedVideo,
-    ) {
-      _originalVideos[index] = updatedVideo;
-      notifyListeners();
+    _videoMetadataService.processVideoMetadataBatch(_originalVideos, (result) {
+      final index = _originalVideos.indexWhere((v) => v.id == result.videoId);
+      if (index != -1) {
+        final video = _originalVideos[index];
+        final updatedVideo = video.copyWith(
+          duration: result.duration,
+          thumbnailPath: result.thumbnailPath,
+        );
+        _originalVideos[index] = updatedVideo;
+        notifyListeners();
+        _scheduleSave();
+      }
     });
-    // 保存更新后的视频数据
-    _scheduleSave();
   }
 
   // 更新单个视频的元数据
@@ -752,31 +790,36 @@ class AppState extends ChangeNotifier {
       debugPrint('Updating metadata for video: ${video.name}');
       debugPrint('Current thumbnailPath: ${video.thumbnailPath}');
 
-      final metadata = await _videoMetadataService.getVideoMetadata(video.path);
-      String? thumbnailPath;
-
-      if (video.thumbnailPath == null) {
-        debugPrint('Generating thumbnail for video: ${video.name}');
-        thumbnailPath = await _videoMetadataService.generateVideoThumbnail(
-          video.path,
-          video.id,
+      _videoMetadataService.processVideoMetadata(video.id, video.path, (result) {
+        final updatedVideo = video.copyWith(
+          duration: result.duration,
+          thumbnailPath: result.thumbnailPath,
         );
-        debugPrint('Generated thumbnailPath: $thumbnailPath');
-      }
 
-      final updatedVideo = video.copyWith(
-        duration: metadata.duration,
-        thumbnailPath: thumbnailPath ?? video.thumbnailPath,
-        metadata: metadata.metadata,
-      );
+        debugPrint('Updated video thumbnailPath: ${updatedVideo.thumbnailPath}');
 
-      debugPrint('Updated video thumbnailPath: ${updatedVideo.thumbnailPath}');
-
-      _originalVideos[index] = updatedVideo;
-      notifyListeners();
-      // 保存更新后的视频数据
-      _scheduleSave();
+        _originalVideos[index] = updatedVideo;
+        notifyListeners();
+        _scheduleSave();
+      });
     }
+  }
+
+  // 强制重新处理所有视频
+  Future<void> forceReprocessAllVideos() async {
+    await _videoMetadataService.forceReprocessAll();
+    await processVideoMetadata();
+  }
+
+  // 强制重新处理失败的视频
+  Future<void> forceReprocessFailedVideos() async {
+    await _videoMetadataService.forceReprocessFailed();
+    await processVideoMetadata();
+  }
+
+  // 获取视频的处理状态
+  VideoMetadataStatus? getVideoStatus(String videoId) {
+    return _videoMetadataService.getVideoStatus(videoId);
   }
 
   // 添加原始视频

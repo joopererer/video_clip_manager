@@ -3,16 +3,65 @@ import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 import '../data/models.dart';
 import 'thumbnail_service.dart';
+import 'video_metadata_cache.dart';
+import 'path_service.dart';
 
 class VideoMetadataService {
   final ThumbnailService _thumbnailService;
-  final Player _player = Player();
+  final VideoMetadataCache _cache = VideoMetadataCache();
 
   VideoMetadataService({required ThumbnailService thumbnailService})
     : _thumbnailService = thumbnailService;
 
-  /// 获取视频的完整元数据
-  Future<VideoMetadata> getVideoMetadata(String videoPath) async {
+  /// 后台处理单个视频的元数据
+  static Future<VideoMetadataResult> _processVideoMetadataInBackground(
+    VideoMetadataTask task,
+  ) async {
+    // 创建一个临时的PathService用于后台处理
+    final pathService = PathService();
+    await pathService.init();
+    final service = VideoMetadataService(
+      thumbnailService: ThumbnailService(pathService: pathService),
+    );
+    
+    try {
+      debugPrint('VideoMetadataService: Background processing ${task.videoPath}');
+      
+      // 获取元数据
+      final metadata = await service._getVideoMetadataInternal(task.videoPath);
+      
+      // 生成缩略图
+      String? thumbnailPath;
+      if (metadata.duration != null) {
+        thumbnailPath = await service._generateVideoThumbnailInternal(
+          task.videoPath,
+          task.videoId,
+          metadata.duration!,
+        );
+      }
+      
+      return VideoMetadataResult(
+        videoId: task.videoId,
+        success: true,
+        duration: metadata.duration,
+        thumbnailPath: thumbnailPath,
+        error: null,
+      );
+    } catch (e) {
+      debugPrint('VideoMetadataService: Background processing failed for ${task.videoPath}: $e');
+      return VideoMetadataResult(
+        videoId: task.videoId,
+        success: false,
+        duration: null,
+        thumbnailPath: null,
+        error: e.toString(),
+      );
+    }
+  }
+
+  /// 获取视频的完整元数据（内部方法，不包含缓存逻辑）
+  Future<VideoMetadata> _getVideoMetadataInternal(String videoPath) async {
+    Player? player;
     try {
       debugPrint('VideoMetadataService: Getting metadata for $videoPath');
 
@@ -23,27 +72,37 @@ class VideoMetadataService {
         return VideoMetadata(duration: null, metadata: {});
       }
 
+      // 检查文件扩展名，对AVI文件使用不同的处理策略
+      final isAviFile = videoPath.toLowerCase().endsWith('.avi');
+      
+      if (isAviFile) {
+        debugPrint('VideoMetadataService: AVI file detected, using fallback strategy');
+        return await _getMetadataForAviFile(videoPath);
+      }
+
+      // 为每个操作创建独立的播放器实例
+      player = Player();
       final media = Media(videoPath);
       debugPrint('VideoMetadataService: Opening media for $videoPath');
-      await _player.open(media, play: false)
+      await player.open(media, play: false)
           .timeout(const Duration(seconds: 10), onTimeout: () {
         throw Exception('Timeout opening video');
       });
 
       // 等待播放器准备好
       debugPrint('VideoMetadataService: Waiting for player to be ready...');
-      await _player.stream.buffer.firstWhere((e) => e > Duration.zero)
+      await player.stream.buffer.firstWhere((e) => e > Duration.zero)
           .timeout(const Duration(seconds: 15), onTimeout: () {
         throw Exception('Timeout waiting for video buffer');
       });
       await Future.delayed(const Duration(milliseconds: 200));
 
-      final duration = _player.state.duration;
+      final duration = player.state.duration;
       debugPrint(
         'VideoMetadataService: Got duration: $duration for $videoPath',
       );
 
-      await _player.stop();
+      await player.stop();
       debugPrint('VideoMetadataService: Player stopped for $videoPath');
 
       return VideoMetadata(
@@ -54,14 +113,41 @@ class VideoMetadataService {
       debugPrint('Error getting video metadata for $videoPath: $e');
       debugPrint('Error stack trace: ${StackTrace.current}');
       return VideoMetadata(duration: null, metadata: {});
+    } finally {
+      // 确保播放器被正确释放
+      if (player != null) {
+        try {
+          await player.stop();
+          player.dispose();
+          debugPrint('VideoMetadataService: Player disposed for $videoPath');
+        } catch (e) {
+          debugPrint('Error disposing player for $videoPath: $e');
+        }
+      }
     }
   }
 
-  /// 为视频生成中间帧作为封面
-  Future<String?> generateVideoThumbnail(
+  /// 为AVI文件获取元数据的降级策略
+  Future<VideoMetadata> _getMetadataForAviFile(String videoPath) async {
+    try {
+      debugPrint('VideoMetadataService: Using fallback strategy for AVI file: $videoPath');
+      
+      // 对于AVI文件，我们暂时跳过元数据获取，只返回null
+      // 这样可以避免media_kit的超时问题，但仍然可以生成缩略图
+      return VideoMetadata(duration: null, metadata: {});
+    } catch (e) {
+      debugPrint('Error in AVI fallback strategy for $videoPath: $e');
+      return VideoMetadata(duration: null, metadata: {});
+    }
+  }
+
+  /// 为视频生成中间帧作为封面（内部方法）
+  Future<String?> _generateVideoThumbnailInternal(
     String videoPath,
     String videoId,
+    Duration duration,
   ) async {
+    Player? player;
     try {
       debugPrint(
         'VideoMetadataService: Generating thumbnail for $videoPath (ID: $videoId)',
@@ -76,12 +162,21 @@ class VideoMetadataService {
         return null;
       }
 
-      // 获取视频时长
+      // 检查文件扩展名
+      final isAviFile = videoPath.toLowerCase().endsWith('.avi');
+      
+      if (isAviFile) {
+        debugPrint('VideoMetadataService: AVI file detected for thumbnail, using fallback');
+        return await _generateThumbnailForAviFile(videoPath, videoId);
+      }
+
+      // 为每个操作创建独立的播放器实例
+      player = Player();
       final media = Media(videoPath);
       debugPrint(
         'VideoMetadataService: Opening media for thumbnail generation: $videoPath',
       );
-      await _player.open(media, play: false)
+      await player.open(media, play: false)
           .timeout(const Duration(seconds: 10), onTimeout: () {
         throw Exception('Timeout opening video');
       });
@@ -90,25 +185,25 @@ class VideoMetadataService {
       debugPrint(
         'VideoMetadataService: Waiting for player to be ready for thumbnail...',
       );
-      await _player.stream.buffer.firstWhere((e) => e > Duration.zero)
+      await player.stream.buffer.firstWhere((e) => e > Duration.zero)
           .timeout(const Duration(seconds: 15), onTimeout: () {
         throw Exception('Timeout waiting for video buffer');
       });
       await Future.delayed(const Duration(milliseconds: 200));
 
-      final duration = _player.state.duration;
-      debugPrint('VideoMetadataService: Got duration for thumbnail: $duration');
+      final playerDuration = player.state.duration;
+      debugPrint('VideoMetadataService: Got duration for thumbnail: $playerDuration');
 
-      if (duration == null || duration.inMilliseconds == 0) {
+      if (playerDuration.inMilliseconds == 0) {
         debugPrint(
-          'VideoMetadataService: Invalid duration for thumbnail generation: $duration',
+          'VideoMetadataService: Invalid duration for thumbnail generation: $playerDuration',
         );
-        await _player.stop();
+        await player.stop();
         return null;
       }
 
       // 在视频中间时间点截图
-      final middleTime = Duration(milliseconds: duration.inMilliseconds ~/ 2);
+      final middleTime = Duration(milliseconds: playerDuration.inMilliseconds ~/ 2);
       debugPrint(
         'VideoMetadataService: Middle time for thumbnail: $middleTime',
       );
@@ -136,7 +231,7 @@ class VideoMetadataService {
         return fileName;
       }
 
-      await _player.stop();
+      await player.stop();
       debugPrint(
         'VideoMetadataService: No thumbnail generated, stopping player',
       );
@@ -144,77 +239,158 @@ class VideoMetadataService {
     } catch (e) {
       debugPrint('Error generating video thumbnail for $videoPath: $e');
       debugPrint('Error stack trace: ${StackTrace.current}');
+    } finally {
+      // 确保播放器被正确释放
+      if (player != null) {
+        try {
+          await player.stop();
+          player.dispose();
+          debugPrint('VideoMetadataService: Player disposed for thumbnail generation of $videoPath');
+        } catch (e) {
+          debugPrint('Error disposing player for thumbnail generation of $videoPath: $e');
+        }
+      }
     }
     return null;
   }
 
-  /// 批量处理视频元数据
+  /// 为AVI文件生成缩略图的降级策略
+  Future<String?> _generateThumbnailForAviFile(String videoPath, String videoId) async {
+    try {
+      debugPrint('VideoMetadataService: Using fallback thumbnail strategy for AVI file: $videoPath');
+      
+      // 对于AVI文件，我们尝试在视频开始处截图
+      final thumbnailPath = await _thumbnailService.generateThumbnail(
+        videoPath,
+        Duration.zero, // 在视频开始处截图
+        videoId,
+      );
+
+      if (thumbnailPath != null) {
+        final fileName = _thumbnailService.getThumbnailFileName(videoId);
+        debugPrint('VideoMetadataService: Generated AVI thumbnail: $fileName');
+        return fileName;
+      }
+      
+      return null;
+    } catch (e) {
+      debugPrint('Error generating AVI thumbnail for $videoPath: $e');
+      return null;
+    }
+  }
+
+  /// 处理单个视频的元数据（公开方法）
   Future<void> processVideoMetadata(
-    List<OriginalVideo> videos,
-    Function(int index, OriginalVideo updatedVideo) onUpdate,
+    String videoId,
+    String videoPath,
+    Function(VideoMetadataResult) onResult,
   ) async {
-    debugPrint(
-      'VideoMetadataService: Starting processVideoMetadata with ${videos.length} videos',
+    // 检查是否需要处理
+    if (!_cache.shouldProcessVideo(videoId, videoPath)) {
+      debugPrint('VideoMetadataService: Skipping $videoId - not ready for processing');
+      return;
+    }
+
+    debugPrint('VideoMetadataService: Processing metadata for $videoId');
+
+    // 在后台处理
+    final task = VideoMetadataTask(videoId: videoId, videoPath: videoPath);
+    final result = await compute(_processVideoMetadataInBackground, task);
+
+    // 记录结果到缓存
+    await _cache.recordResult(
+      videoId,
+      result.success,
+      error: result.error,
+      duration: result.duration,
+      thumbnailPath: result.thumbnailPath,
     );
 
-    for (int i = 0; i < videos.length; i++) {
-      final video = videos[i];
-      debugPrint(
-        'VideoMetadataService: Processing video ${i + 1}/${videos.length}: ${video.name}',
-      );
-      debugPrint(
-        'VideoMetadataService: Current duration: ${video.duration}, thumbnailPath: ${video.thumbnailPath}',
-      );
+    // 通知结果
+    onResult(result);
+  }
 
-      // 如果已经有元数据，跳过
-      if (video.duration != null && video.thumbnailPath != null) {
-        debugPrint(
-          'VideoMetadataService: Skipping ${video.name} - already has metadata',
-        );
+  /// 批量处理视频元数据（非阻塞）
+  Future<void> processVideoMetadataBatch(
+    List<OriginalVideo> videos,
+    Function(VideoMetadataResult) onResult,
+  ) async {
+    debugPrint(
+      'VideoMetadataService: Starting batch processing with ${videos.length} videos',
+    );
+
+    for (final video in videos) {
+      // 检查是否需要处理
+      if (!_cache.shouldProcessVideo(video.id, video.path)) {
+        debugPrint('VideoMetadataService: Skipping ${video.name} - not ready for processing');
         continue;
       }
 
-      try {
-        debugPrint('VideoMetadataService: Getting metadata for ${video.name}');
-        final metadata = await getVideoMetadata(video.path);
-        debugPrint(
-          'VideoMetadataService: Got metadata for ${video.name} - duration: ${metadata.duration}',
-        );
-
-        String? thumbnailPath;
-
-        // 如果没有封面，生成一个
-        if (video.thumbnailPath == null) {
-          debugPrint(
-            'VideoMetadataService: Generating thumbnail for ${video.name}',
-          );
-          thumbnailPath = await generateVideoThumbnail(video.path, video.id);
-          debugPrint(
-            'VideoMetadataService: Generated thumbnail for ${video.name}: $thumbnailPath',
-          );
-        }
-
-        final updatedVideo = video.copyWith(
-          duration: metadata.duration,
-          thumbnailPath: thumbnailPath ?? video.thumbnailPath,
-          metadata: metadata.metadata,
-        );
-
-        debugPrint(
-          'VideoMetadataService: Calling onUpdate for ${video.name} with thumbnailPath: ${updatedVideo.thumbnailPath}',
-        );
-        onUpdate(i, updatedVideo);
-      } catch (e) {
-        debugPrint('Error processing metadata for video ${video.name}: $e');
-      }
+      // 异步处理每个视频
+      processVideoMetadata(video.id, video.path, onResult);
     }
 
-    debugPrint('VideoMetadataService: Finished processVideoMetadata');
+    debugPrint('VideoMetadataService: Batch processing initiated');
+  }
+
+  /// 强制重新处理所有视频
+  Future<void> forceReprocessAll() async {
+    await _cache.forceReprocessAll();
+    debugPrint('VideoMetadataService: Force reprocess all videos');
+  }
+
+  /// 强制重新处理失败的视频
+  Future<void> forceReprocessFailed() async {
+    await _cache.forceReprocessFailed();
+    debugPrint('VideoMetadataService: Force reprocess failed videos');
+  }
+
+  /// 获取视频的处理状态
+  VideoMetadataStatus? getVideoStatus(String videoId) {
+    return _cache.getStatus(videoId);
+  }
+
+  /// 获取需要重试的视频列表
+  List<String> getVideosToRetry() {
+    return _cache.getVideosToRetry();
+  }
+
+  /// 获取失败次数过多的视频列表
+  List<String> getFailedVideos() {
+    return _cache.getFailedVideos();
   }
 
   void dispose() {
-    _player.dispose();
+    // 不再需要dispose方法，因为每个操作都使用独立的播放器实例
   }
+}
+
+/// 视频元数据处理任务
+class VideoMetadataTask {
+  final String videoId;
+  final String videoPath;
+
+  VideoMetadataTask({
+    required this.videoId,
+    required this.videoPath,
+  });
+}
+
+/// 视频元数据处理结果
+class VideoMetadataResult {
+  final String videoId;
+  final bool success;
+  final Duration? duration;
+  final String? thumbnailPath;
+  final String? error;
+
+  VideoMetadataResult({
+    required this.videoId,
+    required this.success,
+    this.duration,
+    this.thumbnailPath,
+    this.error,
+  });
 }
 
 /// 视频元数据类

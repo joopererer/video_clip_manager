@@ -72,7 +72,8 @@ class _VideosTabState extends State<VideosTab> {
 
       try {
         _lastMetadataProcessTime = now;
-        await appState.processVideoMetadata();
+        // 使用非阻塞方式处理元数据
+        appState.processVideoMetadata();
       } finally {
         if (mounted) {
           setState(() => _isProcessingMetadata = false);
@@ -737,15 +738,17 @@ class _VideosTabState extends State<VideosTab> {
     // 添加到视频列表
     appState.addOriginalVideo(video);
 
-    // 处理元数据
-    await appState.updateVideoMetadata(videoId);
-
-    // 显示导入选项对话框
+    // 显示导入选项对话框（不等待元数据处理）
     if (!context.mounted) return;
     final importOption = await showDialog<VideoImportOption>(
       context: context,
       builder: (context) => VideoImportDialog(video: video),
     );
+
+    // 在后台异步处理元数据
+    appState.updateVideoMetadata(videoId).catchError((error) {
+      debugPrint('Error processing video metadata for $videoName: $error');
+    });
 
     if (importOption != null && context.mounted) {
       switch (importOption) {

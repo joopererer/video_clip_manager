@@ -220,25 +220,59 @@ class _VideoMetadataDialogState extends State<VideoMetadataDialog> {
         thumbnailService: thumbnailService,
       );
       
-      final metadata = await metadataService.getVideoMetadata(widget.video.path);
+      // 使用新的处理方式，创建一个临时的OriginalVideo对象
+      final tempVideo = OriginalVideo(
+        id: widget.video.id,
+        path: widget.video.path,
+        name: widget.video.name,
+      );
       
-      setState(() {
-        if (metadata.actors.isNotEmpty) {
-          _actors.clear();
-          _actors.addAll(metadata.actors);
-        }
-        if (metadata.year != null) {
-          _yearController.text = metadata.year.toString();
-        }
-        if (metadata.series != null) {
-          _seriesController.text = metadata.series!;
-        }
-        if (metadata.title != null) {
-          _titleController.text = metadata.title!;
-        }
-        if (metadata.description != null) {
-          _descriptionController.text = metadata.description!;
-        }
+      // 处理元数据
+      await metadataService.processVideoMetadataBatch([tempVideo], (
+        result,
+      ) {
+        // 从结果中提取元数据 - 由于新的处理方式不直接返回metadata，我们需要从缓存中获取
+        // 这里暂时使用空元数据，因为新的处理方式主要关注duration和thumbnail
+        final metadata = <String, dynamic>{};
+        
+        setState(() {
+          // 从元数据中提取演员信息
+          final actorData = metadata['artist'] ?? metadata['actors'] ?? metadata['performer'];
+          if (actorData is String && actorData.isNotEmpty) {
+            _actors.clear();
+            _actors.addAll(actorData
+                .split(',')
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty));
+          }
+          
+          // 从元数据中提取年份
+          final yearData = metadata['date'] ?? metadata['year'];
+          if (yearData is String) {
+            final yearMatch = RegExp(r'(\d{4})').firstMatch(yearData);
+            if (yearMatch != null) {
+              _yearController.text = yearMatch.group(1)!;
+            }
+          }
+          
+          // 从元数据中提取系列信息
+          final seriesData = metadata['album'] ?? metadata['series'] ?? metadata['show'];
+          if (seriesData is String) {
+            _seriesController.text = seriesData;
+          }
+          
+          // 从元数据中提取标题
+          final titleData = metadata['title'];
+          if (titleData is String) {
+            _titleController.text = titleData;
+          }
+          
+          // 从元数据中提取描述
+          final descriptionData = metadata['description'] ?? metadata['comment'];
+          if (descriptionData is String) {
+            _descriptionController.text = descriptionData;
+          }
+        });
       });
       
       ScaffoldMessenger.of(context).showSnackBar(

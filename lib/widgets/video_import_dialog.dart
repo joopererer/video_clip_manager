@@ -16,6 +16,10 @@ class VideoImportDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasMetadata = video.duration != null && 
+                       video.duration != Duration.zero && 
+                       video.thumbnailPath != null;
+    
     return AlertDialog(
       title: const Text('导入视频'),
       content: Column(
@@ -23,6 +27,24 @@ class VideoImportDialog extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('视频: ${video.name}'),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                hasMetadata ? Icons.check_circle : Icons.info_outline,
+                size: 16,
+                color: hasMetadata ? Colors.green : Colors.orange,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                hasMetadata ? '元数据已就绪' : '元数据处理中...',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: hasMetadata ? Colors.green : Colors.orange,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           const Text('请选择导入方式:'),
           const SizedBox(height: 8),
