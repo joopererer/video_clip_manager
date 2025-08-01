@@ -1,0 +1,72 @@
+{
+  "version": "1.0",
+  "exportedAt": "2024-01-15T10:30:00.000Z",
+  "playlist": {
+    "id": "test_playlist_with_clips",
+    "name": "测试播放列表（包含片段信息）",
+    "description": "这是一个包含完整片段信息的测试播放列表",
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "items": [
+      {
+        "id": "item_1",
+        "clipId": "clip_1",
+        "customStartTime": 5000,
+        "customEndTime": 15000,
+        "duration": 10000,
+        "clipInfo": {
+          "id": "clip_1",
+          "name": "测试片段1",
+          "videoPath": "C:\\Videos\\test_video1.mp4",
+          "startTime": 10000,
+          "endTime": 40000,
+          "coverFrameTime": 15000,
+          "tags": ["测试", "片段"],
+          "notes": "这是一个测试片段",
+          "rating": 4,
+          "isFavorite": true,
+          "thumbnailPath": null
+        }
+      },
+      {
+        "id": "item_2", 
+        "clipId": "clip_2",
+        "customStartTime": null,
+        "customEndTime": null,
+        "duration": 30000,
+        "clipInfo": {
+          "id": "clip_2",
+          "name": "测试片段2",
+          "videoPath": "C:\\Videos\\test_video2.mp4",
+          "startTime": 0,
+          "endTime": 30000,
+          "coverFrameTime": 5000,
+          "tags": ["测试"],
+          "notes": null,
+          "rating": 3,
+          "isFavorite": false,
+          "thumbnailPath": null
+        }
+      },
+      {
+        "id": "item_3",
+        "clipId": "clip_3",
+        "customStartTime": 2000,
+        "customEndTime": 8000,
+        "duration": 6000,
+        "clipInfo": {
+          "id": "clip_3",
+          "name": "测试片段3",
+          "videoPath": "C:\\Videos\\missing_video.mp4",
+          "startTime": 5000,
+          "endTime": 15000,
+          "coverFrameTime": 8000,
+          "tags": ["测试", "缺失"],
+          "notes": "这个视频文件可能不存在",
+          "rating": 2,
+          "isFavorite": false,
+          "thumbnailPath": null
+        }
+      }
+    ]
+  }
+} 

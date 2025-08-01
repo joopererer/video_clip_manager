@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "exportedAt": "2024-01-15T10:30:00.000Z",
+  "playlist": {
+    "id": "test_playlist_123",
+    "name": "测试播放列表",
+    "description": "这是一个用于测试导入功能的播放列表",
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "items": [
+      {
+        "id": "item_1",
+        "clipId": "clip_1",
+        "customStartTime": 5000,
+        "customEndTime": 15000,
+        "duration": 10000
+      },
+      {
+        "id": "item_2", 
+        "clipId": "clip_2",
+        "customStartTime": null,
+        "customEndTime": null,
+        "duration": 30000
+      }
+    ]
+  }
+} 

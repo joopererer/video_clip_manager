@@ -828,6 +828,58 @@ class AppState extends ChangeNotifier {
       );
     }).toList();
   }
+
+  /// 导入播放列表
+  void importPlaylist(Map<String, dynamic> playlistData) {
+    final name = playlistData['name'] as String? ?? '导入的播放列表';
+    final description = playlistData['description'] as String?;
+    final itemsData = playlistData['items'] as List<dynamic>? ?? [];
+
+    // 创建新的播放列表
+    final playlist = Playlist.create(name: name, description: description);
+
+    // 处理播放列表项
+    final List<PlaylistItem> importedItems = [];
+    for (int i = 0; i < itemsData.length; i++) {
+      final itemData = itemsData[i] as Map<String, dynamic>;
+      final clipId = itemData['clipId'] as String?;
+
+      // 检查 clip 是否存在
+      if (clipId != null && _clips.any((clip) => clip.id == clipId)) {
+        final item = PlaylistItem(
+          id: 'item_${DateTime.now().millisecondsSinceEpoch}_$i',
+          clipId: clipId,
+          order: i,
+          customStartTime: _parseDuration(itemData['customStartTime']),
+          customEndTime: _parseDuration(itemData['customEndTime']),
+          duration: _parseDuration(itemData['duration']),
+        );
+        importedItems.add(item);
+      }
+    }
+
+    // 创建包含导入项的播放列表
+    final importedPlaylist = playlist.copyWith(items: importedItems);
+    _playlists.add(importedPlaylist);
+    
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// 解析时长数据
+  Duration? _parseDuration(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return Duration(milliseconds: value);
+    if (value is String) {
+      try {
+        // 尝试解析 ISO 8601 格式
+        return Duration(microseconds: int.parse(value));
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  }
   
   @override
   void dispose() {

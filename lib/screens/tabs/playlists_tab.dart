@@ -7,6 +7,7 @@ import '../../widgets/playlist_timeline_view.dart';
 import '../../widgets/clip_thumbnail.dart';
 import '../playlist/playlist_management_screen.dart';
 import '../player/playlist_playback_screen.dart';
+import '../../widgets/playlist_import_export_dialog.dart';
 
 class _PlaylistCardBase extends StatelessWidget {
   final Playlist playlist;
@@ -139,11 +140,23 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
             ),
           ),
 
+          // 导入按钮
+          _buildHeaderAction(
+            label: '导入:',
+            tooltip: '导入播放列表',
+            onTap: () {
+              _importPlaylist(context, appState);
+            },
+            icon: Icon(Icons.file_upload, size: 18),
+          ),
+
+          const SizedBox(width: 24),
+
           // 排序选项
           _buildHeaderAction(
             label: '排序:',
-            child: PopupMenuButton<String>(
-              tooltip: '排序方式',
+            tooltip: '排序方式',
+            icon: PopupMenuButton<String>(
               padding: EdgeInsets.zero,
               icon: const Icon(Icons.sort, size: 18),
               onSelected: (value) => appState.setPlaylistsSortBy(value),
@@ -169,15 +182,12 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
           // 视图模式切换
           _buildHeaderAction(
             label: '视图:',
-            child: IconButton(
-              tooltip: '切换视图',
-              padding: EdgeInsets.zero,
-              icon: Icon(
-                appState.playlistsIsGridView ? Icons.list : Icons.grid_view,
-                size: 18,
-              ),
-              onPressed: () =>
-                  appState.setPlaylistsViewMode(!appState.playlistsIsGridView),
+            tooltip: '切换视图',
+            onTap: () =>
+                appState.setPlaylistsViewMode(!appState.playlistsIsGridView),
+            icon: Icon(
+              appState.playlistsIsGridView ? Icons.list : Icons.grid_view,
+              size: 18,
             ),
           ),
         ],
@@ -185,20 +195,47 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     );
   }
 
-  Widget _buildHeaderAction({required String label, required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.purple.shade200, width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 12)),
-          SizedBox(width: 32, height: 32, child: child),
-        ],
+  /// A custom header action button with a label and an icon.
+  /// The entire area is clickable and shows a tooltip on hover.
+  Widget _buildHeaderAction({
+    required String label,
+    required Widget icon, // Renamed from 'child' for clarity
+    required String tooltip, // Made tooltip required for good accessibility
+    VoidCallback? onTap,
+  }) {
+    // The InkWell is now the parent of the Container.
+    // This makes the entire area, including padding, responsive.
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(
+          6,
+        ), // Important for the ripple effect
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.purple.shade200, width: 0.5),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 12)),
+              const SizedBox(width: 4),
+              // The icon is placed in a SizedBox to ensure consistent layout
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: Center(
+                  child: icon,
+                ), // Use Center to ensure the icon is centered
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -371,6 +408,23 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                           value,
                         ),
                         itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'export',
+                            child: const Row(
+                              children: [
+                                Icon(
+                                  Icons.file_download,
+                                  color: Colors.blue,
+                                  size: 18,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  '导出',
+                                  style: TextStyle(color: Colors.blue),
+                                ),
+                              ],
+                            ),
+                          ),
                           const PopupMenuItem(
                             value: 'delete',
                             child: Row(
@@ -523,6 +577,19 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                           appState,
                           playlist,
                           'manage',
+                        ),
+                        isMini: true,
+                      ),
+                      const SizedBox(width: 4),
+                      _buildActionButton(
+                        icon: Icons.file_download,
+                        color: Colors.blue.shade600,
+                        tooltip: "导出",
+                        onPressed: () => _handlePlaylistAction(
+                          context,
+                          appState,
+                          playlist,
+                          'export',
                         ),
                         isMini: true,
                       ),
@@ -856,6 +923,9 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
       case 'manage':
         _managePlaylist(context, appState, playlist);
         break;
+      case 'export':
+        _exportPlaylist(context, appState, playlist);
+        break;
       case 'delete':
         _deletePlaylist(context, appState, playlist);
         break;
@@ -903,6 +973,31 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
         builder: (context) => PlaylistManagementScreen(playlist: playlist),
       ),
     );
+  }
+
+  Future<void> _importPlaylist(BuildContext context, AppState appState) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => const PlaylistImportExportDialog(),
+    );
+
+    // 导入流程现在在 PlaylistImportPreviewDialog 中处理
+    // 这里不需要额外的处理，因为成功消息已经在预览对话框中显示了
+  }
+
+  Future<void> _exportPlaylist(
+    BuildContext context,
+    AppState appState,
+    Playlist playlist,
+  ) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => PlaylistImportExportDialog(playlist: playlist),
+    );
+
+    if (result == true) {
+      // 导出成功，已经在对话框中显示了成功消息
+    }
   }
 
   Future<void> _deletePlaylist(
