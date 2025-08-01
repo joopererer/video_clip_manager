@@ -11,6 +11,7 @@ import '../player/clip_editor_screen.dart';
 import '../../widgets/video_thumbnail.dart';
 import '../../services/video_metadata_service.dart';
 import '../../widgets/draggable_video_source.dart';
+import '../../widgets/video_import_dialog.dart';
 
 class VideosTab extends StatefulWidget {
   final String searchQuery;
@@ -33,11 +34,12 @@ class VideosTab extends StatefulWidget {
 class _VideosTabState extends State<VideosTab> {
   bool _isProcessingMetadata = false;
   bool _isDraggingFile = false;
+  DateTime? _lastMetadataProcessTime;
 
   @override
   void initState() {
     super.initState();
-    // 只在需要时处理视频元数据
+    // 只在需要时处理视频元数据，添加时间间隔控制
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _processVideoMetadataIfNeeded();
     });
@@ -52,10 +54,24 @@ class _VideosTabState extends State<VideosTab> {
         .toList();
 
     if (videosNeedingMetadata.isNotEmpty) {
+      // 检查时间间隔，避免频繁处理
+      final now = DateTime.now();
+      if (_lastMetadataProcessTime != null) {
+        final timeDiff = now.difference(_lastMetadataProcessTime!);
+        if (timeDiff.inMinutes < 5) {
+          // 5分钟内不重复处理
+          debugPrint(
+            'Skipping metadata processing - too recent (${timeDiff.inMinutes} minutes ago)',
+          );
+          return;
+        }
+      }
+
       if (!mounted) return;
       setState(() => _isProcessingMetadata = true);
 
       try {
+        _lastMetadataProcessTime = now;
         await appState.processVideoMetadata();
       } finally {
         if (mounted) {
@@ -394,10 +410,41 @@ class _VideosTabState extends State<VideosTab> {
               Text('Clips: ${clipsFromVideo.length}'),
             ],
           ),
-          trailing: IconButton(
-            icon: const Icon(Icons.add_box),
-            onPressed: () => _addNewClip(context, video),
-            tooltip: 'Add new clip',
+          trailing: PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) => _handleVideoAction(value, video),
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'add_clip',
+                child: Row(
+                  children: [
+                    Icon(Icons.add_box, size: 20),
+                    SizedBox(width: 8),
+                    Text('创建片段'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'whole_video',
+                child: Row(
+                  children: [
+                    Icon(Icons.video_file, size: 20),
+                    SizedBox(width: 8),
+                    Text('整个视频作为片段'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'view_metadata',
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 20),
+                    SizedBox(width: 8),
+                    Text('查看元数据'),
+                  ],
+                ),
+              ),
+            ],
           ),
           onTap: () => _addNewClip(context, video),
         ),
@@ -417,6 +464,7 @@ class _VideosTabState extends State<VideosTab> {
         margin: const EdgeInsets.all(4.0),
         child: InkWell(
           onTap: () => _addNewClip(context, video),
+          onSecondaryTap: () => _showVideoContextMenu(context, video),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -691,6 +739,35 @@ class _VideosTabState extends State<VideosTab> {
 
     // 处理元数据
     await appState.updateVideoMetadata(videoId);
+
+    // 显示导入选项对话框
+    if (!context.mounted) return;
+    final importOption = await showDialog<VideoImportOption>(
+      context: context,
+      builder: (context) => VideoImportDialog(video: video),
+    );
+
+    if (importOption != null && context.mounted) {
+      switch (importOption) {
+        case VideoImportOption.wholeVideo:
+          await appState.createClipFromWholeVideo(video);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('已将整个视频 "$videoName" 添加为片段'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          break;
+        case VideoImportOption.createClips:
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ClipEditorScreen(video: video),
+            ),
+          );
+          break;
+      }
+    }
   }
 
   Future<void> _addNewClip(BuildContext context, OriginalVideo video) async {
@@ -698,6 +775,86 @@ class _VideosTabState extends State<VideosTab> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => ClipEditorScreen(video: video)),
+    );
+  }
+
+  void _handleVideoAction(String action, OriginalVideo video) {
+    switch (action) {
+      case 'add_clip':
+        _addNewClip(context, video);
+        break;
+      case 'whole_video':
+        _createWholeVideoAsClip(video);
+        break;
+      case 'view_metadata':
+        _showVideoMetadata(video);
+        break;
+    }
+  }
+
+  void _showVideoContextMenu(BuildContext context, OriginalVideo video) {
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(100, 100, 100, 100),
+      items: [
+        const PopupMenuItem(
+          value: 'add_clip',
+          child: Row(
+            children: [
+              Icon(Icons.add_box, size: 20),
+              SizedBox(width: 8),
+              Text('创建片段'),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'whole_video',
+          child: Row(
+            children: [
+              Icon(Icons.video_file, size: 20),
+              SizedBox(width: 8),
+              Text('整个视频作为片段'),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'view_metadata',
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 20),
+              SizedBox(width: 8),
+              Text('查看元数据'),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value != null) {
+        _handleVideoAction(value, video);
+      }
+    });
+  }
+
+  Future<void> _createWholeVideoAsClip(OriginalVideo video) async {
+    final appState = context.read<AppState>();
+    await appState.createClipFromWholeVideo(video);
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('已将整个视频 "${video.name}" 添加为片段'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  void _showVideoMetadata(OriginalVideo video) {
+    // TODO: 实现视频元数据显示对话框
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('视频元数据: ${video.metadata}'),
+        duration: const Duration(seconds: 3),
+      ),
     );
   }
 }

@@ -23,6 +23,8 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
   // 编辑状态（用户正在编辑的副本）
   List<PlaylistItemWithClip> _editingItems = [];
 
+  final List<String> _removeClipIds = [];
+
   // 是否处于编辑模式
   final bool _isEditing = false;
 
@@ -106,6 +108,12 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
   void _saveChanges() {
     final appState = context.read<AppState>();
 
+    // 从 AppState 中移除播放列表项
+    for (String removeId in _removeClipIds) {
+      appState.removePlaylistItem(widget.playlist.id, removeId);
+      _originalItems.removeWhere((item) => item.item.id == removeId);
+    }
+
     // 计算新的顺序并应用到 AppState
     for (int i = 0; i < _editingItems.length; i++) {
       final currentIndex = _originalItems.indexWhere(
@@ -120,6 +128,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
     // 更新本地状态
     setState(() {
       _originalItems = List.from(_editingItems);
+      _removeClipIds.clear();
       _hasChanges = false;
     });
 
@@ -131,6 +140,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
   void _resetChanges() {
     setState(() {
       _editingItems = List.from(_originalItems);
+      _removeClipIds.clear();
       _hasChanges = false;
     });
 
@@ -350,15 +360,12 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
         if (index < 0 || index >= _editingItems.length) {
           return const SizedBox.shrink();
         }
-        
+
         final itemWithClip = _editingItems[index];
-        if (itemWithClip == null || 
-            itemWithClip.item == null || 
-            itemWithClip.clip == null ||
-            itemWithClip.item.id.isEmpty) {
+        if (itemWithClip.item.id.isEmpty) {
           return const SizedBox.shrink();
         }
-        
+
         return _buildPlaylistItem(itemWithClip, index);
       },
     );
@@ -366,13 +373,10 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
 
   Widget _buildPlaylistItem(PlaylistItemWithClip itemWithClip, int index) {
     // 严格的安全检查
-    if (itemWithClip == null || 
-        itemWithClip.item == null || 
-        itemWithClip.clip == null ||
-        itemWithClip.item.id.isEmpty) {
+    if (itemWithClip.item.id.isEmpty) {
       return const SizedBox.shrink();
     }
-    
+
     final item = itemWithClip.item;
     final clip = itemWithClip.clip;
 
@@ -457,10 +461,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
                   color: Colors.red,
                 ),
                 onPressed: () => _removeClipFromPlaylist(itemWithClip),
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                ),
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
               ),
             ],
           ),
@@ -468,8 +469,6 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
       ),
     );
   }
-
-
 
   void _removeClipFromPlaylist(PlaylistItemWithClip itemWithClip) {
     showDialog(
@@ -491,6 +490,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
                 _editingItems.removeWhere(
                   (item) => item.item.id == itemWithClip.item.id,
                 );
+                _removeClipIds.add(itemWithClip.item.id);
                 _hasChanges = true;
               });
               Navigator.of(context).pop();
