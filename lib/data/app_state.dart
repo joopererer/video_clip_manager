@@ -279,6 +279,12 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> forceRefreshThumbnails() async {
+    // 防止重复调用
+    if (_isGeneratingThumbnails) {
+      debugPrint('forceRefreshThumbnails: Already in progress, skipping');
+      return;
+    }
+    
     _isGeneratingThumbnails = true;
     notifyListeners();
 
@@ -341,36 +347,27 @@ class AppState extends ChangeNotifier {
           );
         }
 
-        // 验证重置是否生效
-        debugPrint('=== Verifying reset ===');
+        // 使用新的批量方法生成video缩略图
+        final videoEntries = resetVideos.map((video) => MapEntry(video.id, video.path)).toList();
+        await _thumbnailService.generateVideoThumbnailsInBatch(videoEntries, () {
+          notifyListeners();
+        });
+
+        // 更新video的缩略图路径
         for (int i = 0; i < resetVideos.length; i++) {
           final video = resetVideos[i];
-          debugPrint(
-            'Video ${i + 1}: ${video.name} - duration: ${video.duration}, thumbnailPath: ${video.thumbnailPath}',
-          );
-        }
-        debugPrint('=== End verification ===');
-
-        await _videoMetadataService.processVideoMetadataBatch(resetVideos, (
-          result,
-        ) {
-          // 找到对应的 video 在 _originalVideos 中的索引
-          final videoIndex = _originalVideos.indexWhere(
-            (v) => v.id == result.videoId,
-          );
-          if (videoIndex != -1 && result.success) {
-            final video = _originalVideos[videoIndex];
-            final updatedVideo = video.copyWith(
-              duration: result.duration,
-              thumbnailPath: result.thumbnailPath,
-            );
-            _originalVideos[videoIndex] = updatedVideo;
+          final thumbnailFileName = _thumbnailService.getThumbnailFileName(video.id);
+          final thumbPath = _thumbnailService.getThumbnailPath(video.id);
+          
+          // 检查缩略图文件是否存在
+          if (await File(thumbPath).exists()) {
+            final updatedVideo = video.copyWith(thumbnailPath: thumbnailFileName);
+            _originalVideos[i] = updatedVideo;
             debugPrint(
               'Updated video ${updatedVideo.name} with thumbnail: ${updatedVideo.thumbnailPath}',
             );
-            notifyListeners();
           }
-        });
+        }
       }
 
       // 4. 通知界面刷新
@@ -379,8 +376,8 @@ class AppState extends ChangeNotifier {
 
       debugPrint('=== Finished forceRefreshThumbnails ===');
     } catch (e) {
-      debugPrint("Error forcing thumbnail refresh: $e");
-      // 这里可以添加一个向用户显示错误的功能
+      debugPrint('Error in forceRefreshThumbnails: $e');
+      debugPrint('Error stack trace: ${StackTrace.current}');
     } finally {
       _isGeneratingThumbnails = false;
       notifyListeners();

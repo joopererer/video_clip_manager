@@ -52,6 +52,8 @@ class PlaylistsTab extends StatefulWidget {
 
 class _PlaylistsTabState extends State<PlaylistsTab> {
   String? _selectedPlaylistId;
+  bool _isImporting = false;
+  bool _isExporting = false;
 
   final Map<String, String> _sortOptions = {
     'name': '按名称',
@@ -144,10 +146,19 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
           _buildHeaderAction(
             label: '导入:',
             tooltip: '导入播放列表',
-            onTap: () {
+            onTap: _isImporting ? null : () {
               _importPlaylist(context, appState);
             },
-            icon: Icon(Icons.file_upload, size: 18),
+            icon: _isImporting 
+              ? SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.purple.shade600),
+                  ),
+                )
+              : Icon(Icons.file_upload, size: 18),
           ),
 
           const SizedBox(width: 24),
@@ -265,21 +276,62 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.playlist_play, size: 64, color: Colors.grey.shade400),
-          const SizedBox(height: 16),
-          Text(
-            '暂无播放列表',
-            style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '点击右下角按钮创建您的第一个播放列表',
-            style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-          ),
-        ],
+      child: Container(
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.purple.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.playlist_play,
+                size: 48,
+                color: Colors.purple.shade600,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              '暂无播放列表',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '开始创建您的第一个播放列表',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () => _createPlaylist(context),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('创建播放列表'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple.shade600,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -552,62 +604,128 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                 Positioned(
                   bottom: 8,
                   right: 8,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildActionButton(
-                        icon: Icons.edit,
-                        color: Colors.blue.shade600,
-                        tooltip: "编辑",
-                        onPressed: () => _handlePlaylistAction(
-                          context,
-                          appState,
-                          playlist,
-                          'edit',
+                  child: itemsWithClips.isNotEmpty 
+                    ? Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        isMini: true,
-                      ),
-                      const SizedBox(width: 4),
-                      _buildActionButton(
-                        icon: Icons.list,
-                        color: Colors.orange.shade600,
-                        tooltip: "管理片段",
-                        onPressed: () => _handlePlaylistAction(
-                          context,
-                          appState,
-                          playlist,
-                          'manage',
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildActionButton(
+                              icon: Icons.edit,
+                              color: Colors.blue.shade600,
+                              tooltip: "编辑",
+                              onPressed: () => _handlePlaylistAction(
+                                context,
+                                appState,
+                                playlist,
+                                'edit',
+                              ),
+                              isMini: true,
+                            ),
+                            const SizedBox(width: 4),
+                            _buildActionButton(
+                              icon: Icons.list,
+                              color: Colors.orange.shade600,
+                              tooltip: "管理片段",
+                              onPressed: () => _handlePlaylistAction(
+                                context,
+                                appState,
+                                playlist,
+                                'manage',
+                              ),
+                              isMini: true,
+                            ),
+                            const SizedBox(width: 4),
+                            _buildActionButton(
+                              icon: Icons.file_download,
+                              color: Colors.blue.shade600,
+                              tooltip: "导出",
+                              onPressed: () => _handlePlaylistAction(
+                                context,
+                                appState,
+                                playlist,
+                                'export',
+                              ),
+                              isMini: true,
+                              isLoading: _isExporting,
+                            ),
+                            const SizedBox(width: 4),
+                            _buildActionButton(
+                              icon: Icons.delete,
+                              color: Colors.red.shade600,
+                              tooltip: "删除",
+                              onPressed: () => _handlePlaylistAction(
+                                context,
+                                appState,
+                                playlist,
+                                'delete',
+                              ),
+                              isMini: true,
+                            ),
+                          ],
                         ),
-                        isMini: true,
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildActionButton(
+                            icon: Icons.edit,
+                            color: Colors.blue.shade600,
+                            tooltip: "编辑",
+                            onPressed: () => _handlePlaylistAction(
+                              context,
+                              appState,
+                              playlist,
+                              'edit',
+                            ),
+                            isMini: true,
+                          ),
+                          const SizedBox(width: 4),
+                          _buildActionButton(
+                            icon: Icons.list,
+                            color: Colors.orange.shade600,
+                            tooltip: "管理片段",
+                            onPressed: () => _handlePlaylistAction(
+                              context,
+                              appState,
+                              playlist,
+                              'manage',
+                            ),
+                            isMini: true,
+                          ),
+                          const SizedBox(width: 4),
+                          _buildActionButton(
+                            icon: Icons.file_download,
+                            color: Colors.blue.shade600,
+                            tooltip: "导出",
+                            onPressed: () => _handlePlaylistAction(
+                              context,
+                              appState,
+                              playlist,
+                              'export',
+                            ),
+                            isMini: true,
+                            isLoading: _isExporting,
+                          ),
+                          const SizedBox(width: 4),
+                          _buildActionButton(
+                            icon: Icons.delete,
+                            color: Colors.red.shade600,
+                            tooltip: "删除",
+                            onPressed: () => _handlePlaylistAction(
+                              context,
+                              appState,
+                              playlist,
+                              'delete',
+                            ),
+                            isMini: true,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 4),
-                      _buildActionButton(
-                        icon: Icons.file_download,
-                        color: Colors.blue.shade600,
-                        tooltip: "导出",
-                        onPressed: () => _handlePlaylistAction(
-                          context,
-                          appState,
-                          playlist,
-                          'export',
-                        ),
-                        isMini: true,
-                      ),
-                      const SizedBox(width: 4),
-                      _buildActionButton(
-                        icon: Icons.delete,
-                        color: Colors.red.shade600,
-                        tooltip: "删除",
-                        onPressed: () => _handlePlaylistAction(
-                          context,
-                          appState,
-                          playlist,
-                          'delete',
-                        ),
-                        isMini: true,
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
@@ -814,6 +932,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     required VoidCallback onPressed,
     required Color color,
     bool isMini = false,
+    bool isLoading = false,
   }) {
     final size = isMini ? 32.0 : 40.0;
     final iconSize = isMini ? 16.0 : 20.0;
@@ -824,8 +943,17 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
       child: IconButton(
         tooltip: tooltip,
         padding: EdgeInsets.zero,
-        icon: Icon(icon, color: color, size: iconSize),
-        onPressed: onPressed,
+        icon: isLoading 
+          ? SizedBox(
+              width: iconSize,
+              height: iconSize,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+            )
+          : Icon(icon, color: color, size: iconSize),
+        onPressed: isLoading ? null : onPressed,
         style: IconButton.styleFrom(
           backgroundColor: color.withValues(alpha: 0.1),
           shape: RoundedRectangleBorder(
@@ -976,13 +1104,25 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
   }
 
   Future<void> _importPlaylist(BuildContext context, AppState appState) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => const PlaylistImportExportDialog(),
-    );
+    setState(() {
+      _isImporting = true;
+    });
 
-    // 导入流程现在在 PlaylistImportPreviewDialog 中处理
-    // 这里不需要额外的处理，因为成功消息已经在预览对话框中显示了
+    try {
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (context) => const PlaylistImportExportDialog(),
+      );
+
+      // 导入流程现在在 PlaylistImportPreviewDialog 中处理
+      // 这里不需要额外的处理，因为成功消息已经在预览对话框中显示了
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+        });
+      }
+    }
   }
 
   Future<void> _exportPlaylist(
@@ -990,13 +1130,25 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     AppState appState,
     Playlist playlist,
   ) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => PlaylistImportExportDialog(playlist: playlist),
-    );
+    setState(() {
+      _isExporting = true;
+    });
 
-    if (result == true) {
-      // 导出成功，已经在对话框中显示了成功消息
+    try {
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (context) => PlaylistImportExportDialog(playlist: playlist),
+      );
+
+      if (result == true) {
+        // 导出成功，已经在对话框中显示了成功消息
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+        });
+      }
     }
   }
 

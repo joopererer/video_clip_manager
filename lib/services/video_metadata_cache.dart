@@ -165,14 +165,13 @@ class VideoMetadataCache {
   /// 强制重新处理所有视频
   Future<void> forceReprocessAll() async {
     _ensureLoaded();
-    for (final entry in _cache.entries) {
-      _cache[entry.key] = entry.value.copyWith(
-        lastAttempt: DateTime.now().subtract(_successCacheDuration),
-        retryCount: 0,
-      );
-    }
+    debugPrint('VideoMetadataCache: Force reprocess all videos - clearing cache entries');
+    
+    // 清除所有缓存条目，强制重新处理
+    _cache.clear();
     await _saveCache();
-    debugPrint('VideoMetadataCache: Force reprocess all videos');
+    
+    debugPrint('VideoMetadataCache: Force reprocess all videos - cache cleared');
   }
 
   /// 强制重新处理失败的视频

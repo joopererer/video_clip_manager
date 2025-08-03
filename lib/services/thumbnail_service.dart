@@ -93,24 +93,35 @@ class ThumbnailService {
     await Directory(thumbDir).create(recursive: true);
 
     try {
+      // 如果当前打开的不是目标视频，需要切换
       if (_currentlyOpenVideoPath != videoPath) {
+        debugPrint('ThumbnailService: Switching to video $videoPath for $clipId');
         await player.open(Media(videoPath), play: false);
         _currentlyOpenVideoPath = videoPath;
-        // 等待播放器准备好，对于快速连续操作很重要
+        // 等待播放器准备好
         await player.stream.buffer.firstWhere((e) => e > Duration.zero);
         await Future.delayed(const Duration(milliseconds: 200));
       }
 
+      debugPrint('ThumbnailService: Seeking to time $time for $clipId');
       await player.seek(time);
       await Future.delayed(const Duration(milliseconds: 200)); // 给 seek 一点时间
+      
+      debugPrint('ThumbnailService: Taking screenshot for $clipId');
       final data = await player.screenshot();
 
       if (data != null) {
         await thumbFile.writeAsBytes(data);
-        return thumbPath;
+        debugPrint('ThumbnailService: Generated thumbnail at $thumbPath');
+        // 返回相对路径（只保留文件名）
+        return getThumbnailFileName(clipId);
+      } else {
+        debugPrint('ThumbnailService: Screenshot returned null for $clipId');
+        debugPrint('ThumbnailService: Player state - duration: ${player.state.duration}, position: ${player.state.position}');
       }
     } catch (e) {
       debugPrint('Error generating thumbnail for $clipId: $e');
+      debugPrint('Error stack trace: ${StackTrace.current}');
     }
     return null;
   }
@@ -169,6 +180,58 @@ class ThumbnailService {
     }
     _currentlyOpenVideoPath = null;
     // 任务结束后可以考虑停止播放器以释放资源
+    await player.stop();
+  }
+
+  /// 为video生成缩略图的批量方法
+  Future<void> generateVideoThumbnailsInBatch(
+    List<MapEntry<String, String>> videoEntries, // videoId -> videoPath
+    VoidCallback onUpdate,
+  ) async {
+    for (final entry in videoEntries) {
+      final videoId = entry.key;
+      final videoPath = entry.value;
+
+      try {
+        debugPrint('ThumbnailService: Generating thumbnail for video $videoPath (ID: $videoId)');
+        
+        // 为每个video重新打开Player，确保正确的视频切换
+        await player.open(Media(videoPath), play: false);
+        _currentlyOpenVideoPath = videoPath;
+        // 等待播放器准备好
+        await player.stream.buffer.firstWhere((e) => e > Duration.zero);
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        // 获取视频时长
+        final duration = player.state.duration;
+        if (duration == null || duration.inMilliseconds == 0) {
+          debugPrint('ThumbnailService: Invalid duration for video $videoPath');
+          continue;
+        }
+
+        // 在视频中间时间点截图
+        final middleTime = Duration(milliseconds: duration.inMilliseconds ~/ 2);
+        debugPrint('ThumbnailService: Middle time for video $videoId: $middleTime');
+
+        await player.seek(middleTime);
+        await Future.delayed(const Duration(milliseconds: 200)); // 给 seek 一点时间
+        
+        final data = await player.screenshot();
+
+        if (data != null) {
+          final thumbPath = getThumbnailPath(videoId);
+          await File(thumbPath).writeAsBytes(data);
+          debugPrint('ThumbnailService: Generated video thumbnail at $thumbPath');
+          onUpdate();
+        } else {
+          debugPrint('ThumbnailService: Screenshot returned null for video $videoId');
+        }
+      } catch (e) {
+        debugPrint('Error generating thumbnail for video $videoId: $e');
+      }
+    }
+    _currentlyOpenVideoPath = null;
+    // 任务结束后停止播放器以释放资源
     await player.stop();
   }
 

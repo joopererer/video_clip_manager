@@ -6,7 +6,7 @@ import '../data/app_state.dart';
 import '../services/thumbnail_service.dart';
 import '../services/path_service.dart';
 
-class VideoThumbnail extends StatelessWidget {
+class VideoThumbnail extends StatefulWidget {
   final OriginalVideo video;
   final double size;
   final BoxFit fit;
@@ -23,86 +23,116 @@ class VideoThumbnail extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    if (size == double.infinity) {
-      return Container(
-        decoration: BoxDecoration(
-          borderRadius: borderRadius ?? BorderRadius.circular(8),
-          color: Colors.grey.shade200,
-        ),
-        child: ClipRRect(
-          borderRadius: borderRadius ?? BorderRadius.circular(8),
-          child: _buildThumbnail(),
-        ),
-      );
-    } else {
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          borderRadius: borderRadius ?? BorderRadius.circular(8),
-          color: Colors.grey.shade200,
-        ),
-        child: ClipRRect(
-          borderRadius: borderRadius ?? BorderRadius.circular(8),
-          child: _buildThumbnail(),
-        ),
-      );
+  State<VideoThumbnail> createState() => _VideoThumbnailState();
+}
+
+class _VideoThumbnailState extends State<VideoThumbnail> {
+  bool? _fileExists;
+  bool _isLoading = true;
+  
+  // 静态缓存，避免重复检查相同路径
+  static final Map<String, bool> _fileExistsCache = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _checkFileExists();
+  }
+
+  @override
+  void didUpdateWidget(VideoThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 只有当thumbnailPath发生变化时才重新检查
+    if (oldWidget.video.thumbnailPath != widget.video.thumbnailPath) {
+      _checkFileExists();
     }
   }
 
-  Widget _buildThumbnail() {
-    if (video.thumbnailPath != null) {
-      // 构建完整的缩略图路径
-      String fullThumbPath;
-      if (!video.thumbnailPath!.contains('\\') && !video.thumbnailPath!.contains('/')) {
-        // 相对路径（只有文件名），需要数据库路径来构建完整路径
-        if (dbPath != null) {
-          final thumbnailService = ThumbnailService(pathService: PathService());
-          fullThumbPath = thumbnailService.buildThumbnailPath(dbPath!, video.thumbnailPath!);
-        } else {
-          // 没有数据库路径，无法构建完整路径
-          return _buildFallback();
-        }
+  Future<void> _checkFileExists() async {
+    if (widget.video.thumbnailPath == null) {
+      setState(() {
+        _fileExists = false;
+        _isLoading = false;
+      });
+      return;
+    }
+
+    // 构建完整的缩略图路径
+    String fullThumbPath;
+    if (!widget.video.thumbnailPath!.contains('\\') && !widget.video.thumbnailPath!.contains('/')) {
+      // 相对路径（只有文件名），构建完整路径
+      final appState = context.read<AppState>();
+      if (appState.currentDbFullPath != null) {
+        fullThumbPath = appState.thumbnailService.buildThumbnailPath(appState.currentDbFullPath!, widget.video.thumbnailPath!);
       } else {
-        // 完整路径，直接使用
-        fullThumbPath = video.thumbnailPath!;
+        // 没有数据库路径，无法构建完整路径
+        setState(() {
+          _fileExists = false;
+          _isLoading = false;
+        });
+        return;
       }
-      
-      final file = File(fullThumbPath);
-      if (file.existsSync()) {
-        return Image.file(
-          file,
-          fit: fit,
-          width: size == double.infinity ? null : size,
-          height: size == double.infinity ? null : size,
-          errorBuilder: (context, error, stackTrace) {
-            debugPrint('Error loading thumbnail for ${video.name}: $error');
-            return _buildFallback();
-          },
-        );
+    } else {
+      // 完整路径，直接使用
+      fullThumbPath = widget.video.thumbnailPath!;
+    }
+
+    // 检查缓存
+    if (_fileExistsCache.containsKey(fullThumbPath)) {
+      setState(() {
+        _fileExists = _fileExistsCache[fullThumbPath];
+        _isLoading = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final exists = await File(fullThumbPath).exists();
+      if (mounted) {
+        // 更新缓存
+        _fileExistsCache[fullThumbPath] = exists;
+        setState(() {
+          _fileExists = exists;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        // 缓存错误结果
+        _fileExistsCache[fullThumbPath] = false;
+        setState(() {
+          _fileExists = false;
+          _isLoading = false;
+        });
       }
     }
-    return _buildFallback();
   }
 
-  Widget _buildFallback() {
-    return Container(
+  @override
+  Widget build(BuildContext context) {
+    Widget child;
+
+    final String? path = widget.video.thumbnailPath;
+    Widget placeholder = Container(
       color: Colors.grey.shade300,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             Icons.movie_creation_outlined,
-            size: size * 0.3,
+            size: widget.size * 0.3,
             color: Colors.grey.shade600,
           ),
-          if (video.duration != null) ...[
+          if (widget.video.duration != null) ...[
             const SizedBox(height: 4),
             Text(
-              _formatDuration(video.duration!),
+              _formatDuration(widget.video.duration!),
               style: TextStyle(
-                fontSize: size * 0.08,
+                fontSize: widget.size * 0.08,
                 color: Colors.grey.shade600,
                 fontWeight: FontWeight.w500,
               ),
@@ -111,6 +141,69 @@ class VideoThumbnail extends StatelessWidget {
         ],
       ),
     );
+
+    if (path == null || _isLoading) {
+      child = Center(child: CircularProgressIndicator(strokeWidth: 2.0));
+    } else if (_fileExists == true) {
+      // 构建完整的缩略图路径
+      String? fullThumbPath;
+      if (!path.contains('\\') && !path.contains('/')) {
+        // 相对路径（只有文件名），构建完整路径
+        final appState = context.read<AppState>();
+        if (appState.currentDbFullPath != null) {
+          fullThumbPath = appState.thumbnailService.buildThumbnailPath(appState.currentDbFullPath!, path);
+        } else {
+          // 没有数据库路径，无法构建完整路径
+          child = Center(child: placeholder);
+        }
+      } else {
+        // 完整路径，直接使用
+        fullThumbPath = path;
+      }
+      
+      // 只有在有完整路径时才创建图片
+      if (fullThumbPath != null) {
+        child = Image.file(
+          File(fullThumbPath),
+          fit: widget.fit,
+          width: widget.size == double.infinity ? null : widget.size,
+          height: widget.size == double.infinity ? null : widget.size,
+          errorBuilder: (c, e, s) => Center(child: placeholder),
+        );
+      } else {
+        child = Center(child: placeholder);
+      }
+    } else {
+      child = Center(child: placeholder);
+    }
+
+    // If a size is provided (like in the ListView), wrap the child
+    // in a SizedBox with fixed dimensions.
+    if (widget.size != double.infinity) {
+      return Container(
+        width: widget.size,
+        height: widget.size,
+        decoration: BoxDecoration(
+          borderRadius: widget.borderRadius ?? BorderRadius.circular(8),
+          color: Colors.grey.shade200,
+        ),
+        child: ClipRRect(
+          borderRadius: widget.borderRadius ?? BorderRadius.circular(8),
+          child: child,
+        ),
+      );
+    } else {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: widget.borderRadius ?? BorderRadius.circular(8),
+          color: Colors.grey.shade200,
+        ),
+        child: ClipRRect(
+          borderRadius: widget.borderRadius ?? BorderRadius.circular(8),
+          child: child,
+        ),
+      );
+    }
   }
 
   String _formatDuration(Duration duration) {
