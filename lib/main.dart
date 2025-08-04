@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,7 +17,6 @@ void main() async {
 
   final prefs = await SharedPreferences.getInstance();
 
-  // The thumbnail service now manages a global player
   final thumbnailService = ThumbnailService(pathService: pathService);
 
   runApp(
@@ -31,60 +29,29 @@ void main() async {
             prefs: prefs,
             pathService: pathService,
             thumbnailService: thumbnailService,
-          )..loadInitialClips(),
+          )..loadInitialData(),
         ),
       ],
-      child: MyApp(thumbnailService: thumbnailService),
+      child: MaterialApp(
+        title: 'Video Clip Manager',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          useMaterial3: true,
+          brightness: Brightness.light,
+          scaffoldBackgroundColor: Colors.grey[100],
+          dialogTheme: const DialogThemeData(backgroundColor: Colors.white), // Fixed
+        ),
+        darkTheme: ThemeData(
+          primarySwatch: Colors.blue,
+          useMaterial3: true,
+          brightness: Brightness.dark,
+          scaffoldBackgroundColor: const Color(0xFF121212),
+          dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF1e1e1e)), // Fixed
+        ),
+        themeMode: ThemeMode.system,
+        home: const MainScreen(),
+        debugShowCheckedModeBanner: false,
+      ),
     ),
   );
-}
-
-class MyApp extends StatelessWidget {
-  final ThumbnailService thumbnailService;
-  const MyApp({super.key, required this.thumbnailService});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Video Clip Manager',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-        brightness: Brightness.light,
-        dialogTheme: DialogThemeData(backgroundColor: Colors.white),
-      ),
-      darkTheme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        dialogTheme: DialogThemeData(backgroundColor: const Color(0xFF1e1e1e)),
-      ),
-      themeMode: ThemeMode.system,
-      home: Scaffold(
-        body: Stack(
-          children: [
-            const MainScreen(),
-            // This is the global, 1x1 pixel "drawing board" for screenshots
-            Positioned(
-              left: 0,
-              top: 0,
-              width: 1,
-              height: 1,
-              child: Video(
-                controller: thumbnailService.videoController,
-                fit: BoxFit.contain,
-                controls: (state) => const SizedBox.shrink(), // 禁用所有默认控件
-              ),
-            ),
-          ],
-        ),
-      ),
-      debugShowCheckedModeBanner: false,
-    );
-  }
-}
-
-String formatDuration(Duration d) {
-  final parts = d.toString().split('.').first.padLeft(8, '0').split(':');
-  return '${parts[0]}:${parts[1]}:${parts[2]}';
 }

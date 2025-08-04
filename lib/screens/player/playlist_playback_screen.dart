@@ -314,8 +314,8 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                        onSetEnd: (position) async {
                          // 播放模式下不需要设置结束时间
                        },
-                       isPlaybackMode: true,
-                       showClipRelativeProgress: true,
+                       // isPlaybackMode: true, // 移除这个参数，因为 CustomProgressBar 不支持
+                       // showClipRelativeProgress: true, // 移除这个参数，因为 CustomProgressBar 不支持
                      ),
                    ],
                 ],

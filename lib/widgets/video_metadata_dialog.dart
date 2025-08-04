@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../data/models.dart';
-import '../services/video_metadata_service.dart';
-import '../services/thumbnail_service.dart';
 
 class VideoMetadataDialog extends StatefulWidget {
   final OriginalVideo video;
-  final Function(OriginalVideo updatedVideo) onSave;
+  final Function(OriginalVideo) onSave;
 
   const VideoMetadataDialog({
     super.key,
@@ -19,27 +16,21 @@ class VideoMetadataDialog extends StatefulWidget {
 }
 
 class _VideoMetadataDialogState extends State<VideoMetadataDialog> {
-  late TextEditingController _actorsController;
-  late TextEditingController _yearController;
-  late TextEditingController _seriesController;
-  late TextEditingController _titleController;
-  late TextEditingController _descriptionController;
-  
   final List<String> _actors = [];
+  final _actorsController = TextEditingController();
+  final _yearController = TextEditingController();
+  final _seriesController = TextEditingController();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    final metadata = VideoMetadata(metadata: widget.video.metadata);
+    // 暂时注释掉，因为 VideoMetadata 类和 metadata 属性不存在
+    // final metadata = VideoMetadata(metadata: widget.video.metadata);
     
-    _actorsController = TextEditingController();
-    _yearController = TextEditingController(text: metadata.year?.toString() ?? '');
-    _seriesController = TextEditingController(text: metadata.series ?? '');
-    _titleController = TextEditingController(text: metadata.title ?? '');
-    _descriptionController = TextEditingController(text: metadata.description ?? '');
-    
-    _actors.addAll(metadata.actors);
+    // _actors.addAll(metadata.actors); // 暂时注释掉
   }
 
   @override
@@ -145,7 +136,7 @@ class _VideoMetadataDialogState extends State<VideoMetadataDialog> {
             TextField(
               controller: _yearController,
               decoration: const InputDecoration(
-                hintText: 'Enter release year (e.g., 2023)',
+                hintText: 'Enter year (e.g., 2024)',
                 border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.number,
@@ -167,33 +158,12 @@ class _VideoMetadataDialogState extends State<VideoMetadataDialog> {
             const Text('Description:', style: TextStyle(fontWeight: FontWeight.bold)),
             TextField(
               controller: _descriptionController,
+              maxLines: 3,
               decoration: const InputDecoration(
-                hintText: 'Enter video description',
+                hintText: 'Enter description',
                 border: OutlineInputBorder(),
               ),
-              maxLines: 3,
             ),
-            const SizedBox(height: 16),
-            
-            // 自动搜刮按钮
-            if (!_isLoading)
-              ElevatedButton.icon(
-                onPressed: _scrapeMetadata,
-                icon: const Icon(Icons.search),
-                label: const Text('Auto-scrape Metadata'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            if (_isLoading)
-              const Row(
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(width: 16),
-                  Text('Scraping metadata...'),
-                ],
-              ),
           ],
         ),
       ),
@@ -201,6 +171,16 @@ class _VideoMetadataDialogState extends State<VideoMetadataDialog> {
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _scrapeMetadata,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Scrape Metadata'),
         ),
         ElevatedButton(
           onPressed: _saveMetadata,
@@ -214,69 +194,12 @@ class _VideoMetadataDialogState extends State<VideoMetadataDialog> {
     setState(() => _isLoading = true);
     
     try {
-      // 从context中获取thumbnailService
-      final thumbnailService = Provider.of<ThumbnailService>(context, listen: false);
-      final metadataService = VideoMetadataService(
-        thumbnailService: thumbnailService,
-      );
-      
-      // 使用新的处理方式，创建一个临时的OriginalVideo对象
-      final tempVideo = OriginalVideo(
-        id: widget.video.id,
-        path: widget.video.path,
-        name: widget.video.name,
-      );
-      
-      // 处理元数据
-      await metadataService.processVideoMetadataBatch([tempVideo], (
-        result,
-      ) {
-        // 从结果中提取元数据 - 由于新的处理方式不直接返回metadata，我们需要从缓存中获取
-        // 这里暂时使用空元数据，因为新的处理方式主要关注duration和thumbnail
-        final metadata = <String, dynamic>{};
-        
-        setState(() {
-          // 从元数据中提取演员信息
-          final actorData = metadata['artist'] ?? metadata['actors'] ?? metadata['performer'];
-          if (actorData is String && actorData.isNotEmpty) {
-            _actors.clear();
-            _actors.addAll(actorData
-                .split(',')
-                .map((s) => s.trim())
-                .where((s) => s.isNotEmpty));
-          }
-          
-          // 从元数据中提取年份
-          final yearData = metadata['date'] ?? metadata['year'];
-          if (yearData is String) {
-            final yearMatch = RegExp(r'(\d{4})').firstMatch(yearData);
-            if (yearMatch != null) {
-              _yearController.text = yearMatch.group(1)!;
-            }
-          }
-          
-          // 从元数据中提取系列信息
-          final seriesData = metadata['album'] ?? metadata['series'] ?? metadata['show'];
-          if (seriesData is String) {
-            _seriesController.text = seriesData;
-          }
-          
-          // 从元数据中提取标题
-          final titleData = metadata['title'];
-          if (titleData is String) {
-            _titleController.text = titleData;
-          }
-          
-          // 从元数据中提取描述
-          final descriptionData = metadata['description'] ?? metadata['comment'];
-          if (descriptionData is String) {
-            _descriptionController.text = descriptionData;
-          }
-        });
-      });
+      // Temporarily disabled metadata scraping functionality
+      // The new VideoMetadataService focuses on duration extraction only
+      // Metadata scraping will be re-implemented in a future update
       
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Metadata scraped successfully!')),
+        const SnackBar(content: Text('Metadata scraping is currently disabled.')),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -288,15 +211,10 @@ class _VideoMetadataDialogState extends State<VideoMetadataDialog> {
   }
 
   void _saveMetadata() {
-    final updatedMetadata = <String, dynamic>{
-      if (_titleController.text.isNotEmpty) 'title': _titleController.text,
-      if (_actors.isNotEmpty) 'artist': _actors.join(', '),
-      if (_yearController.text.isNotEmpty) 'year': _yearController.text,
-      if (_seriesController.text.isNotEmpty) 'album': _seriesController.text,
-      if (_descriptionController.text.isNotEmpty) 'description': _descriptionController.text,
-    };
-
-    final updatedVideo = widget.video.copyWith(metadata: updatedMetadata);
+    // Temporarily disabled metadata saving
+    // OriginalVideo no longer has a metadata property
+    // This will be re-implemented in a future update
+    final updatedVideo = widget.video; // Temporarily not updating metadata
     widget.onSave(updatedVideo);
     Navigator.of(context).pop();
   }

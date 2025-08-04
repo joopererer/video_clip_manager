@@ -1,8 +1,6 @@
 import 'package:equatable/equatable.dart';
 
-// 2. La classe hérite de Equatable
 class VideoClip extends Equatable {
-  // 3. Toutes les propriétés sont maintenant 'final'
   final String id;
   final String name;
   final String videoPath;
@@ -15,7 +13,6 @@ class VideoClip extends Equatable {
   final bool isFavorite;
   final String? thumbnailPath;
 
-  // Le constructeur devient 'const'
   const VideoClip({
     required this.id,
     this.name = '',
@@ -34,32 +31,32 @@ class VideoClip extends Equatable {
     final startTime = Duration(milliseconds: json['start'] ?? 0);
     return VideoClip(
       id: json['id'] ?? 'clip_${DateTime.now().millisecondsSinceEpoch}_${json['videoPath']?.hashCode}',
-      name: json['label'] ?? 'Untitled Clip',
+      name: json['label'] ?? json['name'] ?? 'Untitled Clip',
       videoPath: json['videoPath'] ?? '',
       startTime: startTime,
       endTime: Duration(milliseconds: json['end'] ?? 0),
       coverFrameTime: Duration(milliseconds: json['coverFrameTime'] ?? startTime.inMilliseconds),
       tags: List<String>.from(json['tags'] ?? []),
-      notes: json['note'],
+      notes: json['notes'] ?? json['note'],
       rating: json['rating'] ?? 0,
       isFavorite: json['isFavorite'] ?? false,
-      thumbnailPath: json['thumbnailPath'], // Assurez-vous que le thumbnailPath est aussi dans fromJson si besoin
+      thumbnailPath: json['thumbnailPath'],
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'label': name,
+      'name': name,
       'videoPath': videoPath,
       'start': startTime.inMilliseconds,
       'end': endTime.inMilliseconds,
       'coverFrameTime': coverFrameTime.inMilliseconds,
       'tags': tags,
-      'note': notes,
+      'notes': notes,
       'rating': rating,
       'isFavorite': isFavorite,
-      'thumbnailPath': thumbnailPath, // Et dans toJson
+      'thumbnailPath': thumbnailPath,
     };
   }
 
@@ -76,6 +73,7 @@ class VideoClip extends Equatable {
     bool? isFavorite,
     String? thumbnailPath,
   }) {
+    // Return a new instance, handling nullable values for notes and thumbnailPath
     return VideoClip(
       id: id ?? this.id,
       name: name ?? this.name,
@@ -91,48 +89,33 @@ class VideoClip extends Equatable {
     );
   }
 
-  // 4. On définit la liste des propriétés pour la comparaison
   @override
   List<Object?> get props => [
-    id,
-    name,
-    videoPath,
-    startTime,
-    endTime,
-    coverFrameTime,
-    tags,
-    notes,
-    rating,
-    isFavorite,
-    thumbnailPath,
+    id, name, videoPath, startTime, endTime, coverFrameTime, tags, notes, rating, isFavorite, thumbnailPath
   ];
 }
 
-class OriginalVideo {
+class OriginalVideo extends Equatable {
   final String id;
   final String path;
-  String name;
-  Duration? duration;
-  String? thumbnailPath;
-  Map<String, dynamic> metadata; // 存储视频元数据，如演员、年份、系列等
+  final String name;
+  final Duration? duration;
+  final String? thumbnailPath;
 
-  OriginalVideo({
-    required this.id, 
-    required this.path, 
+  const OriginalVideo({
+    required this.id,
+    required this.path,
     required this.name,
     this.duration,
     this.thumbnailPath,
-    this.metadata = const {},
   });
 
-  // 添加copyWith方法
   OriginalVideo copyWith({
     String? id,
     String? path,
     String? name,
     Duration? duration,
     String? thumbnailPath,
-    Map<String, dynamic>? metadata,
   }) {
     return OriginalVideo(
       id: id ?? this.id,
@@ -140,11 +123,9 @@ class OriginalVideo {
       name: name ?? this.name,
       duration: duration ?? this.duration,
       thumbnailPath: thumbnailPath ?? this.thumbnailPath,
-      metadata: metadata ?? this.metadata,
     );
   }
 
-  // 添加JSON序列化方法
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -152,22 +133,21 @@ class OriginalVideo {
       'name': name,
       'duration': duration?.inMilliseconds,
       'thumbnailPath': thumbnailPath,
-      'metadata': metadata,
     };
   }
 
   factory OriginalVideo.fromJson(Map<String, dynamic> json) {
     return OriginalVideo(
-      id: json['id'] ?? '',
+      id: json['id'] ?? 'vid_${json['path']?.hashCode}',
       path: json['path'] ?? '',
       name: json['name'] ?? '',
-      duration: json['duration'] != null 
-          ? Duration(milliseconds: json['duration']) 
-          : null,
+      duration: json['duration'] != null ? Duration(milliseconds: json['duration']) : null,
       thumbnailPath: json['thumbnailPath'],
-      metadata: Map<String, dynamic>.from(json['metadata'] ?? {}),
     );
   }
+
+  @override
+  List<Object?> get props => [id, path, name, duration, thumbnailPath];
 }
 
 class Playlist extends Equatable {
@@ -198,11 +178,7 @@ class Playlist extends Equatable {
   /// 获取播放列表中的 clip 数量
   int get clipCount => items.length;
 
-  /// 创建新的播放列表
-  factory Playlist.create({
-    required String name,
-    String? description,
-  }) {
+  factory Playlist.create({required String name, String? description}) {
     final now = DateTime.now();
     return Playlist(
       id: 'playlist_${now.millisecondsSinceEpoch}',
@@ -210,82 +186,6 @@ class Playlist extends Equatable {
       description: description,
       createdAt: now,
       updatedAt: now,
-    );
-  }
-
-  /// 添加 clip 到播放列表
-  Playlist addClip(String clipId, {Duration? customStartTime, Duration? customEndTime}) {
-    // 计算时长
-    Duration calculatedDuration;
-    if (customStartTime != null && customEndTime != null) {
-      calculatedDuration = customEndTime - customStartTime;
-    } else {
-      // 这里需要从外部传入 clip 的时长，暂时设为 null
-      // 在 AppState 中会通过 getPlaylistItemsWithClips 来计算实际时长
-      calculatedDuration = Duration.zero;
-    }
-
-    final newItem = PlaylistItem(
-      id: 'item_${DateTime.now().millisecondsSinceEpoch}',
-      clipId: clipId,
-      order: items.length,
-      customStartTime: customStartTime,
-      customEndTime: customEndTime,
-      duration: calculatedDuration,
-    );
-
-    return copyWith(
-      items: [...items, newItem],
-      updatedAt: DateTime.now(),
-    );
-  }
-
-  /// 移除 clip 从播放列表
-  Playlist removeClip(String clipId) {
-    final newItems = items.where((item) => item.clipId != clipId).toList();
-    // 重新排序
-    for (int i = 0; i < newItems.length; i++) {
-      newItems[i] = newItems[i].copyWith(order: i);
-    }
-    
-    return copyWith(
-      items: newItems,
-      updatedAt: DateTime.now(),
-    );
-  }
-
-  /// 移除特定的播放列表项
-  Playlist removeItem(String itemId) {
-    final newItems = items.where((item) => item.id != itemId).toList();
-    // 重新排序
-    for (int i = 0; i < newItems.length; i++) {
-      newItems[i] = newItems[i].copyWith(order: i);
-    }
-    
-    return copyWith(
-      items: newItems,
-      updatedAt: DateTime.now(),
-    );
-  }
-
-  /// 重新排序播放列表项
-  Playlist reorderItems(int oldIndex, int newIndex) {
-    if (oldIndex < newIndex) {
-      newIndex -= 1;
-    }
-    
-    final newItems = List<PlaylistItem>.from(items);
-    final item = newItems.removeAt(oldIndex);
-    newItems.insert(newIndex, item);
-    
-    // 更新所有项的排序
-    for (int i = 0; i < newItems.length; i++) {
-      newItems[i] = newItems[i].copyWith(order: i);
-    }
-    
-    return copyWith(
-      items: newItems,
-      updatedAt: DateTime.now(),
     );
   }
 
@@ -300,11 +200,30 @@ class Playlist extends Equatable {
     return Playlist(
       id: id ?? this.id,
       name: name ?? this.name,
-      description: description, // 直接使用传入的 description，允许设置为 null
+      description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       items: items ?? this.items,
     );
+  }
+  
+  Playlist removeItem(String itemId) {
+    final newItems = items.where((item) => item.id != itemId).toList();
+    for (int i = 0; i < newItems.length; i++) {
+      newItems[i] = newItems[i].copyWith(order: i);
+    }
+    return copyWith(items: newItems, updatedAt: DateTime.now());
+  }
+
+  Playlist reorderItems(int oldIndex, int newIndex) {
+    if (oldIndex < newIndex) newIndex -= 1;
+    final newItems = List<PlaylistItem>.from(items);
+    final item = newItems.removeAt(oldIndex);
+    newItems.insert(newIndex, item);
+    for (int i = 0; i < newItems.length; i++) {
+      newItems[i] = newItems[i].copyWith(order: i);
+    }
+    return copyWith(items: newItems, updatedAt: DateTime.now());
   }
 
   Map<String, dynamic> toJson() {
@@ -327,7 +246,8 @@ class Playlist extends Equatable {
       updatedAt: DateTime.fromMillisecondsSinceEpoch(json['updatedAt'] ?? 0),
       items: (json['items'] as List<dynamic>?)
           ?.map((item) => PlaylistItem.fromJson(item))
-          .toList() ?? [],
+          .toList() ??
+          [],
     );
   }
 
@@ -351,6 +271,21 @@ class PlaylistItem extends Equatable {
     this.customEndTime,
     this.duration,
   });
+
+  Duration getDuration(VideoClip clip) {
+    if (customStartTime != null && customEndTime != null) {
+      return customEndTime! - customStartTime!;
+    }
+    return clip.endTime - clip.startTime;
+  }
+
+  factory PlaylistItem.fromClip(VideoClip clip, int order) {
+    return PlaylistItem(
+      id: 'item_${DateTime.now().millisecondsSinceEpoch}',
+      clipId: clip.id,
+      order: order,
+    );
+  }
 
   PlaylistItem copyWith({
     String? id,
@@ -402,7 +337,6 @@ class PlaylistItem extends Equatable {
   List<Object?> get props => [id, clipId, order, customStartTime, customEndTime, duration];
 }
 
-/// 播放列表项与对应的 clip 信息的组合类
 class PlaylistItemWithClip extends Equatable {
   final PlaylistItem item;
   final VideoClip clip;
@@ -412,13 +346,7 @@ class PlaylistItemWithClip extends Equatable {
     required this.clip,
   });
 
-  /// 获取实际播放时长
-  Duration get effectiveDuration {
-    if (item.customStartTime != null && item.customEndTime != null) {
-      return item.customEndTime! - item.customStartTime!;
-    }
-    return clip.endTime - clip.startTime;
-  }
+  Duration get effectiveDuration => item.getDuration(clip);
 
   @override
   List<Object?> get props => [item, clip];
