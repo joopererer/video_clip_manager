@@ -17,7 +17,6 @@ class ThumbnailService {
   VideoController get videoController => _videoController;
 
   String? _currentlyOpenVideoPath;
-  final Completer<void> _processingCompleter = Completer<void>()..complete();
   Future<void> _processingFuture = Future.value();
 
   ThumbnailService({required this.pathService}) {
@@ -51,7 +50,10 @@ class ThumbnailService {
   }) async {
     final previousFuture = _processingFuture;
     final completer = Completer<String?>();
-    _processingFuture = completer.future.then((_) => null, onError: (_) => null);
+    _processingFuture = completer.future.then(
+      (_) => null,
+      onError: (_) => null,
+    );
 
     await previousFuture;
 
@@ -62,7 +64,9 @@ class ThumbnailService {
       await Directory(thumbDir).create(recursive: true);
 
       if (_currentlyOpenVideoPath != videoPath) {
-        debugPrint('ThumbnailService: Switching to video $videoPath for entity $entityId');
+        debugPrint(
+          'ThumbnailService: Switching to video $videoPath for entity $entityId',
+        );
         await _player.open(Media(videoPath), play: false);
         _currentlyOpenVideoPath = videoPath;
         await _player.stream.buffer
@@ -71,7 +75,9 @@ class ThumbnailService {
         await Future.delayed(const Duration(milliseconds: 500));
       }
 
-      debugPrint('ThumbnailService: Seeking to time $time for entity $entityId');
+      debugPrint(
+        'ThumbnailService: Seeking to time $time for entity $entityId',
+      );
       await _player.seek(time);
       await Future.delayed(const Duration(milliseconds: 500));
 
@@ -81,7 +87,9 @@ class ThumbnailService {
       if (data != null) {
         await thumbFile.writeAsBytes(data);
         final fileName = getThumbnailFileName(entityId);
-        debugPrint('ThumbnailService: Generated thumbnail at ${thumbFile.path}');
+        debugPrint(
+          'ThumbnailService: Generated thumbnail at ${thumbFile.path}',
+        );
         completer.complete(fileName);
         return fileName;
       } else {
@@ -93,6 +101,15 @@ class ThumbnailService {
       completer.complete(null);
       return null;
     }
+  }
+
+  bool deleteThumbnail(String dbPath, String clipId) {
+    String thumbnailFile = getThumbnailPathForDatabase(dbPath, clipId);
+    if (File(thumbnailFile).existsSync()) {
+      File(thumbnailFile).deleteSync();
+      return true;
+    }
+    return false;
   }
 
   void dispose() {

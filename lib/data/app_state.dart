@@ -54,8 +54,9 @@ class AppState extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
   bool get isGeneratingThumbnails => _isGeneratingThumbnails;
-  String get currentDbPath =>
-      _currentDbPath != null ? p.basename(_currentDbPath!) : 'No Database Loaded';
+  String get currentDbPath => _currentDbPath != null
+      ? p.basename(_currentDbPath!)
+      : 'No Database Loaded';
   String? get currentDbFullPath => _currentDbPath;
   bool get clipsIsGridView => _clipsIsGridView;
   bool get videosIsGridView => _videosIsGridView;
@@ -69,9 +70,9 @@ class AppState extends ChangeNotifier {
     required SharedPreferences prefs,
     required PathService pathService,
     required ThumbnailService thumbnailService,
-  })  : _prefs = prefs,
-        _pathService = pathService,
-        _thumbnailService = thumbnailService {
+  }) : _prefs = prefs,
+       _pathService = pathService,
+       _thumbnailService = thumbnailService {
     _dataService = DataService(pathService: _pathService);
     _videoMetadataService = VideoMetadataService();
     _clipsIsGridView = _prefs.getBool('clipsIsGridView') ?? false;
@@ -148,7 +149,8 @@ class AppState extends ChangeNotifier {
   }
 
   void clearAllFilters() {
-    bool hasChanges = _selectedTags.isNotEmpty ||
+    bool hasChanges =
+        _selectedTags.isNotEmpty ||
         _selectedRating != null ||
         _selectedFavorite != null;
     if (hasChanges) {
@@ -192,18 +194,25 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final videosNeedingMetadata =
-          _originalVideos.where((v) => v.duration == null).toList();
+      final videosNeedingMetadata = _originalVideos
+          .where((v) => v.duration == null)
+          .toList();
       if (videosNeedingMetadata.isNotEmpty) {
-        debugPrint('Populating metadata for ${videosNeedingMetadata.length} videos...');
+        debugPrint(
+          'Populating metadata for ${videosNeedingMetadata.length} videos...',
+        );
         await Future.wait(
-            videosNeedingMetadata.map((v) => updateVideoMetadata(v.id)));
+          videosNeedingMetadata.map((v) => updateVideoMetadata(v.id)),
+        );
       }
 
       final clipsNeedingThumbnails = <VideoClip>[];
       if (currentDbFullPath != null) {
         for (final clip in _clips) {
-          final thumbPath = _thumbnailService.getThumbnailPathForDatabase(currentDbFullPath!, clip.id);
+          final thumbPath = _thumbnailService.getThumbnailPathForDatabase(
+            currentDbFullPath!,
+            clip.id,
+          );
           if (!await File(thumbPath).exists()) {
             clipsNeedingThumbnails.add(clip);
           }
@@ -211,10 +220,16 @@ class AppState extends ChangeNotifier {
       }
 
       if (clipsNeedingThumbnails.isNotEmpty) {
-        debugPrint('Populating thumbnails for ${clipsNeedingThumbnails.length} clips...');
+        debugPrint(
+          'Populating thumbnails for ${clipsNeedingThumbnails.length} clips...',
+        );
         final futures = clipsNeedingThumbnails.map((clip) async {
           final thumbnailFileName = await _thumbnailService.generateThumbnail(
-              clip.videoPath, clip.coverFrameTime, clip.id, dbPath: _currentDbPath!);
+            clip.videoPath,
+            clip.coverFrameTime,
+            clip.id,
+            dbPath: _currentDbPath!,
+          );
           if (thumbnailFileName != null) {
             updateClipThumbnail(clip.id, thumbnailFileName);
           }
@@ -231,7 +246,8 @@ class AppState extends ChangeNotifier {
   }
 
   void _generateOriginalVideosIfNeeded() {
-    if (_originalVideos.isNotEmpty && _originalVideos.every((v) => v.id.isNotEmpty)) {
+    if (_originalVideos.isNotEmpty &&
+        _originalVideos.every((v) => v.id.isNotEmpty)) {
       return;
     }
 
@@ -241,7 +257,7 @@ class AppState extends ChangeNotifier {
     }
 
     final existingVideosByPath = {for (var v in _originalVideos) v.path: v};
-    
+
     _originalVideos = videoMap.entries.map((entry) {
       final path = entry.key;
       if (existingVideosByPath.containsKey(path)) {
@@ -287,7 +303,7 @@ class AppState extends ChangeNotifier {
             existingClipsCount++;
           }
         }
-        
+
         if (newClipsCount > 0) {
           _generateOriginalVideosIfNeeded();
           await _populateMissingMetadataAndThumbnails();
@@ -310,23 +326,28 @@ class AppState extends ChangeNotifier {
     try {
       debugPrint('--- Force Refreshing All Thumbnails & Metadata ---');
       if (currentDbFullPath != null) {
-         final thumbDir = _thumbnailService.getThumbnailDirForDatabase(currentDbFullPath!);
-         final dir = Directory(thumbDir);
-         if (await dir.exists()) {
-           try {
-             await dir.delete(recursive: true);
-           } catch (e) {
-             debugPrint('Warning: Could not delete thumbnail directory: $e');
-             // Continue anyway, we'll overwrite existing thumbnails
-           }
-         }
+        final thumbDir = _thumbnailService.getThumbnailDirForDatabase(
+          currentDbFullPath!,
+        );
+        final dir = Directory(thumbDir);
+        if (await dir.exists()) {
+          try {
+            await dir.delete(recursive: true);
+          } catch (e) {
+            debugPrint('Warning: Could not delete thumbnail directory: $e');
+            // Continue anyway, we'll overwrite existing thumbnails
+          }
+        }
       }
 
       for (int i = 0; i < _clips.length; i++) {
         _clips[i] = _clips[i].copyWith(thumbnailPath: null);
       }
       for (int i = 0; i < _originalVideos.length; i++) {
-        _originalVideos[i] = _originalVideos[i].copyWith(thumbnailPath: null, duration: null);
+        _originalVideos[i] = _originalVideos[i].copyWith(
+          thumbnailPath: null,
+          duration: null,
+        );
       }
       notifyListeners();
 
@@ -335,7 +356,11 @@ class AppState extends ChangeNotifier {
         debugPrint('Regenerating thumbnails for ${_clips.length} clips...');
         final futures = _clips.map((clip) async {
           final thumbnailFileName = await _thumbnailService.generateThumbnail(
-              clip.videoPath, clip.coverFrameTime, clip.id, dbPath: _currentDbPath!);
+            clip.videoPath,
+            clip.coverFrameTime,
+            clip.id,
+            dbPath: _currentDbPath!,
+          );
           if (thumbnailFileName != null) {
             updateClipThumbnail(clip.id, thumbnailFileName);
           }
@@ -345,11 +370,14 @@ class AppState extends ChangeNotifier {
 
       // Regenerate metadata and thumbnails for videos
       if (_originalVideos.isNotEmpty) {
-        debugPrint('Regenerating metadata and thumbnails for ${_originalVideos.length} videos...');
-        final futures = _originalVideos.map((video) => updateVideoMetadata(video.id));
+        debugPrint(
+          'Regenerating metadata and thumbnails for ${_originalVideos.length} videos...',
+        );
+        final futures = _originalVideos.map(
+          (video) => updateVideoMetadata(video.id),
+        );
         await Future.wait(futures);
       }
-
     } catch (e) {
       debugPrint('Error in forceRefreshThumbnails: $e');
     } finally {
@@ -386,7 +414,7 @@ class AppState extends ChangeNotifier {
       }
     });
   }
-  
+
   Future<void> forceSave() async {
     if (_hasUnsavedChanges) {
       _saveTimer?.cancel();
@@ -423,33 +451,39 @@ class AppState extends ChangeNotifier {
           dbPath: _currentDbPath!,
         );
       }
-      
+
       _originalVideos[index] = video.copyWith(
         duration: duration,
         thumbnailPath: thumbnailPath,
       );
       notifyListeners();
       _scheduleSave();
-      debugPrint('Updated video ${video.name} with duration: $duration and thumbnail: $thumbnailPath');
+      debugPrint(
+        'Updated video ${video.name} with duration: $duration and thumbnail: $thumbnailPath',
+      );
     } else {
       debugPrint('Failed to get duration for video: ${video.name}');
     }
   }
-  
+
   Future<OriginalVideo?> getVideoById(String videoId) async {
-     final video = _originalVideos.firstWhereOrNull((v) => v.id == videoId);
-     if (video != null && video.duration == null) {
-       await updateVideoMetadata(videoId);
-       return _originalVideos.firstWhereOrNull((v) => v.id == videoId);
-     }
-     return video;
+    final video = _originalVideos.firstWhereOrNull((v) => v.id == videoId);
+    if (video != null && video.duration == null) {
+      await updateVideoMetadata(videoId);
+      return _originalVideos.firstWhereOrNull((v) => v.id == videoId);
+    }
+    return video;
   }
 
   // --- Clip Methods ---
   Future<void> addClip(VideoClip clip) async {
     final thumbnailFileName = await _thumbnailService.generateThumbnail(
-        clip.videoPath, clip.coverFrameTime, clip.id, dbPath: _currentDbPath!);
-    
+      clip.videoPath,
+      clip.coverFrameTime,
+      clip.id,
+      dbPath: _currentDbPath!,
+    );
+
     final clipWithThumbnail = clip.copyWith(thumbnailPath: thumbnailFileName);
 
     _clips.add(clipWithThumbnail);
@@ -457,24 +491,31 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     _scheduleSave();
   }
-  
+
   Future<void> createClipFromWholeVideo(OriginalVideo video) async {
     // First try to get video with metadata
     final videoWithMeta = await getVideoById(video.id);
-    
+
     // If still no duration, try to update metadata directly
-    if (videoWithMeta?.duration == null || videoWithMeta!.duration! <= Duration.zero) {
+    if (videoWithMeta?.duration == null ||
+        videoWithMeta!.duration! <= Duration.zero) {
       debugPrint("Attempting to get metadata for video: ${video.name}");
       await updateVideoMetadata(video.id);
-      
+
       // Get the updated video
-      final updatedVideo = _originalVideos.firstWhereOrNull((v) => v.id == video.id);
-      if (updatedVideo?.duration == null || updatedVideo!.duration! <= Duration.zero) {
-        debugPrint("Cannot create clip from video with no duration: ${video.name}");
+      final updatedVideo = _originalVideos.firstWhereOrNull(
+        (v) => v.id == video.id,
+      );
+      if (updatedVideo?.duration == null ||
+          updatedVideo!.duration! <= Duration.zero) {
+        debugPrint(
+          "Cannot create clip from video with no duration: ${video.name}",
+        );
         return;
       }
-      
-      final clipId = 'clip_${DateTime.now().millisecondsSinceEpoch}_${video.id}';
+
+      final clipId =
+          'clip_${DateTime.now().millisecondsSinceEpoch}_${video.id}';
       final clip = VideoClip(
         id: clipId,
         name: video.name,
@@ -485,7 +526,8 @@ class AppState extends ChangeNotifier {
       );
       await addClip(clip);
     } else {
-      final clipId = 'clip_${DateTime.now().millisecondsSinceEpoch}_${video.id}';
+      final clipId =
+          'clip_${DateTime.now().millisecondsSinceEpoch}_${video.id}';
       final clip = VideoClip(
         id: clipId,
         name: video.name,
@@ -506,7 +548,7 @@ class AppState extends ChangeNotifier {
       _scheduleSave();
     }
   }
-  
+
   void updateClipSilently(VideoClip updatedClip) {
     final index = _clips.indexWhere((c) => c.id == updatedClip.id);
     if (index != -1) {
@@ -525,10 +567,15 @@ class AppState extends ChangeNotifier {
 
   Future<void> deleteClip(String clipId) async {
     _clips.removeWhere((c) => c.id == clipId);
+    // also remove from playlists
+    for (var p in _playlists) {
+      p.items.removeWhere((item) => item.clipId == clipId);
+    }
+    _thumbnailService.deleteThumbnail(_currentDbPath!, clipId);
     notifyListeners();
     await _save();
   }
-  
+
   UnmodifiableListView<String> get allTags {
     final allTagsSet = <String>{};
     for (var clip in _clips) {
@@ -550,10 +597,12 @@ class AppState extends ChangeNotifier {
 
     return _clips.where((clip) {
       final query = searchQuery.toLowerCase();
-      final textMatch = query.isEmpty ||
+      final textMatch =
+          query.isEmpty ||
           clip.name.toLowerCase().contains(query) ||
           (clip.notes?.toLowerCase().contains(query) ?? false);
-      final tagMatch = tags.isEmpty || tags.every((tag) => clip.tags.contains(tag));
+      final tagMatch =
+          tags.isEmpty || tags.every((tag) => clip.tags.contains(tag));
       final ratingMatch = rating == null || clip.rating == rating;
       final favoriteMatch = favorite == null || clip.isFavorite == favorite;
       return textMatch && tagMatch && ratingMatch && favoriteMatch;
@@ -563,7 +612,9 @@ class AppState extends ChangeNotifier {
   List<OriginalVideo> getFilteredVideos({String searchQuery = ''}) {
     if (searchQuery.isEmpty) return _originalVideos;
     final query = searchQuery.toLowerCase();
-    return _originalVideos.where((video) => video.name.toLowerCase().contains(query)).toList();
+    return _originalVideos
+        .where((video) => video.name.toLowerCase().contains(query))
+        .toList();
   }
 
   // --- Playlist Methods ---
@@ -574,7 +625,12 @@ class AppState extends ChangeNotifier {
     _scheduleSave();
   }
 
-  void updatePlaylist(String playlistId, {String? name, String? description, List<PlaylistItem>? items}) {
+  void updatePlaylist(
+    String playlistId, {
+    String? name,
+    String? description,
+    List<PlaylistItem>? items,
+  }) {
     final index = _playlists.indexWhere((p) => p.id == playlistId);
     if (index != -1) {
       final playlist = _playlists[index];
@@ -600,10 +656,10 @@ class AppState extends ChangeNotifier {
     if (index != -1) {
       final playlist = _playlists[index];
       if (playlist.items.any((item) => item.clipId == clipId)) return;
-      
+
       final clip = _clips.firstWhere((c) => c.id == clipId);
       final newItem = PlaylistItem.fromClip(clip, playlist.items.length);
-      
+
       _playlists[index] = playlist.copyWith(
         items: [...playlist.items, newItem],
         updatedAt: DateTime.now(),
@@ -612,13 +668,18 @@ class AppState extends ChangeNotifier {
       _scheduleSave();
     }
   }
-  
+
   void removePlaylistItem(String playlistId, String itemId) {
     final index = _playlists.indexWhere((p) => p.id == playlistId);
     if (index != -1) {
       final playlist = _playlists[index];
-      final newItems = playlist.items.where((item) => item.id != itemId).toList();
-      _playlists[index] = playlist.copyWith(items: newItems, updatedAt: DateTime.now());
+      final newItems = playlist.items
+          .where((item) => item.id != itemId)
+          .toList();
+      _playlists[index] = playlist.copyWith(
+        items: newItems,
+        updatedAt: DateTime.now(),
+      );
       notifyListeners();
       _scheduleSave();
     }
@@ -634,10 +695,15 @@ class AppState extends ChangeNotifier {
       }
       final item = items.removeAt(oldIndex);
       items.insert(newIndex, item);
-      
-      final reorderedItems = items.map((item) => item.copyWith(order: items.indexOf(item))).toList();
-      
-      _playlists[index] = playlist.copyWith(items: reorderedItems, updatedAt: DateTime.now());
+
+      final reorderedItems = items
+          .map((item) => item.copyWith(order: items.indexOf(item)))
+          .toList();
+
+      _playlists[index] = playlist.copyWith(
+        items: reorderedItems,
+        updatedAt: DateTime.now(),
+      );
       notifyListeners();
       _scheduleSave();
     }
@@ -649,7 +715,9 @@ class AppState extends ChangeNotifier {
     return playlist.items
         .map((item) {
           final clip = _clips.firstWhereOrNull((c) => c.id == item.clipId);
-          return clip != null ? PlaylistItemWithClip(item: item, clip: clip) : null;
+          return clip != null
+              ? PlaylistItemWithClip(item: item, clip: clip)
+              : null;
         })
         .whereType<PlaylistItemWithClip>()
         .toList();
