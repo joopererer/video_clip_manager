@@ -55,7 +55,7 @@ class _MainScreenState extends State<MainScreen>
 
   void _handleVideoDrop(List<XFile> files) {
     final appState = context.read<AppState>();
-    
+
     for (final file in files) {
       final path = file.path.toLowerCase();
       if (path.endsWith('.mp4') ||
@@ -79,15 +79,11 @@ class _MainScreenState extends State<MainScreen>
       return;
     }
 
-    final video = OriginalVideo(
-      id: videoId,
-      path: videoPath,
-      name: videoName,
-    );
+    final video = OriginalVideo(id: videoId, path: videoPath, name: videoName);
 
     appState.addOriginalVideo(video);
     await appState.updateVideoMetadata(videoId);
-    
+
     _showSnackBar('Added video: $videoName');
   }
 
@@ -150,7 +146,7 @@ class _MainScreenState extends State<MainScreen>
   void _showRatingFilterDialog() {
     final appState = context.read<AppState>();
     int? tempSelectedRating = appState.selectedRating;
-    
+
     showDialog(
       context: context,
       builder: (context) {
@@ -171,7 +167,9 @@ class _MainScreenState extends State<MainScreen>
                         selected: tempSelectedRating == null,
                         onSelected: (selected) {
                           setDialogState(() {
-                            tempSelectedRating = selected ? null : tempSelectedRating;
+                            tempSelectedRating = selected
+                                ? null
+                                : tempSelectedRating;
                           });
                         },
                       ),
@@ -179,7 +177,11 @@ class _MainScreenState extends State<MainScreen>
                         label: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.star_border, size: 16, color: Colors.grey),
+                            Icon(
+                              Icons.star_border,
+                              size: 16,
+                              color: Colors.grey,
+                            ),
                             Text(' No Rating'),
                           ],
                         ),
@@ -196,8 +198,13 @@ class _MainScreenState extends State<MainScreen>
                           label: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              ...List.generate(rating, (starIndex) => 
-                                const Icon(Icons.star, size: 16, color: Colors.amber)
+                              ...List.generate(
+                                rating,
+                                (starIndex) => const Icon(
+                                  Icons.star,
+                                  size: 16,
+                                  color: Colors.amber,
+                                ),
                               ),
                               Text(' $rating'),
                             ],
@@ -237,7 +244,7 @@ class _MainScreenState extends State<MainScreen>
   void _showFavoriteFilterDialog() {
     final appState = context.read<AppState>();
     bool? tempSelectedFavorite = appState.selectedFavorite;
-    
+
     showDialog(
       context: context,
       builder: (context) {
@@ -258,7 +265,9 @@ class _MainScreenState extends State<MainScreen>
                         selected: tempSelectedFavorite == null,
                         onSelected: (selected) {
                           setDialogState(() {
-                            tempSelectedFavorite = selected ? null : tempSelectedFavorite;
+                            tempSelectedFavorite = selected
+                                ? null
+                                : tempSelectedFavorite;
                           });
                         },
                       ),
@@ -329,8 +338,19 @@ class _MainScreenState extends State<MainScreen>
           // The main UI
           Scaffold(
             appBar: AppBar(
-              title: Text('Video Clip Manager (${appState.currentDbPath ?? "No DB"})'),
+              title: Text(
+                'Video Clip Manager (${appState.currentDbPath ?? "No DB"})',
+              ),
               actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Refresh All Thumbnails',
+                  onPressed: () async {
+                    await appState.forceRefreshThumbnails();
+                    _showSnackBar("All thumbnails are being refreshed.");
+                  },
+                ),
+                const SizedBox(width: 8),
                 PopupMenuButton<int>(
                   onSelected: (item) async {
                     if (item == 0) {
@@ -339,9 +359,6 @@ class _MainScreenState extends State<MainScreen>
                     } else if (item == 1) {
                       final result = await appState.switchDatabase();
                       _showSnackBar(result);
-                    } else if (item == 2) {
-                      await appState.forceRefreshThumbnails();
-                      _showSnackBar("All thumbnails are being refreshed.");
                     }
                   },
                   itemBuilder: (context) => [
@@ -352,11 +369,6 @@ class _MainScreenState extends State<MainScreen>
                     const PopupMenuItem<int>(
                       value: 1,
                       child: Text('Switch Database'),
-                    ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem<int>(
-                      value: 2,
-                      child: Text('Refresh All Thumbnails'),
                     ),
                   ],
                 ),
@@ -401,38 +413,66 @@ class _MainScreenState extends State<MainScreen>
                             suffixIcon: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (_tabController.index == 0 && appState.selectedTags.isNotEmpty)
+                                if (_tabController.index == 0 &&
+                                    appState.selectedTags.isNotEmpty)
                                   Chip(
-                                    label: Text('${appState.selectedTags.length}'),
-                                    onDeleted: () => appState.clearSelectedTags(),
+                                    label: Text(
+                                      '${appState.selectedTags.length}',
+                                    ),
+                                    onDeleted: () =>
+                                        appState.clearSelectedTags(),
                                   ),
-                                if (_tabController.index == 0 && appState.selectedRating != null)
+                                if (_tabController.index == 0 &&
+                                    appState.selectedRating != null)
                                   Chip(
                                     label: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         appState.selectedRating == 0
-                                            ? const Icon(Icons.star_border, size: 16, color: Colors.grey)
-                                            : const Icon(Icons.star, size: 16, color: Colors.amber),
-                                        Text(appState.selectedRating == 0 ? 'No Rating' : '${appState.selectedRating}'),
+                                            ? const Icon(
+                                                Icons.star_border,
+                                                size: 16,
+                                                color: Colors.grey,
+                                              )
+                                            : const Icon(
+                                                Icons.star,
+                                                size: 16,
+                                                color: Colors.amber,
+                                              ),
+                                        Text(
+                                          appState.selectedRating == 0
+                                              ? 'No Rating'
+                                              : '${appState.selectedRating}',
+                                        ),
                                       ],
                                     ),
-                                    onDeleted: () => appState.clearSelectedRating(),
+                                    onDeleted: () =>
+                                        appState.clearSelectedRating(),
                                   ),
-                                if (_tabController.index == 0 && appState.selectedFavorite != null)
+                                if (_tabController.index == 0 &&
+                                    appState.selectedFavorite != null)
                                   Chip(
                                     label: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Icon(
-                                          appState.selectedFavorite! ? Icons.favorite : Icons.favorite_border,
+                                          appState.selectedFavorite!
+                                              ? Icons.favorite
+                                              : Icons.favorite_border,
                                           size: 16,
-                                          color: appState.selectedFavorite! ? Colors.red : Colors.grey,
+                                          color: appState.selectedFavorite!
+                                              ? Colors.red
+                                              : Colors.grey,
                                         ),
-                                        Text(appState.selectedFavorite! ? 'Fav' : 'Not Fav'),
+                                        Text(
+                                          appState.selectedFavorite!
+                                              ? 'Fav'
+                                              : 'Not Fav',
+                                        ),
                                       ],
                                     ),
-                                    onDeleted: () => appState.clearSelectedFavorite(),
+                                    onDeleted: () =>
+                                        appState.clearSelectedFavorite(),
                                   ),
                                 if (_tabController.index == 0)
                                   PopupMenuButton<String>(
@@ -484,12 +524,12 @@ class _MainScreenState extends State<MainScreen>
                                           ],
                                         ),
                                       ),
-                                      if (appState.selectedTags.isNotEmpty || 
-                                          appState.selectedRating != null || 
+                                      if (appState.selectedTags.isNotEmpty ||
+                                          appState.selectedRating != null ||
                                           appState.selectedFavorite != null)
                                         const PopupMenuDivider(),
-                                      if (appState.selectedTags.isNotEmpty || 
-                                          appState.selectedRating != null || 
+                                      if (appState.selectedTags.isNotEmpty ||
+                                          appState.selectedRating != null ||
                                           appState.selectedFavorite != null)
                                         const PopupMenuItem<String>(
                                           value: 'clear_all',
@@ -580,7 +620,10 @@ class _MainScreenState extends State<MainScreen>
                                   : (appState.isGeneratingThumbnails
                                         ? 'Generating Thumbnails...'
                                         : 'Loading...'),
-                              style: const TextStyle(color: Colors.white, fontSize: 16),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
                             ),
                           ],
                         ),
@@ -598,9 +641,7 @@ class _MainScreenState extends State<MainScreen>
             height: 1,
             child: Opacity(
               opacity: 0.0, // Fully transparent
-              child: Video(
-                controller: thumbnailService.videoController,
-              ),
+              child: Video(controller: thumbnailService.videoController),
             ),
           ),
         ],
