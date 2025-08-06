@@ -566,12 +566,37 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> deleteClip(String clipId) async {
+    _deleteClip(clipId);
+    notifyListeners();
+    await _save();
+  }
+
+  Future<void> _deleteClip(String clipId) async {
     _clips.removeWhere((c) => c.id == clipId);
     // also remove from playlists
     for (var p in _playlists) {
       p.items.removeWhere((item) => item.clipId == clipId);
     }
     _thumbnailService.deleteThumbnail(_currentDbPath!, clipId);
+  }
+
+  Future<void> deleteVideo(String videoId, {bool deleteClips = false}) async {
+    final video = _originalVideos.firstWhere((v) => v.id == videoId);
+    final relatedClips = _clips
+        .where((c) => c.videoPath == video.path)
+        .toList();
+
+    if (deleteClips) {
+      // 删除所有相关clips
+      for (var clip in relatedClips) {
+        _deleteClip(clip.id);
+      }
+    }
+
+    // 删除视频
+    _originalVideos.removeWhere((v) => v.id == videoId);
+    _thumbnailService.deleteThumbnail(_currentDbPath!, videoId);
+
     notifyListeners();
     await _save();
   }

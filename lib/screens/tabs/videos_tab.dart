@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/app_state.dart';
 import '../../data/models.dart';
+import '../../utils/toast_utils.dart';
 import '../../widgets/video_thumbnail.dart';
 import '../player/clip_editor_screen.dart';
 
@@ -30,8 +31,9 @@ class _VideosTabState extends State<VideosTab> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final filteredVideos =
-        appState.getFilteredVideos(searchQuery: widget.searchQuery);
+    final filteredVideos = appState.getFilteredVideos(
+      searchQuery: widget.searchQuery,
+    );
 
     return Scaffold(
       body: Column(
@@ -41,8 +43,8 @@ class _VideosTabState extends State<VideosTab> {
             child: filteredVideos.isEmpty
                 ? _buildEmptyState(context)
                 : appState.videosIsGridView
-                    ? _buildGridView(filteredVideos)
-                    : _buildListView(filteredVideos),
+                ? _buildGridView(filteredVideos)
+                : _buildListView(filteredVideos),
           ),
         ],
       ),
@@ -55,9 +57,13 @@ class _VideosTabState extends State<VideosTab> {
   }
 
   Widget _buildVideoInfoBar(
-      AppState appState, List<OriginalVideo> filteredVideos) {
+    AppState appState,
+    List<OriginalVideo> filteredVideos,
+  ) {
     final totalDuration = filteredVideos.fold<Duration>(
-        Duration.zero, (sum, v) => sum + (v.duration ?? Duration.zero));
+      Duration.zero,
+      (sum, v) => sum + (v.duration ?? Duration.zero),
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -67,14 +73,19 @@ class _VideosTabState extends State<VideosTab> {
           _buildInfoItem('Videos', '${filteredVideos.length}', Icons.movie),
           const SizedBox(width: 24),
           _buildInfoItem(
-              'Total Duration', _formatDuration(totalDuration), Icons.access_time),
+            'Total Duration',
+            _formatDuration(totalDuration),
+            Icons.access_time,
+          ),
           const Spacer(),
           const Text('View:'),
           IconButton(
             tooltip: appState.videosIsGridView
                 ? 'Switch to List View'
                 : 'Switch to Grid View',
-            icon: Icon(appState.videosIsGridView ? Icons.list : Icons.grid_view),
+            icon: Icon(
+              appState.videosIsGridView ? Icons.list : Icons.grid_view,
+            ),
             onPressed: () =>
                 appState.setVideosViewMode(!appState.videosIsGridView),
           ),
@@ -99,7 +110,11 @@ class _VideosTabState extends State<VideosTab> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.video_library_outlined, size: 64, color: Colors.grey),
+          const Icon(
+            Icons.video_library_outlined,
+            size: 64,
+            color: Colors.grey,
+          ),
           const SizedBox(height: 16),
           const Text('No videos found.', style: TextStyle(fontSize: 18)),
           const SizedBox(height: 8),
@@ -142,19 +157,18 @@ class _VideosTabState extends State<VideosTab> {
 
   Widget _buildVideoListTile(BuildContext context, OriginalVideo video) {
     final appState = context.read<AppState>();
-    final clipCount =
-        appState.clips.where((c) => c.videoPath == video.path).length;
+    final clipCount = appState.clips
+        .where((c) => c.videoPath == video.path)
+        .length;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       child: ListTile(
-        leading: SizedBox(
-          width: 80,
-          child: VideoThumbnail(video: video),
-        ),
+        leading: SizedBox(width: 80, child: VideoThumbnail(video: video)),
         title: Text(video.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
-            'Duration: ${video.duration != null ? _formatDuration(video.duration!) : "..."}  |  Clips: $clipCount'),
+          'Duration: ${video.duration != null ? _formatDuration(video.duration!) : "..."}  |  Clips: $clipCount',
+        ),
         trailing: _buildVideoMenuButton(context, video),
         onTap: () => _navigateToClipEditor(context, video),
       ),
@@ -163,8 +177,9 @@ class _VideosTabState extends State<VideosTab> {
 
   Widget _buildVideoGridTile(BuildContext context, OriginalVideo video) {
     final appState = context.read<AppState>();
-    final clipCount =
-        appState.clips.where((c) => c.videoPath == video.path).length;
+    final clipCount = appState.clips
+        .where((c) => c.videoPath == video.path)
+        .length;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -184,7 +199,9 @@ class _VideosTabState extends State<VideosTab> {
                       right: 4,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 2),
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.6),
                           borderRadius: BorderRadius.circular(4),
@@ -192,7 +209,9 @@ class _VideosTabState extends State<VideosTab> {
                         child: Text(
                           _formatDuration(video.duration!),
                           style: const TextStyle(
-                              color: Colors.white, fontSize: 10),
+                            color: Colors.white,
+                            fontSize: 10,
+                          ),
                         ),
                       ),
                     ),
@@ -213,13 +232,19 @@ class _VideosTabState extends State<VideosTab> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Clips: $clipCount',
-                      style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    'Clips: $clipCount',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   SizedBox(
                     height: 24,
                     width: 24,
-                    child: _buildVideoMenuButton(context, video, isCompact: true),
-                  )
+                    child: _buildVideoMenuButton(
+                      context,
+                      video,
+                      isCompact: true,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -230,8 +255,10 @@ class _VideosTabState extends State<VideosTab> {
   }
 
   PopupMenuButton<String> _buildVideoMenuButton(
-      BuildContext context, OriginalVideo video,
-      {bool isCompact = false}) {
+    BuildContext context,
+    OriginalVideo video, {
+    bool isCompact = false,
+  }) {
     return PopupMenuButton<String>(
       icon: isCompact
           ? const Icon(Icons.more_vert, size: 16)
@@ -240,21 +267,25 @@ class _VideosTabState extends State<VideosTab> {
       itemBuilder: (context) => [
         const PopupMenuItem(
           value: 'create_clip',
-          child:
-              ListTile(leading: Icon(Icons.content_cut), title: Text('Create Clips')),
+          child: ListTile(
+            leading: Icon(Icons.content_cut),
+            title: Text('Create Clips'),
+          ),
         ),
         const PopupMenuItem(
           value: 'clip_from_whole',
           child: ListTile(
-              leading: Icon(Icons.movie_creation_outlined),
-              title: Text('Clip From Whole Video')),
+            leading: Icon(Icons.movie_creation_outlined),
+            title: Text('Clip From Whole Video'),
+          ),
         ),
         const PopupMenuDivider(),
         const PopupMenuItem(
           value: 'delete_video',
           child: ListTile(
-              leading: Icon(Icons.delete_forever, color: Colors.red),
-              title: Text('Delete Video', style: TextStyle(color: Colors.red))),
+            leading: Icon(Icons.delete_forever, color: Colors.red),
+            title: Text('Delete Video', style: TextStyle(color: Colors.red)),
+          ),
         ),
       ],
     );
@@ -282,9 +313,9 @@ class _VideosTabState extends State<VideosTab> {
 
   void _addVideo(AppState appState, String videoPath) {
     if (appState.originalVideos.any((v) => v.path == videoPath)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Video "${p.basename(videoPath)}" already exists.')),
+      ToastUtils.showWarning(
+        context,
+        'Video "${p.basename(videoPath)}" already exists.',
       );
       return;
     }
@@ -295,11 +326,7 @@ class _VideosTabState extends State<VideosTab> {
       name: p.basename(videoPath),
     );
     appState.addOriginalVideo(video); // AppState will handle metadata fetching
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text('Added "${video.name}".'),
-          backgroundColor: Colors.green),
-    );
+    ToastUtils.showSuccess(context, 'Added "${video.name}".');
   }
 
   void _navigateToClipEditor(BuildContext context, OriginalVideo video) {
@@ -310,7 +337,10 @@ class _VideosTabState extends State<VideosTab> {
   }
 
   void _handleVideoAction(
-      BuildContext context, String action, OriginalVideo video) {
+    BuildContext context,
+    String action,
+    OriginalVideo video,
+  ) {
     final appState = context.read<AppState>();
     switch (action) {
       case 'create_clip':
@@ -318,15 +348,104 @@ class _VideosTabState extends State<VideosTab> {
         break;
       case 'clip_from_whole':
         appState.createClipFromWholeVideo(video);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Created clip from "${video.name}"'),
-            backgroundColor: Colors.green));
+        ToastUtils.showSuccess(context, 'Created clip from "${video.name}"');
         break;
       case 'delete_video':
-        // TODO: Implement video deletion with confirmation
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Video deletion not yet implemented.')));
+        _deleteVideo(context, video);
         break;
     }
+  }
+
+  void _deleteVideo(BuildContext context, OriginalVideo video) {
+    final appState = context.read<AppState>();
+    final clipCount = appState.clips
+        .where((c) => c.videoPath == video.path)
+        .length;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Confirm Video Deletion',
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        content: SizedBox(
+          width: 400, // 固定宽度
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Are you sure you want to delete "${video.name}"?',
+                style: const TextStyle(fontSize: 16),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 16),
+              if (clipCount > 0) ...[
+                Text(
+                  'This video has $clipCount associated clips.',
+                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Choose deletion option:',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+              ] else ...[
+                Text(
+                  'This video has no associated clips.',
+                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          if (clipCount > 0) ...[
+            TextButton(
+              onPressed: () {
+                appState.deleteVideo(video.id, deleteClips: false);
+                Navigator.of(ctx).pop();
+                ToastUtils.showSuccess(
+                  context,
+                  'Deleted video "${video.name}" (clips preserved)',
+                );
+              },
+              child: const Text('Delete Video Only'),
+            ),
+            TextButton(
+              onPressed: () {
+                appState.deleteVideo(video.id, deleteClips: true);
+                Navigator.of(ctx).pop();
+                ToastUtils.showSuccess(
+                  context,
+                  'Deleted video "${video.name}" and $clipCount clips',
+                );
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete Video & Clips'),
+            ),
+          ] else ...[
+            TextButton(
+              onPressed: () {
+                appState.deleteVideo(video.id, deleteClips: false);
+                Navigator.of(ctx).pop();
+                ToastUtils.showSuccess(
+                  context,
+                  'Deleted video "${video.name}"',
+                );
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete Video'),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
