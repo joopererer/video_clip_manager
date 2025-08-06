@@ -33,6 +33,18 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
 
   int? _selectedItemIndex;
 
+  // 创建一个 getter 来计算编辑状态下的总时长
+  Duration get _currentEditingTotalDuration {
+    if (_editingItems.isEmpty) {
+      return Duration.zero;
+    }
+    // 使用 fold 方法累加所有片段的有效时长
+    return _editingItems.fold(
+      Duration.zero,
+      (previousValue, item) => previousValue + item.effectiveDuration,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -281,7 +293,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '总时长: ${_formatDuration(widget.playlist.totalDuration)}',
+                      '总时长: ${_formatDuration(_currentEditingTotalDuration)}',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade700,
@@ -317,7 +329,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
               ),
               const Spacer(),
               Text(
-                '总时长: ${_formatDuration(widget.playlist.totalDuration)}',
+                '总时长: ${_formatDuration(_currentEditingTotalDuration)}',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
               ),
             ],

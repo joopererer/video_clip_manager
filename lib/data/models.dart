@@ -30,12 +30,16 @@ class VideoClip extends Equatable {
   factory VideoClip.fromJson(Map<String, dynamic> json) {
     final startTime = Duration(milliseconds: json['start'] ?? 0);
     return VideoClip(
-      id: json['id'] ?? 'clip_${DateTime.now().millisecondsSinceEpoch}_${json['videoPath']?.hashCode}',
+      id:
+          json['id'] ??
+          'clip_${DateTime.now().millisecondsSinceEpoch}_${json['videoPath']?.hashCode}',
       name: json['label'] ?? json['name'] ?? 'Untitled Clip',
       videoPath: json['videoPath'] ?? '',
       startTime: startTime,
       endTime: Duration(milliseconds: json['end'] ?? 0),
-      coverFrameTime: Duration(milliseconds: json['coverFrameTime'] ?? startTime.inMilliseconds),
+      coverFrameTime: Duration(
+        milliseconds: json['coverFrameTime'] ?? startTime.inMilliseconds,
+      ),
       tags: List<String>.from(json['tags'] ?? []),
       notes: json['notes'] ?? json['note'],
       rating: json['rating'] ?? 0,
@@ -91,7 +95,17 @@ class VideoClip extends Equatable {
 
   @override
   List<Object?> get props => [
-    id, name, videoPath, startTime, endTime, coverFrameTime, tags, notes, rating, isFavorite, thumbnailPath
+    id,
+    name,
+    videoPath,
+    startTime,
+    endTime,
+    coverFrameTime,
+    tags,
+    notes,
+    rating,
+    isFavorite,
+    thumbnailPath,
   ];
 }
 
@@ -141,7 +155,9 @@ class OriginalVideo extends Equatable {
       id: json['id'] ?? 'vid_${json['path']?.hashCode}',
       path: json['path'] ?? '',
       name: json['name'] ?? '',
-      duration: json['duration'] != null ? Duration(milliseconds: json['duration']) : null,
+      duration: json['duration'] != null
+          ? Duration(milliseconds: json['duration'])
+          : null,
       thumbnailPath: json['thumbnailPath'],
     );
   }
@@ -206,7 +222,7 @@ class Playlist extends Equatable {
       items: items ?? this.items,
     );
   }
-  
+
   Playlist removeItem(String itemId) {
     final newItems = items.where((item) => item.id != itemId).toList();
     for (int i = 0; i < newItems.length; i++) {
@@ -244,15 +260,23 @@ class Playlist extends Equatable {
       description: json['description'],
       createdAt: DateTime.fromMillisecondsSinceEpoch(json['createdAt'] ?? 0),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(json['updatedAt'] ?? 0),
-      items: (json['items'] as List<dynamic>?)
-          ?.map((item) => PlaylistItem.fromJson(item))
-          .toList() ??
+      items:
+          (json['items'] as List<dynamic>?)
+              ?.map((item) => PlaylistItem.fromJson(item))
+              .toList() ??
           [],
     );
   }
 
   @override
-  List<Object?> get props => [id, name, description, createdAt, updatedAt, items];
+  List<Object?> get props => [
+    id,
+    name,
+    description,
+    createdAt,
+    updatedAt,
+    items,
+  ];
 }
 
 class PlaylistItem extends Equatable {
@@ -284,6 +308,9 @@ class PlaylistItem extends Equatable {
       id: 'item_${DateTime.now().millisecondsSinceEpoch}',
       clipId: clip.id,
       order: order,
+      customStartTime: clip.startTime,
+      customEndTime: clip.endTime,
+      duration: clip.endTime - clip.startTime,
     );
   }
 
@@ -334,17 +361,21 @@ class PlaylistItem extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, clipId, order, customStartTime, customEndTime, duration];
+  List<Object?> get props => [
+    id,
+    clipId,
+    order,
+    customStartTime,
+    customEndTime,
+    duration,
+  ];
 }
 
 class PlaylistItemWithClip extends Equatable {
   final PlaylistItem item;
   final VideoClip clip;
 
-  const PlaylistItemWithClip({
-    required this.item,
-    required this.clip,
-  });
+  const PlaylistItemWithClip({required this.item, required this.clip});
 
   Duration get effectiveDuration => item.getDuration(clip);
 
