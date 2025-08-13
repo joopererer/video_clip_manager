@@ -117,7 +117,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       }
 
       // 预生成关键帧预览图
-      // _preGenerateKeyframes(); // 临时禁用，避免初始化延迟
+      // 智能预生成：检查全局缓存完成度，决定是否继续生成
+      _smartPreGenerate();
 
       // 设置主播放器位置监听器
       _positionSubscription?.cancel();
@@ -176,21 +177,74 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       }
     });
   }
-
-  // 新增：预生成关键帧预览图
-  Future<void> _preGenerateKeyframes() async {
-    if (_disposed || !_isPlayerReady) return;
+  
+  /// 智能预生成逻辑
+  Future<void> _smartPreGenerate() async {
+    if (widget.clip.videoPath == null) return;
     
     try {
-      print('ClipPlaybackScreen: Starting keyframe pre-generation');
+      // 检查当前进度
+      final progress = await PreviewService().getVideoProgress(widget.clip.videoPath!);
+      final remainingPercentage = 1.0 - progress;
+      
+      print('ClipPlayback: Current progress: ${(progress * 100).toStringAsFixed(1)}%, remaining: ${(remainingPercentage * 100).toStringAsFixed(1)}%');
+      
+      if (remainingPercentage <= 0.3) {
+        // 剩余少于30%，继续生成并显示loading
+        print('ClipPlayback: Less than 30% remaining, continuing generation...');
+        await _continuePreGeneration();
+      } else {
+        print('ClipPlayback: More than 30% remaining, skipping generation');
+      }
+    } catch (e) {
+      print('ClipPlayback: Error in smart pre-generation: $e');
+    }
+  }
+  
+  /// 继续预生成并显示loading
+  Future<void> _continuePreGeneration() async {
+    if (widget.clip.videoPath == null) return;
+    
+    try {
+      // 暂停全局预生成
+      PreviewService().pauseGlobalPreGeneration();
+      
+      // 显示loading状态
+      _showLoadingPreview();
+      
+      // 获取视频时长
+      final duration = mainPlayer.state.duration;
+      if (duration == Duration.zero) {
+        print('ClipPlayback: Cannot get video duration');
+        return;
+      }
+      
+      // 继续预生成
       await PreviewService().preGenerateKeyFrames(
         mainPlayer,
-        _currentClip.videoPath,
-        mainPlayer.state.duration,
+        widget.clip.videoPath!,
+        duration,
       );
-      print('ClipPlaybackScreen: Keyframe pre-generation completed');
+      
+      print('ClipPlayback: Pre-generation completed');
+      
     } catch (e) {
-      print('ClipPlaybackScreen: Error pre-generating keyframes: $e');
+      print('ClipPlayback: Error continuing pre-generation: $e');
+    } finally {
+      // 恢复全局预生成
+      PreviewService().resumeGlobalPreGeneration();
+    }
+  }
+  
+  /// 显示loading预览状态
+  void _showLoadingPreview() {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('正在生成预览图...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -280,6 +334,9 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   void dispose() {
     print('ClipPlaybackScreen disposing...'); // 调试信息
     _disposed = true;
+    
+    // 恢复全局预生成
+    PreviewService().resumeGlobalPreGeneration();
     
     // 取消所有定时器和订阅
     _recoveryTimer?.cancel();

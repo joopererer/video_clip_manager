@@ -45,8 +45,11 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   Duration? _hoverTime;
   Uint8List? _thumbnailData;
   Future<void>? _pendingPreview;
-
-
+  
+  // 新增：预览生成进度状态
+  double _previewProgress = 0.0;
+  String _previewStatus = '未生成';
+  bool _isLoadingPreview = false;
 
   // --- Fonctions utilitaires ---
 
@@ -62,16 +65,12 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   }
 
   void _updatePreview(Duration time) {
-    // 临时禁用预览功能，避免播放卡顿
-    print('CustomProgressBar: Preview temporarily disabled to avoid playback interference');
-    return;
-    
     _pendingPreview?.ignore();
     _pendingPreview = Future(() async {
       try {
         print('CustomProgressBar: Updating preview to time: $time using keyframe system');
         
-        // 使用关键帧预览系统
+        // 使用关键帧预览系统 - 直接获取最近的关键帧，不需要先检查缓存
         final data = PreviewService().getNearestKeyframe(
           widget.videoPath ?? '',
           time,
@@ -83,10 +82,22 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
           });
           print('CustomProgressBar: Keyframe preview updated successfully');
         } else if (data == null) {
-          print('CustomProgressBar: No keyframe preview available');
+          // 只有在没有找到任何关键帧时才显示 "No preview"
+          final hasAnyKeyframes = PreviewService().hasKeyframes(widget.videoPath ?? '');
+          if (!hasAnyKeyframes) {
+            print('CustomProgressBar: No keyframes available for this video');
+          } else {
+            print('CustomProgressBar: No keyframe found near time $time');
+          }
+          setState(() {
+            _thumbnailData = null;
+          });
         }
       } catch (e) {
         print('CustomProgressBar: Preview update failed: $e');
+        setState(() {
+          _thumbnailData = null;
+        });
       }
     });
   }
@@ -212,14 +223,35 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   @override
   void initState() {
     super.initState();
-    // 测试ffmpeg是否可用
-    // _testFFmpeg(); // Removed as per edit hint
+    _updatePreviewProgress();
   }
 
-  // void _testFFmpeg() async { // Removed as per edit hint
-  //   final isAvailable = await PreviewService().testFFmpeg(); // Removed as per edit hint
-  //   print('CustomProgressBar: FFmpeg available: $isAvailable'); // Removed as per edit hint
-  // } // Removed as per edit hint
+  @override
+  void didUpdateWidget(CustomProgressBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.videoPath != widget.videoPath) {
+      _updatePreviewProgress();
+    }
+  }
+
+  /// 更新预览生成进度
+  Future<void> _updatePreviewProgress() async {
+    if (widget.videoPath == null) return;
+    
+    try {
+      final progress = await PreviewService().getVideoProgress(widget.videoPath!);
+      final status = await PreviewService().getVideoStatus(widget.videoPath!);
+      
+      if (mounted) {
+        setState(() {
+          _previewProgress = progress;
+          _previewStatus = status;
+        });
+      }
+    } catch (e) {
+      print('CustomProgressBar: Error updating preview progress: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -261,127 +293,155 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return MouseRegion(
-                    onEnter: _handleEnter,
-                    onExit: _handleExit,
-                    onHover: (event) =>
-                        _handleHover(event, constraints, totalDuration),
-                    child: GestureDetector(
-                      onTapUp: (details) => _handlePrimaryTap(
-                        details,
-                        constraints.maxWidth,
-                        totalDuration,
-                      ),
-                      onSecondaryTapUp: (details) => _handleSecondaryTap(
-                        details,
-                        constraints.maxWidth,
-                        totalDuration,
-                      ),
-                      child: Tooltip(
-                        message: widget.isPlaybackMode
-                            ? 'Click to seek to position'
-                            : 'Clic gauche: Définir Début / Clic droit: Définir Fin',
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          alignment: Alignment.centerLeft,
-                          children: [
-                            // 背景条
-                            Container(
-                              height: 8,
-                              width: constraints.maxWidth,
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                            // Clip范围高亮（只在非相对模式下显示）
-                            if (!widget.showClipRelativeProgress)
-                              _buildPositionedBar(
-                                constraints.maxWidth,
-                                totalDuration,
-                                widget.startTime,
-                                widget.endTime,
-                                Theme.of(
-                                  context,
-                                ).primaryColor.withValues(alpha: 0.4),
-                              ),
-                            // 播放进度条
-                            StreamBuilder<Duration>(
-                              stream: widget.player.stream.position,
-                              initialData: widget.player.state.position,
-                              builder: (context, positionSnapshot) {
-                                final position =
-                                    positionSnapshot.data ?? Duration.zero;
-                                if (widget.showClipRelativeProgress) {
-                                  // 显示clip相对进度
-                                  final relativePosition = _clampDuration(
-                                    position - widget.startTime,
-                                    Duration.zero,
-                                    clipProgress,
-                                  );
-                                  final progress = clipProgress > Duration.zero
-                                      ? (relativePosition.inMilliseconds /
-                                                clipProgress.inMilliseconds)
-                                            .clamp(0.0, 1.0)
-                                      : 0.0;
-                                  return Positioned(
-                                    left: 0,
-                                    child: Container(
-                                      height: 8,
-                                      width: (constraints.maxWidth * progress)
-                                          .clamp(0, constraints.maxWidth),
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).primaryColor,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                    ),
-                                  );
-                                } else {
-                                  // 显示完整视频进度
-                                  return _buildPositionedBar(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 主进度条
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      return MouseRegion(
+                        onEnter: _handleEnter,
+                        onExit: _handleExit,
+                        onHover: (event) =>
+                            _handleHover(event, constraints, totalDuration),
+                        child: GestureDetector(
+                          onTapUp: (details) => _handlePrimaryTap(
+                            details,
+                            constraints.maxWidth,
+                            totalDuration,
+                          ),
+                          onSecondaryTapUp: (details) => _handleSecondaryTap(
+                            details,
+                            constraints.maxWidth,
+                            totalDuration,
+                          ),
+                          child: Tooltip(
+                            message: widget.isPlaybackMode
+                                ? 'Click to seek to position'
+                                : 'Clic gauche: Définir Début / Clic droit: Définir Fin',
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              alignment: Alignment.centerLeft,
+                              children: [
+                                // 背景条
+                                Container(
+                                  height: 8,
+                                  width: constraints.maxWidth,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade300,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                                // Clip范围高亮（只在非相对模式下显示）
+                                if (!widget.showClipRelativeProgress)
+                                  _buildPositionedBar(
                                     constraints.maxWidth,
                                     totalDuration,
-                                    Duration.zero,
-                                    position,
-                                    Theme.of(context).primaryColor,
-                                  );
-                                }
-                              },
+                                    widget.startTime,
+                                    widget.endTime,
+                                    Theme.of(
+                                      context,
+                                    ).primaryColor.withValues(alpha: 0.4),
+                                  ),
+                                // 播放进度条
+                                StreamBuilder<Duration>(
+                                  stream: widget.player.stream.position,
+                                  initialData: widget.player.state.position,
+                                  builder: (context, positionSnapshot) {
+                                    final position =
+                                        positionSnapshot.data ?? Duration.zero;
+                                    if (widget.showClipRelativeProgress) {
+                                      // 显示clip相对进度
+                                      final relativePosition = _clampDuration(
+                                        position - widget.startTime,
+                                        Duration.zero,
+                                        clipProgress,
+                                      );
+                                      final progress = clipProgress > Duration.zero
+                                          ? (relativePosition.inMilliseconds /
+                                                    clipProgress.inMilliseconds)
+                                                .clamp(0.0, 1.0)
+                                          : 0.0;
+                                      return Positioned(
+                                        left: 0,
+                                        child: Container(
+                                          height: 8,
+                                          width: (constraints.maxWidth * progress)
+                                              .clamp(0, constraints.maxWidth),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).primaryColor,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                        ),
+                                      );
+                                    } else {
+                                      // 显示完整视频进度
+                                      return _buildPositionedBar(
+                                        constraints.maxWidth,
+                                        totalDuration,
+                                        Duration.zero,
+                                        position,
+                                        Theme.of(context).primaryColor,
+                                      );
+                                    }
+                                  },
+                                ),
+                                // 标记（只在非相对模式下显示）
+                                if (!widget.showClipRelativeProgress) ...[
+                                  _buildMarker(
+                                    constraints.maxWidth,
+                                    totalDuration,
+                                    widget.startTime,
+                                    Colors.blue,
+                                  ),
+                                  _buildMarker(
+                                    constraints.maxWidth,
+                                    totalDuration,
+                                    widget.endTime,
+                                    Colors.red,
+                                  ),
+                                ],
+                                // 悬停预览
+                                if (_isHovering && _hoverDx != null)
+                                  Positioned(
+                                    left:
+                                        _hoverDx! -
+                                        (widget.showThumbnailPreview ? 50 : 28),
+                                    bottom: 20,
+                                    child: widget.showThumbnailPreview 
+                                        ? _buildThumbnailPreview() 
+                                        : _buildHoverTimePreview(),
+                                  ),
+                              ],
                             ),
-                            // 标记（只在非相对模式下显示）
-                            if (!widget.showClipRelativeProgress) ...[
-                              _buildMarker(
-                                constraints.maxWidth,
-                                totalDuration,
-                                widget.startTime,
-                                Colors.blue,
-                              ),
-                              _buildMarker(
-                                constraints.maxWidth,
-                                totalDuration,
-                                widget.endTime,
-                                Colors.red,
-                              ),
-                            ],
-                            // 悬停预览
-                            if (_isHovering && _hoverDx != null)
-                              Positioned(
-                                left:
-                                    _hoverDx! -
-                                    (widget.showThumbnailPreview ? 50 : 28),
-                                bottom: 20,
-                                child: widget.showThumbnailPreview 
-                                    ? _buildThumbnailPreview() 
-                                    : _buildHoverTimePreview(),
-                              ),
-                          ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  // 预览生成进度条（只在进度小于100%时显示）
+                  if (_previewProgress < 1.0 && widget.videoPath != null) ...[
+                    const SizedBox(height: 1),
+                    Container(
+                      height: 1,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(0.5),
+                      ),
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: _previewProgress,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.orange,
+                            borderRadius: BorderRadius.circular(0.5),
+                          ),
                         ),
                       ),
                     ),
-                  );
-                },
+                  ],
+                ],
               ),
             ),
             const SizedBox(width: 8),
@@ -471,7 +531,30 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
           else
             const SizedBox(
               height: 56,
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.image_not_supported, color: Colors.white54, size: 24),
+                    SizedBox(height: 4),
+                    Text(
+                      'No Preview',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 10,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Hover to generate',
+                      style: TextStyle(
+                        color: Colors.white38,
+                        fontSize: 8,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           const SizedBox(height: 4),
           Text(

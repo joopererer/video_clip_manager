@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
+import 'package:path/path.dart' as path;
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:path/path.dart' as p;
 import 'package:cross_file/cross_file.dart';
-import 'package:media_kit_video/media_kit_video.dart'; // Import Video
+import 'package:media_kit_video/media_kit_video.dart';
 
 import '../data/app_state.dart';
 import '../data/models.dart';
 import '../utils/tag_utils.dart';
-import 'tabs/clips_tab.dart';
+import '../services/preview_service.dart'; // 添加预览服务导入
+import '../services/thumbnail_service.dart'; // 添加缩略图服务导入
 import 'tabs/videos_tab.dart';
+import 'tabs/clips_tab.dart';
 import 'tabs/playlists_tab.dart';
-import '../services/thumbnail_service.dart'; // Import ThumbnailService
+import 'player/clip_playback_screen.dart';
+import 'player/clip_editor_screen.dart';
+import 'player/playlist_playback_screen.dart';
+import '../widgets/video_import_dialog.dart';
+import '../widgets/playlist_import_export_dialog.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -37,10 +44,46 @@ class _MainScreenState extends State<MainScreen>
     _searchController.addListener(
       () => setState(() => _searchQuery = _searchController.text),
     );
+    _startGlobalPreGeneration();
   }
-
+  
+  /// 启动全局预览预生成
+  Future<void> _startGlobalPreGeneration() async {
+    print('MainScreen: _startGlobalPreGeneration called');
+    
+    // 延迟启动，避免与界面初始化冲突
+    await Future.delayed(Duration(seconds: 3));
+    
+    if (!mounted) {
+      print('MainScreen: Widget not mounted, aborting global pre-generation');
+      return;
+    }
+    
+    final appState = context.read<AppState>();
+    final videoPaths = appState.originalVideos.map((v) => v.path).toList();
+    
+    print('MainScreen: Found ${videoPaths.length} videos in appState');
+    print('MainScreen: Video paths: ${videoPaths.map((p) => p.split('/').last).join(', ')}');
+    
+    if (videoPaths.isNotEmpty) {
+      print('MainScreen: Loading existing cache first...');
+      
+      // 首先加载已有的缓存文件到内存
+      await PreviewService().loadExistingCache();
+      
+      print('MainScreen: Starting global pre-generation for ${videoPaths.length} videos');
+      
+      // 在后台启动全局预生成
+      PreviewService().startGlobalPreGeneration(videoPaths);
+    } else {
+      print('MainScreen: No videos found, skipping global pre-generation');
+    }
+  }
+  
   @override
   void dispose() {
+    // 停止全局预生成
+    PreviewService().stopGlobalPreGeneration();
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -71,7 +114,7 @@ class _MainScreenState extends State<MainScreen>
   }
 
   Future<void> _addVideoFromPath(String videoPath, AppState appState) async {
-    final videoName = p.basename(videoPath);
+    final videoName = path.basename(videoPath);
     final videoId = 'vid_${videoPath.hashCode}';
 
     if (appState.originalVideos.any((v) => v.path == videoPath)) {
@@ -644,25 +687,17 @@ class _MainScreenState extends State<MainScreen>
               child: Video(controller: thumbnailService.videoController),
             ),
           ),
-          // 暂时注释掉预览Video widget，避免布局问题
           // This is the global, 1x1 pixel "drawing board" for preview screenshots
-          // Consumer<PreviewManager>(
-          //   builder: (context, previewManager, child) {
-          //     if (previewManager.videoController == null) {
-          //       return const SizedBox.shrink();
-          //     }
-          //     return Positioned(
-          //       left: -2, // Use -2 to ensure it's fully off-screen and separate from thumbnail widget
-          //       top: -2,
-          //       width: 1,
-          //       height: 1,
-          //       child: Opacity(
-          //         opacity: 0.0, // Fully transparent
-          //         child: Video(controller: previewManager.videoController!),
-          //       ),
-          //     );
-          //   },
-          // ),
+          Positioned(
+            left: -2, // Use -2 to ensure it's fully off-screen and separate from thumbnail widget
+            top: -2,
+            width: 1,
+            height: 1,
+            child: Opacity(
+              opacity: 0.0, // Fully transparent
+              child: Video(controller: PreviewService().videoController),
+            ),
+          ),
         ],
       ),
     );
