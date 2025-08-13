@@ -535,15 +535,25 @@ class _ClipsTabState extends State<ClipsTab> {
     final appState = context.read<AppState>();
     showDialog(
       context: context,
+      barrierDismissible: false, // 防止误关闭
       builder: (context) => Dialog(
-        child: ClipPlaybackScreen(
-          clip: clip,
-          allClips: appState.clips.toList(),
-          searchQuery: widget.searchQuery,
-          selectedTags: widget.selectedTags,
-          selectedRating: widget.selectedRating,
-          selectedFavorite: widget.selectedFavorite,
-          currentSortOption: _currentSortOption,
+        insetPadding: const EdgeInsets.all(16.0), // 设置边距
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 1200, // 最大宽度
+            maxHeight: 800, // 最大高度
+            minWidth: 800,  // 最小宽度
+            minHeight: 600, // 最小高度
+          ),
+          child: ClipPlaybackScreen(
+            clip: clip,
+            allClips: appState.clips.toList(),
+            searchQuery: widget.searchQuery,
+            selectedTags: widget.selectedTags,
+            selectedRating: widget.selectedRating,
+            selectedFavorite: widget.selectedFavorite,
+            currentSortOption: _currentSortOption,
+          ),
         ),
       ),
     );

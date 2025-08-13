@@ -644,6 +644,25 @@ class _MainScreenState extends State<MainScreen>
               child: Video(controller: thumbnailService.videoController),
             ),
           ),
+          // 暂时注释掉预览Video widget，避免布局问题
+          // This is the global, 1x1 pixel "drawing board" for preview screenshots
+          // Consumer<PreviewManager>(
+          //   builder: (context, previewManager, child) {
+          //     if (previewManager.videoController == null) {
+          //       return const SizedBox.shrink();
+          //     }
+          //     return Positioned(
+          //       left: -2, // Use -2 to ensure it's fully off-screen and separate from thumbnail widget
+          //       top: -2,
+          //       width: 1,
+          //       height: 1,
+          //       child: Opacity(
+          //         opacity: 0.0, // Fully transparent
+          //         child: Video(controller: previewManager.videoController!),
+          //       ),
+          //     );
+          //   },
+          // ),
         ],
       ),
     );

@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
@@ -10,7 +9,6 @@ String formatDuration(Duration d) {
   return '${parts[0]}:${parts[1]}:${parts[2]}';
 }
 
-
 class CustomProgressBar extends StatefulWidget {
   final Player player;
   final Duration startTime;
@@ -18,6 +16,8 @@ class CustomProgressBar extends StatefulWidget {
   final Function(Duration) onSetStart;
   final Function(Duration) onSetEnd;
   final bool showThumbnailPreview;
+  final bool isPlaybackMode; // 新增：是否为播放模式
+  final bool showClipRelativeProgress; // 新增：是否显示clip相对进度
 
   const CustomProgressBar({
     super.key,
@@ -27,6 +27,8 @@ class CustomProgressBar extends StatefulWidget {
     required this.onSetStart,
     required this.onSetEnd,
     this.showThumbnailPreview = false,
+    this.isPlaybackMode = false, // 默认为编辑模式
+    this.showClipRelativeProgress = false, // 默认为显示完整视频进度
   });
 
   @override
@@ -34,17 +36,31 @@ class CustomProgressBar extends StatefulWidget {
 }
 
 class _CustomProgressBarState extends State<CustomProgressBar> {
+  // --- État pour la prévisualisation ---
   bool _isHovering = false;
   double? _hoverDx;
   Duration? _hoverTime;
   Uint8List? _thumbnailData;
   Future<void>? _pendingPreview;
+
+  // ✨ --- État pour gérer la restauration de la position ---
+  /// Mémorise la position de la tête de lecture au début du survol.
   Duration? _positionBeforeHover;
+
+  /// Un drapeau pour savoir si un clic a eu lieu pendant le survol.
   bool _clickPerformed = false;
+
+  // --- Fonctions utilitaires ---
 
   Duration _getTimeFromDx(double dx, double maxWidth, Duration totalDuration) {
     final double progress = (dx / maxWidth).clamp(0.0, 1.0);
     return totalDuration * progress;
+  }
+
+  Duration _clampDuration(Duration duration, Duration min, Duration max) {
+    if (duration < min) return min;
+    if (duration > max) return max;
+    return duration;
   }
 
   void _updatePreview(Duration time) {
@@ -62,7 +78,13 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     });
   }
 
-  void _handleHover(PointerHoverEvent event, BoxConstraints constraints, Duration totalDuration) {
+  // --- Gestion des événements souris ---
+
+  void _handleHover(
+    PointerHoverEvent event,
+    BoxConstraints constraints,
+    Duration totalDuration,
+  ) {
     final dx = event.localPosition.dx;
     final hoverTime = _getTimeFromDx(dx, constraints.maxWidth, totalDuration);
 
@@ -72,9 +94,11 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       if (widget.showThumbnailPreview) _thumbnailData = null;
     });
 
-    if (widget.showThumbnailPreview) {
+    // 只在编辑模式下才进行预览seek，播放模式下只显示悬停位置
+    if (widget.showThumbnailPreview && !widget.isPlaybackMode) {
       _updatePreview(hoverTime);
-    } else {
+    } else if (!widget.isPlaybackMode) {
+      // 只在非播放模式下才进行seek预览
       widget.player.seek(hoverTime);
     }
   }
@@ -82,6 +106,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   void _handleEnter(PointerEnterEvent event) {
     setState(() {
       _isHovering = true;
+      // ✨ On mémorise la position actuelle et on réinitialise le drapeau de clic.
       _positionBeforeHover = widget.player.state.position;
       _clickPerformed = false;
     });
@@ -91,23 +116,58 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     setState(() {
       _isHovering = false;
     });
-    if (!_clickPerformed && _positionBeforeHover != null) {
+    // 只在编辑模式下恢复位置，播放模式下不恢复
+    if (!widget.isPlaybackMode &&
+        !_clickPerformed &&
+        _positionBeforeHover != null) {
       widget.player.seek(_positionBeforeHover!);
     }
   }
 
-  void _handlePrimaryTap(TapUpDetails details, double maxWidth, Duration totalDuration) {
-    final tappedTime = _getTimeFromDx(details.localPosition.dx, maxWidth, totalDuration);
-    widget.onSetStart(tappedTime);
-    widget.player.seek(tappedTime);
-    _clickPerformed = true;
+  void _handlePrimaryTap(
+    TapUpDetails details,
+    double maxWidth,
+    Duration totalDuration,
+  ) {
+    final tappedTime = _getTimeFromDx(
+      details.localPosition.dx,
+      maxWidth,
+      totalDuration,
+    );
+
+    if (widget.isPlaybackMode) {
+      // 播放模式：只跳转到点击位置，不修改clip
+      widget.player.seek(tappedTime);
+      _clickPerformed = true;
+    } else {
+      // 编辑模式：设置开始时间
+      widget.onSetStart(tappedTime);
+      widget.player.seek(tappedTime);
+      _clickPerformed = true;
+    }
   }
 
-  void _handleSecondaryTap(TapUpDetails details, double maxWidth, Duration totalDuration) {
-    final tappedTime = _getTimeFromDx(details.localPosition.dx, maxWidth, totalDuration);
-    widget.onSetEnd(tappedTime);
-    widget.player.seek(tappedTime);
-    _clickPerformed = true;
+  void _handleSecondaryTap(
+    TapUpDetails details,
+    double maxWidth,
+    Duration totalDuration,
+  ) {
+    final tappedTime = _getTimeFromDx(
+      details.localPosition.dx,
+      maxWidth,
+      totalDuration,
+    );
+
+    if (widget.isPlaybackMode) {
+      // 播放模式：只跳转到点击位置，不修改clip
+      widget.player.seek(tappedTime);
+      _clickPerformed = true;
+    } else {
+      // 编辑模式：设置结束时间
+      widget.onSetEnd(tappedTime);
+      widget.player.seek(tappedTime);
+      _clickPerformed = true;
+    }
   }
 
   @override
@@ -121,14 +181,29 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
           return const SizedBox(height: 48);
         }
 
+        // 计算clip相对进度
+        final clipDuration = widget.endTime - widget.startTime;
+        final clipProgress = clipDuration > Duration.zero
+            ? clipDuration
+            : Duration.zero;
+
         return Row(
           children: [
             StreamBuilder<Duration>(
               stream: widget.player.stream.position,
               initialData: widget.player.state.position,
               builder: (context, snapshot) {
+                final currentPosition = snapshot.data ?? Duration.zero;
+                final displayPosition = widget.showClipRelativeProgress
+                    ? _clampDuration(
+                        currentPosition - widget.startTime,
+                        Duration.zero,
+                        clipProgress,
+                      )
+                    : currentPosition;
+
                 return Text(
-                  formatDuration(snapshot.data ?? Duration.zero),
+                  formatDuration(displayPosition),
                   style: const TextStyle(fontFamily: 'monospace'),
                 );
               },
@@ -140,16 +215,28 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
                   return MouseRegion(
                     onEnter: _handleEnter,
                     onExit: _handleExit,
-                    onHover: (event) => _handleHover(event, constraints, totalDuration),
+                    onHover: (event) =>
+                        _handleHover(event, constraints, totalDuration),
                     child: GestureDetector(
-                      onTapUp: (details) => _handlePrimaryTap(details, constraints.maxWidth, totalDuration),
-                      onSecondaryTapUp: (details) => _handleSecondaryTap(details, constraints.maxWidth, totalDuration),
+                      onTapUp: (details) => _handlePrimaryTap(
+                        details,
+                        constraints.maxWidth,
+                        totalDuration,
+                      ),
+                      onSecondaryTapUp: (details) => _handleSecondaryTap(
+                        details,
+                        constraints.maxWidth,
+                        totalDuration,
+                      ),
                       child: Tooltip(
-                        message: 'Left Click: Set Start / Right Click: Set End',
+                        message: widget.isPlaybackMode
+                            ? 'Click to seek to position'
+                            : 'Clic gauche: Définir Début / Clic droit: Définir Fin',
                         child: Stack(
                           clipBehavior: Clip.none,
                           alignment: Alignment.centerLeft,
                           children: [
+                            // 背景条
                             Container(
                               height: 8,
                               width: constraints.maxWidth,
@@ -158,31 +245,81 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                             ),
-                            _buildPositionedBar(
-                              constraints.maxWidth,
-                              totalDuration,
-                              widget.startTime,
-                              widget.endTime,
-                              Theme.of(context).primaryColor.withOpacity(0.4),
-                            ),
+                            // Clip范围高亮（只在非相对模式下显示）
+                            if (!widget.showClipRelativeProgress)
+                              _buildPositionedBar(
+                                constraints.maxWidth,
+                                totalDuration,
+                                widget.startTime,
+                                widget.endTime,
+                                Theme.of(
+                                  context,
+                                ).primaryColor.withValues(alpha: 0.4),
+                              ),
+                            // 播放进度条
                             StreamBuilder<Duration>(
                               stream: widget.player.stream.position,
                               initialData: widget.player.state.position,
                               builder: (context, positionSnapshot) {
-                                return _buildPositionedBar(
-                                  constraints.maxWidth,
-                                  totalDuration,
-                                  Duration.zero,
-                                  positionSnapshot.data ?? Duration.zero,
-                                  Theme.of(context).primaryColor,
-                                );
+                                final position =
+                                    positionSnapshot.data ?? Duration.zero;
+                                if (widget.showClipRelativeProgress) {
+                                  // 显示clip相对进度
+                                  final relativePosition = _clampDuration(
+                                    position - widget.startTime,
+                                    Duration.zero,
+                                    clipProgress,
+                                  );
+                                  final progress = clipProgress > Duration.zero
+                                      ? (relativePosition.inMilliseconds /
+                                                clipProgress.inMilliseconds)
+                                            .clamp(0.0, 1.0)
+                                      : 0.0;
+                                  return Positioned(
+                                    left: 0,
+                                    child: Container(
+                                      height: 8,
+                                      width: (constraints.maxWidth * progress)
+                                          .clamp(0, constraints.maxWidth),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).primaryColor,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                  );
+                                } else {
+                                  // 显示完整视频进度
+                                  return _buildPositionedBar(
+                                    constraints.maxWidth,
+                                    totalDuration,
+                                    Duration.zero,
+                                    position,
+                                    Theme.of(context).primaryColor,
+                                  );
+                                }
                               },
                             ),
-                            _buildMarker(constraints.maxWidth, totalDuration, widget.startTime, Colors.blue),
-                            _buildMarker(constraints.maxWidth, totalDuration, widget.endTime, Colors.red),
+                            // 标记（只在非相对模式下显示）
+                            if (!widget.showClipRelativeProgress) ...[
+                              _buildMarker(
+                                constraints.maxWidth,
+                                totalDuration,
+                                widget.startTime,
+                                Colors.blue,
+                              ),
+                              _buildMarker(
+                                constraints.maxWidth,
+                                totalDuration,
+                                widget.endTime,
+                                Colors.red,
+                              ),
+                            ],
+                            // 悬停预览
                             if (_isHovering && _hoverDx != null)
                               Positioned(
-                                left: _hoverDx! - (widget.showThumbnailPreview ? 50 : 28),
+                                left:
+                                    _hoverDx! -
+                                    (widget.showThumbnailPreview ? 50 : 28),
                                 bottom: 20,
                                 child: widget.showThumbnailPreview
                                     ? _buildThumbnailPreview()
@@ -198,7 +335,9 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
             ),
             const SizedBox(width: 8),
             Text(
-              formatDuration(totalDuration),
+              widget.showClipRelativeProgress
+                  ? formatDuration(clipProgress)
+                  : formatDuration(totalDuration),
               style: const TextStyle(fontFamily: 'monospace'),
             ),
           ],
@@ -207,7 +346,15 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     );
   }
 
-  Widget _buildPositionedBar(double maxWidth, Duration total, Duration start, Duration end, Color color) {
+  // --- Widgets de construction (inchangés) ---
+
+  Widget _buildPositionedBar(
+    double maxWidth,
+    Duration total,
+    Duration start,
+    Duration end,
+    Color color,
+  ) {
     final startDx = (start.inMilliseconds / total.inMilliseconds) * maxWidth;
     final endDx = (end.inMilliseconds / total.inMilliseconds) * maxWidth;
     return Positioned(
@@ -223,7 +370,12 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     );
   }
 
-  Widget _buildMarker(double maxWidth, Duration total, Duration time, Color color) {
+  Widget _buildMarker(
+    double maxWidth,
+    Duration total,
+    Duration time,
+    Color color,
+  ) {
     final dx = (time.inMilliseconds / total.inMilliseconds) * maxWidth;
     return Positioned(
       left: dx.clamp(0.0, maxWidth) - 8,
@@ -244,7 +396,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       width: 100,
       padding: const EdgeInsets.all(4.0),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.8),
+        color: Colors.black.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.white54, width: 1),
       ),
@@ -276,7 +428,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.8),
+        color: Colors.black.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(

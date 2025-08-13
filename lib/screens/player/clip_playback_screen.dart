@@ -590,8 +590,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                             // 播放模式下不需要修改clip，这里只是为了满足接口要求
                           },
                           showThumbnailPreview: true,
-                          // isPlaybackMode: true, // 移除这个参数，因为 CustomProgressBar 不支持
-                          // showClipRelativeProgress: _showClipRelativeProgress, // 移除这个参数，因为 CustomProgressBar 不支持
+                          isPlaybackMode: true, // 启用播放模式
+                          showClipRelativeProgress: _showClipRelativeProgress, // 使用状态变量
                         ),
                       );
                     },
