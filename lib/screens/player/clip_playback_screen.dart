@@ -49,6 +49,12 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   bool _showHints = false; // 控制提示显示
   bool _showCustomProgressBar = true; // 控制是否显示自定义进度条
   bool _showClipRelativeProgress = true; // 控制是否显示clip相对进度
+  
+  // 新增：播放器状态管理
+  bool _isPlayerReady = false;
+  bool _isInitializing = false;
+  Timer? _recoveryTimer;
+  bool _disposed = false;
 
   @override
   void initState() {
@@ -60,10 +66,19 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   }
 
   Future<void> _initializePlayer() async {
-    // 确保播放器已经准备好
-    await player.open(Media(_currentClip.videoPath), play: false);
+    if (_isInitializing || _disposed) return;
     
-    if (mounted) {
+    setState(() {
+      _isInitializing = true;
+      _isPlayerReady = false;
+    });
+
+    try {
+      // 确保播放器已经准备好
+      await player.open(Media(_currentClip.videoPath), play: false);
+      
+      if (!mounted || _disposed) return;
+      
       // 等待一下确保媒体加载完成
       await Future.delayed(Duration(milliseconds: 200));
       
@@ -76,70 +91,131 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       // 开始播放
       await player.play();
       
-      setState(() {
-        _isPlaying = true;
-      });
-    }
+      if (mounted && !_disposed) {
+        setState(() {
+          _isPlaying = true;
+          _isPlayerReady = true;
+          _isInitializing = false;
+        });
+      }
 
-    // 设置位置监听器
-    _positionSubscription = player.stream.position.listen((position) {
-      if (mounted && _currentClip.endTime > Duration.zero &&
-          position >= _currentClip.endTime) {
-        player.pause();
+      // 设置位置监听器
+      _positionSubscription?.cancel();
+      _positionSubscription = player.stream.position.listen((position) {
+        if (mounted && !_disposed && _currentClip.endTime > Duration.zero &&
+            position >= _currentClip.endTime) {
+          _safePause();
+        }
+      });
+
+      // 监听播放状态
+      _playingSubscription?.cancel();
+      _playingSubscription = player.stream.playing.listen((playing) {
+        if (mounted && !_disposed) {
+          setState(() {
+            _isPlaying = playing;
+          });
+        }
+      });
+
+    } catch (e) {
+      if (mounted && !_disposed) {
+        setState(() {
+          _isInitializing = false;
+        });
+        _scheduleRecovery();
+      }
+    }
+  }
+
+  void _scheduleRecovery() {
+    _recoveryTimer?.cancel();
+    _recoveryTimer = Timer(Duration(seconds: 2), () {
+      if (mounted && !_disposed && !_isPlayerReady) {
+        _initializePlayer();
+      }
+    });
+  }
+
+  Future<void> _safePause() async {
+    try {
+      await player.pause();
+      if (mounted && !_disposed) {
         setState(() {
           _isPlaying = false;
         });
       }
-    });
+    } catch (e) {
+      // 忽略暂停错误
+    }
+  }
 
-    // 监听播放状态
-    _playingSubscription = player.stream.playing.listen((playing) {
-      if (mounted) {
+  Future<void> _safePlay() async {
+    try {
+      await player.play();
+      if (mounted && !_disposed) {
         setState(() {
-          _isPlaying = playing;
+          _isPlaying = true;
         });
       }
-    });
+    } catch (e) {
+      _scheduleRecovery();
+    }
+  }
+
+  Future<void> _safeSeek(Duration position) async {
+    try {
+      await player.seek(position);
+    } catch (e) {
+      _scheduleRecovery();
+    }
   }
 
   @override
   void dispose() {
+    _disposed = true;
+    _recoveryTimer?.cancel();
     _positionSubscription?.cancel();
     _playingSubscription?.cancel();
-    player.dispose();
+    try {
+      player.pause();
+      player.dispose();
+    } catch (e) {
+      // 忽略dispose错误
+    }
     super.dispose();
   }
 
   void _replay() async {
-    await player.seek(_currentClip.startTime);
-    await player.play();
-    setState(() {
-      _isPlaying = true;
-    });
+    if (!_isPlayerReady) return;
+    await _safeSeek(_currentClip.startTime);
+    await _safePlay();
   }
 
   void _togglePlayPause() async {
+    if (!_isPlayerReady) return;
     if (_isPlaying) {
-      await player.pause();
+      await _safePause();
     } else {
-      await player.play();
+      await _safePlay();
     }
   }
 
   // 修改导航逻辑，在同一窗口中切换clip
   void _navigateToClip(VideoClip? targetClip) async {
-    if (targetClip != null) {
+    if (targetClip != null && !_disposed) {
       // 取消之前的订阅
       await _positionSubscription?.cancel();
       await _playingSubscription?.cancel();
       
       // 暂停当前播放
-      await player.pause();
+      await _safePause();
       
       // 更新当前clip
       setState(() {
         _currentClip = targetClip;
         _isPlaying = false;
+        _isPlayerReady = false;
       });
       
       // 重新初始化播放器

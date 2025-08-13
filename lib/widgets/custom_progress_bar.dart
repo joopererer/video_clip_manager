@@ -43,12 +43,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   Uint8List? _thumbnailData;
   Future<void>? _pendingPreview;
 
-  // ✨ --- État pour gérer la restauration de la position ---
-  /// Mémorise la position de la tête de lecture au début du survol.
-  Duration? _positionBeforeHover;
 
-  /// Un drapeau pour savoir si un clic a eu lieu pendant le survol.
-  bool _clickPerformed = false;
 
   // --- Fonctions utilitaires ---
 
@@ -86,87 +81,79 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     Duration totalDuration,
   ) {
     final dx = event.localPosition.dx;
-    final hoverTime = _getTimeFromDx(dx, constraints.maxWidth, totalDuration);
-
-    setState(() {
-      _hoverDx = dx;
-      _hoverTime = hoverTime;
-      if (widget.showThumbnailPreview) _thumbnailData = null;
-    });
+    
+    if (widget.showClipRelativeProgress && widget.isPlaybackMode) {
+      // 相对进度模式：基于clip时长计算悬停时间
+      final clipDuration = widget.endTime - widget.startTime;
+      final progress = (dx / constraints.maxWidth).clamp(0.0, 1.0);
+      final relativeTime = clipDuration * progress;
+      final hoverTime = widget.startTime + relativeTime;
+      
+      setState(() {
+        _hoverDx = dx;
+        _hoverTime = hoverTime;
+        if (widget.showThumbnailPreview) _thumbnailData = null;
+      });
+    } else {
+      // 完整进度模式或编辑模式：基于完整视频时长计算
+      final hoverTime = _getTimeFromDx(dx, constraints.maxWidth, totalDuration);
+      
+      setState(() {
+        _hoverDx = dx;
+        _hoverTime = hoverTime;
+        if (widget.showThumbnailPreview) _thumbnailData = null;
+      });
+    }
 
     // 只在编辑模式下才进行预览seek，播放模式下只显示悬停位置
     if (widget.showThumbnailPreview && !widget.isPlaybackMode) {
-      _updatePreview(hoverTime);
-    } else if (!widget.isPlaybackMode) {
-      // 只在非播放模式下才进行seek预览
-      widget.player.seek(hoverTime);
+      _updatePreview(_hoverTime!);
     }
   }
 
   void _handleEnter(PointerEnterEvent event) {
     setState(() {
       _isHovering = true;
-      // ✨ On mémorise la position actuelle et on réinitialise le drapeau de clic.
-      _positionBeforeHover = widget.player.state.position;
-      _clickPerformed = false;
     });
   }
 
   void _handleExit(PointerExitEvent event) {
     setState(() {
       _isHovering = false;
+      _hoverDx = null;
+      _hoverTime = null;
+      _thumbnailData = null;
     });
-    // 只在编辑模式下恢复位置，播放模式下不恢复
-    if (!widget.isPlaybackMode &&
-        !_clickPerformed &&
-        _positionBeforeHover != null) {
-      widget.player.seek(_positionBeforeHover!);
-    }
   }
 
-  void _handlePrimaryTap(
-    TapUpDetails details,
-    double maxWidth,
-    Duration totalDuration,
-  ) {
-    final tappedTime = _getTimeFromDx(
-      details.localPosition.dx,
-      maxWidth,
-      totalDuration,
-    );
-
+  void _handlePrimaryTap(TapUpDetails details, double maxWidth, Duration totalDuration) {
     if (widget.isPlaybackMode) {
-      // 播放模式：只跳转到点击位置，不修改clip
-      widget.player.seek(tappedTime);
-      _clickPerformed = true;
+      // 播放模式：seek到点击位置
+      if (widget.showClipRelativeProgress) {
+        // 相对进度模式：基于clip时长计算点击位置
+        final clipDuration = widget.endTime - widget.startTime;
+        final dx = details.localPosition.dx;
+        final progress = (dx / maxWidth).clamp(0.0, 1.0);
+        final relativeTime = clipDuration * progress;
+        final absoluteTime = widget.startTime + relativeTime;
+        widget.player.seek(absoluteTime);
+      } else {
+        // 完整进度模式：基于完整视频时长计算点击位置
+        final tapTime = _getTimeFromDx(details.localPosition.dx, maxWidth, totalDuration);
+        widget.player.seek(tapTime);
+      }
     } else {
       // 编辑模式：设置开始时间
-      widget.onSetStart(tappedTime);
-      widget.player.seek(tappedTime);
-      _clickPerformed = true;
+      final tapTime = _getTimeFromDx(details.localPosition.dx, maxWidth, totalDuration);
+      widget.onSetStart(tapTime);
     }
   }
 
-  void _handleSecondaryTap(
-    TapUpDetails details,
-    double maxWidth,
-    Duration totalDuration,
-  ) {
-    final tappedTime = _getTimeFromDx(
-      details.localPosition.dx,
-      maxWidth,
-      totalDuration,
-    );
-
-    if (widget.isPlaybackMode) {
-      // 播放模式：只跳转到点击位置，不修改clip
-      widget.player.seek(tappedTime);
-      _clickPerformed = true;
-    } else {
-      // 编辑模式：设置结束时间
-      widget.onSetEnd(tappedTime);
-      widget.player.seek(tappedTime);
-      _clickPerformed = true;
+  void _handleSecondaryTap(TapUpDetails details, double maxWidth, Duration totalDuration) {
+    if (!widget.isPlaybackMode) {
+      // 只在编辑模式下处理右键
+      final tapTime = _getTimeFromDx(details.localPosition.dx, maxWidth, totalDuration);
+      widget.onSetEnd(tapTime);
     }
   }
 
