@@ -428,7 +428,11 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              SizedBox(width: 60, height: 40, child: ClipThumbnail(clip: clip)),
+              SizedBox(
+                width: 60,
+                height: 40,
+                child: ClipThumbnail(clip: clip),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

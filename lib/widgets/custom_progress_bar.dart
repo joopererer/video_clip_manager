@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
@@ -50,6 +51,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   double _previewProgress = 0.0;
   String _previewStatus = '未生成';
   bool _isLoadingPreview = false;
+  Timer? _progressTimer;
 
   // --- Fonctions utilitaires ---
 
@@ -224,14 +226,22 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   void initState() {
     super.initState();
     _updatePreviewProgress();
+    
+    // 添加定时器，每2秒刷新一次进度
+    _progressTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (mounted && _previewProgress < 1.0) {
+        _updatePreviewProgress();
+      } else if (_previewProgress >= 1.0) {
+        // 如果进度达到100%，停止定时器
+        timer.cancel();
+      }
+    });
   }
 
   @override
-  void didUpdateWidget(CustomProgressBar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.videoPath != widget.videoPath) {
-      _updatePreviewProgress();
-    }
+  void dispose() {
+    _progressTimer?.cancel();
+    super.dispose();
   }
 
   /// 更新预览生成进度

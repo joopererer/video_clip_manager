@@ -708,7 +708,7 @@ class _ClipListItemState extends State<ClipListItem> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(6),
-                      child: ClipThumbnail(clip: widget.clip, width: 80, height: 56),
+                      child: ClipThumbnail(clip: widget.clip),
                     ),
                   ),
                 ),

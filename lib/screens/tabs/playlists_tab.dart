@@ -838,7 +838,9 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
               topLeft: Radius.circular(8),
               topRight: Radius.circular(8),
             ),
-            child: ClipThumbnail(clip: itemsWithClips.first.clip),
+            child: ClipThumbnail(
+              clip: itemsWithClips.first.clip,
+            ),
           ),
 
         // 2. 堆叠的缩略图 (从第二个 Clip 开始)
@@ -923,7 +925,9 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
         ),
       );
     }
-    return ClipThumbnail(clip: itemsWithClips.first.clip);
+    return ClipThumbnail(
+      clip: itemsWithClips.first.clip,
+    );
   }
 
   Widget _buildActionButton({
