@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
+import '../services/preview_service.dart';
 
 // Helper function
 String formatDuration(Duration d) {
@@ -18,6 +19,7 @@ class CustomProgressBar extends StatefulWidget {
   final bool showThumbnailPreview;
   final bool isPlaybackMode; // 新增：是否为播放模式
   final bool showClipRelativeProgress; // 新增：是否显示clip相对进度
+  final String? videoPath; // 新增：视频文件路径，用于关键帧预览
 
   const CustomProgressBar({
     super.key,
@@ -29,6 +31,7 @@ class CustomProgressBar extends StatefulWidget {
     this.showThumbnailPreview = false,
     this.isPlaybackMode = false, // 默认为编辑模式
     this.showClipRelativeProgress = false, // 默认为显示完整视频进度
+    this.videoPath, // 新增
   });
 
   @override
@@ -59,16 +62,31 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   }
 
   void _updatePreview(Duration time) {
+    // 临时禁用预览功能，避免播放卡顿
+    print('CustomProgressBar: Preview temporarily disabled to avoid playback interference');
+    return;
+    
     _pendingPreview?.ignore();
     _pendingPreview = Future(() async {
-      await widget.player.seek(time);
-      await Future.delayed(const Duration(milliseconds: 50));
-      if (!_isHovering || !mounted) return;
-      final data = await widget.player.screenshot();
-      if (mounted && _isHovering) {
-        setState(() {
-          _thumbnailData = data;
-        });
+      try {
+        print('CustomProgressBar: Updating preview to time: $time using keyframe system');
+        
+        // 使用关键帧预览系统
+        final data = PreviewService().getNearestKeyframe(
+          widget.videoPath ?? '',
+          time,
+        );
+        
+        if (mounted && _isHovering && data != null) {
+          setState(() {
+            _thumbnailData = data;
+          });
+          print('CustomProgressBar: Keyframe preview updated successfully');
+        } else if (data == null) {
+          print('CustomProgressBar: No keyframe preview available');
+        }
+      } catch (e) {
+        print('CustomProgressBar: Preview update failed: $e');
       }
     });
   }
@@ -105,8 +123,8 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       });
     }
 
-    // 只在编辑模式下才进行预览seek，播放模式下只显示悬停位置
-    if (widget.showThumbnailPreview && !widget.isPlaybackMode) {
+    // 重新启用预览图生成，使用PreviewService
+    if (widget.showThumbnailPreview) {
       _updatePreview(_hoverTime!);
     }
   }
@@ -127,6 +145,8 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   }
 
   void _handlePrimaryTap(TapUpDetails details, double maxWidth, Duration totalDuration) {
+    print('Tap detected at: ${details.localPosition.dx} / $maxWidth'); // 调试信息
+    
     if (widget.isPlaybackMode) {
       // 播放模式：seek到点击位置
       if (widget.showClipRelativeProgress) {
@@ -136,16 +156,48 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
         final progress = (dx / maxWidth).clamp(0.0, 1.0);
         final relativeTime = clipDuration * progress;
         final absoluteTime = widget.startTime + relativeTime;
-        widget.player.seek(absoluteTime);
+        print('Relative mode: progress=$progress, relativeTime=$relativeTime, absoluteTime=$absoluteTime'); // 调试信息
+        
+        // 使用安全的seek方法
+        _safeSeek(absoluteTime);
       } else {
         // 完整进度模式：基于完整视频时长计算点击位置
         final tapTime = _getTimeFromDx(details.localPosition.dx, maxWidth, totalDuration);
-        widget.player.seek(tapTime);
+        print('Full mode: tapTime=$tapTime'); // 调试信息
+        
+        // 使用安全的seek方法
+        _safeSeek(tapTime);
       }
     } else {
       // 编辑模式：设置开始时间
       final tapTime = _getTimeFromDx(details.localPosition.dx, maxWidth, totalDuration);
+      print('Edit mode: tapTime=$tapTime'); // 调试信息
       widget.onSetStart(tapTime);
+    }
+  }
+
+  // 新增：安全的seek方法
+  Future<void> _safeSeek(Duration position) async {
+    try {
+      print('CustomProgressBar: Attempting to seek to $position'); // 调试信息
+      print('CustomProgressBar: Player state - duration: ${widget.player.state.duration}, position: ${widget.player.state.position}, playing: ${widget.player.state.playing}'); // 调试信息
+      
+      // 直接执行seek操作，不做额外的状态检查
+      print('CustomProgressBar: Executing seek to $position...'); // 调试信息
+      await widget.player.seek(position);
+      
+      // 验证seek是否成功
+      await Future.delayed(Duration(milliseconds: 100));
+      final newPosition = widget.player.state.position;
+      print('CustomProgressBar: Seek completed. New position: $newPosition, Target: $position'); // 调试信息
+      
+      if ((newPosition - position).abs() < Duration(seconds: 1)) {
+        print('CustomProgressBar: Seek successful to: $position'); // 调试信息
+      } else {
+        print('CustomProgressBar: Seek may have failed. Expected: $position, Actual: $newPosition'); // 调试信息
+      }
+    } catch (e) {
+      print('CustomProgressBar: Seek failed: $e'); // 调试信息
     }
   }
 
@@ -156,6 +208,18 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       widget.onSetEnd(tapTime);
     }
   }
+
+  @override
+  void initState() {
+    super.initState();
+    // 测试ffmpeg是否可用
+    // _testFFmpeg(); // Removed as per edit hint
+  }
+
+  // void _testFFmpeg() async { // Removed as per edit hint
+  //   final isAvailable = await PreviewService().testFFmpeg(); // Removed as per edit hint
+  //   print('CustomProgressBar: FFmpeg available: $isAvailable'); // Removed as per edit hint
+  // } // Removed as per edit hint
 
   @override
   Widget build(BuildContext context) {
@@ -308,8 +372,8 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
                                     _hoverDx! -
                                     (widget.showThumbnailPreview ? 50 : 28),
                                 bottom: 20,
-                                child: widget.showThumbnailPreview
-                                    ? _buildThumbnailPreview()
+                                child: widget.showThumbnailPreview 
+                                    ? _buildThumbnailPreview() 
                                     : _buildHoverTimePreview(),
                               ),
                           ],
@@ -379,6 +443,18 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   }
 
   Widget _buildThumbnailPreview() {
+    // 在相对进度模式下显示相对时间，否则显示绝对时间
+    Duration displayTime;
+    if (widget.showClipRelativeProgress && widget.isPlaybackMode) {
+      final clipDuration = widget.endTime - widget.startTime;
+      final relativeTime = _hoverTime != null 
+          ? _clampDuration(_hoverTime! - widget.startTime, Duration.zero, clipDuration)
+          : Duration.zero;
+      displayTime = relativeTime;
+    } else {
+      displayTime = _hoverTime ?? Duration.zero;
+    }
+
     return Container(
       width: 100,
       padding: const EdgeInsets.all(4.0),
@@ -399,7 +475,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
             ),
           const SizedBox(height: 4),
           Text(
-            formatDuration(_hoverTime ?? Duration.zero),
+            formatDuration(displayTime),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 12,
@@ -412,6 +488,18 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   }
 
   Widget _buildHoverTimePreview() {
+    // 在相对进度模式下显示相对时间，否则显示绝对时间
+    Duration displayTime;
+    if (widget.showClipRelativeProgress && widget.isPlaybackMode) {
+      final clipDuration = widget.endTime - widget.startTime;
+      final relativeTime = _hoverTime != null 
+          ? _clampDuration(_hoverTime! - widget.startTime, Duration.zero, clipDuration)
+          : Duration.zero;
+      displayTime = relativeTime;
+    } else {
+      displayTime = _hoverTime ?? Duration.zero;
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       decoration: BoxDecoration(
@@ -419,7 +507,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
-        formatDuration(_hoverTime ?? Duration.zero),
+        formatDuration(displayTime),
         style: const TextStyle(
           color: Colors.white,
           fontSize: 12,

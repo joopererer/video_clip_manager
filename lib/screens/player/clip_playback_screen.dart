@@ -13,6 +13,7 @@ import 'clip_editor_screen.dart';
 import '../tabs/clips_tab.dart';
 import '../../utils/tag_utils.dart';
 import '../../widgets/custom_progress_bar.dart'; // 添加自定义进度条导入
+import '../../services/preview_service.dart'; // 添加预览服务导入
 
 
 class ClipPlaybackScreen extends StatefulWidget {
@@ -40,8 +41,16 @@ class ClipPlaybackScreen extends StatefulWidget {
 }
 
 class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
-  late final Player player;
-  late final VideoController controller;
+  // 播放器状态管理
+  late Player mainPlayer;
+  late VideoController mainController;
+  
+  // 播放器状态管理
+  bool _isPlayerReady = false;
+  bool _isInitializing = false;
+  Timer? _recoveryTimer;
+  bool _disposed = false;
+  bool _isSeeking = false; // 新增：seek锁定标志
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<bool>? _playingSubscription;
   bool _isPlaying = false;
@@ -50,23 +59,19 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   bool _showCustomProgressBar = true; // 控制是否显示自定义进度条
   bool _showClipRelativeProgress = true; // 控制是否显示clip相对进度
   
-  // 新增：播放器状态管理
-  bool _isPlayerReady = false;
-  bool _isInitializing = false;
-  Timer? _recoveryTimer;
-  bool _disposed = false;
-
   @override
   void initState() {
     super.initState();
     _currentClip = widget.clip; // 初始化当前clip
-    player = Player();
-    controller = VideoController(player);
-    _initializePlayer();
+    mainPlayer = Player();
+    mainController = VideoController(mainPlayer);
+    _initializePlayers();
   }
 
-  Future<void> _initializePlayer() async {
+  Future<void> _initializePlayers() async {
     if (_isInitializing || _disposed) return;
+    
+    print('Initializing players for clip: ${_currentClip.name}'); // 调试信息
     
     setState(() {
       _isInitializing = true;
@@ -74,22 +79,33 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     });
 
     try {
-      // 确保播放器已经准备好
-      await player.open(Media(_currentClip.videoPath), play: false);
+      // 确保播放器处于干净状态
+      await _resetPlayers();
       
-      if (!mounted || _disposed) return;
+      // 初始化主播放器
+      print('Opening main player with: ${_currentClip.videoPath}'); // 调试信息
+      await mainPlayer.open(Media(_currentClip.videoPath), play: false);
+      
+      if (!mounted || _disposed) {
+        print('Widget disposed during initialization, aborting'); // 调试信息
+        return;
+      }
       
       // 等待一下确保媒体加载完成
-      await Future.delayed(Duration(milliseconds: 200));
+      await Future.delayed(Duration(milliseconds: 300));
       
-      // 跳转到开始时间
-      await player.seek(_currentClip.startTime);
+      // 检查播放器状态
+      if (mainPlayer.state.duration == Duration.zero) {
+        throw Exception('Main player failed to load media');
+      }
       
-      // 再等待一下确保seek完成
-      await Future.delayed(Duration(milliseconds: 50));
+      // 主播放器跳转到开始时间并开始播放
+      print('Seeking main player to: ${_currentClip.startTime}'); // 调试信息
+      await mainPlayer.seek(_currentClip.startTime);
+      await Future.delayed(Duration(milliseconds: 100));
       
-      // 开始播放
-      await player.play();
+      print('Starting main player playback'); // 调试信息
+      await mainPlayer.play();
       
       if (mounted && !_disposed) {
         setState(() {
@@ -97,20 +113,25 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
           _isPlayerReady = true;
           _isInitializing = false;
         });
+        print('Players initialized successfully'); // 调试信息
       }
 
-      // 设置位置监听器
+      // 预生成关键帧预览图
+      // _preGenerateKeyframes(); // 临时禁用，避免初始化延迟
+
+      // 设置主播放器位置监听器
       _positionSubscription?.cancel();
-      _positionSubscription = player.stream.position.listen((position) {
-        if (mounted && !_disposed && _currentClip.endTime > Duration.zero &&
+      _positionSubscription = mainPlayer.stream.position.listen((position) {
+        if (mounted && !_disposed && !_isSeeking && _currentClip.endTime > Duration.zero &&
             position >= _currentClip.endTime) {
+          print('ClipPlaybackScreen: Position reached end time, pausing'); // 调试信息
           _safePause();
         }
       });
 
-      // 监听播放状态
+      // 监听主播放器播放状态
       _playingSubscription?.cancel();
-      _playingSubscription = player.stream.playing.listen((playing) {
+      _playingSubscription = mainPlayer.stream.playing.listen((playing) {
         if (mounted && !_disposed) {
           setState(() {
             _isPlaying = playing;
@@ -119,71 +140,182 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       });
 
     } catch (e) {
+      print('Error during player initialization: $e'); // 调试信息
       if (mounted && !_disposed) {
         setState(() {
           _isInitializing = false;
+          _isPlayerReady = false;
         });
         _scheduleRecovery();
       }
     }
   }
 
+  // 新增：重置播放器状态
+  Future<void> _resetPlayers() async {
+    try {
+      // 如果播放器已经打开，先暂停
+      if (mainPlayer.state.playing) {
+        await mainPlayer.pause();
+      }
+      
+      // 等待一下确保暂停完成
+      await Future.delayed(Duration(milliseconds: 100));
+    } catch (e) {
+      print('Error resetting players: $e'); // 调试信息
+      // 继续执行，不要因为重置失败而阻止初始化
+    }
+  }
+
   void _scheduleRecovery() {
     _recoveryTimer?.cancel();
-    _recoveryTimer = Timer(Duration(seconds: 2), () {
+    _recoveryTimer = Timer(Duration(seconds: 3), () {
       if (mounted && !_disposed && !_isPlayerReady) {
-        _initializePlayer();
+        print('Attempting player recovery...'); // 调试信息
+        _initializePlayers();
       }
     });
   }
 
-  Future<void> _safePause() async {
+  // 新增：预生成关键帧预览图
+  Future<void> _preGenerateKeyframes() async {
+    if (_disposed || !_isPlayerReady) return;
+    
     try {
-      await player.pause();
+      print('ClipPlaybackScreen: Starting keyframe pre-generation');
+      await PreviewService().preGenerateKeyFrames(
+        mainPlayer,
+        _currentClip.videoPath,
+        mainPlayer.state.duration,
+      );
+      print('ClipPlaybackScreen: Keyframe pre-generation completed');
+    } catch (e) {
+      print('ClipPlaybackScreen: Error pre-generating keyframes: $e');
+    }
+  }
+
+  Future<void> _safePause() async {
+    if (!_isPlayerReady || _disposed) return;
+    
+    try {
+      await mainPlayer.pause();
       if (mounted && !_disposed) {
         setState(() {
           _isPlaying = false;
         });
       }
     } catch (e) {
-      // 忽略暂停错误
+      print('Error during pause: $e'); // 调试信息
+      _scheduleRecovery();
     }
   }
 
   Future<void> _safePlay() async {
+    if (!_isPlayerReady || _disposed) return;
+    
     try {
-      await player.play();
+      await mainPlayer.play();
       if (mounted && !_disposed) {
         setState(() {
           _isPlaying = true;
         });
       }
     } catch (e) {
+      print('Error during play: $e'); // 调试信息
       _scheduleRecovery();
     }
   }
 
   Future<void> _safeSeek(Duration position) async {
+    if (!_isPlayerReady || _disposed) {
+      print('ClipPlaybackScreen: Cannot seek - player not ready or disposed'); // 调试信息
+      return;
+    }
+    
+    if (_isSeeking) {
+      print('ClipPlaybackScreen: Seek already in progress, ignoring'); // 调试信息
+      return;
+    }
+    
     try {
-      await player.seek(position);
+      _isSeeking = true; // 设置seek锁定
+      print('ClipPlaybackScreen: Attempting to seek main player to $position'); // 调试信息
+      print('ClipPlaybackScreen: Main player state - duration: ${mainPlayer.state.duration}, position: ${mainPlayer.state.position}, playing: ${mainPlayer.state.playing}'); // 调试信息
+      
+      // 确保播放器处于可用状态
+      if (mainPlayer.state.duration == Duration.zero) {
+        print('ClipPlaybackScreen: Main player duration is zero, attempting to recover...'); // 调试信息
+        await _initializePlayers();
+        return;
+      }
+      
+      // 执行seek操作
+      await mainPlayer.seek(position);
+      
+      // 验证seek是否成功
+      await Future.delayed(Duration(milliseconds: 200)); // 增加延迟确保seek完成
+      final newPosition = mainPlayer.state.position;
+      print('ClipPlaybackScreen: Seek completed. New position: $newPosition, Target: $position'); // 调试信息
+      
+      if ((newPosition - position).abs() < Duration(seconds: 1)) {
+        print('ClipPlaybackScreen: Seek successful to: $position'); // 调试信息
+      } else {
+        print('ClipPlaybackScreen: Seek may have failed. Expected: $position, Actual: $newPosition'); // 调试信息
+      }
     } catch (e) {
+      print('ClipPlaybackScreen: Error during seek: $e'); // 调试信息
       _scheduleRecovery();
+    } finally {
+      // 延迟释放seek锁定，确保其他逻辑不会立即覆盖
+      Future.delayed(Duration(milliseconds: 500), () {
+        if (mounted && !_disposed) {
+          _isSeeking = false;
+          print('ClipPlaybackScreen: Seek lock released'); // 调试信息
+        }
+      });
     }
   }
 
   @override
   void dispose() {
+    print('ClipPlaybackScreen disposing...'); // 调试信息
     _disposed = true;
+    
+    // 取消所有定时器和订阅
     _recoveryTimer?.cancel();
     _positionSubscription?.cancel();
     _playingSubscription?.cancel();
-    try {
-      player.pause();
-      player.dispose();
-    } catch (e) {
-      // 忽略dispose错误
-    }
+    
+    // 安全地停止和释放播放器
+    _disposePlayers();
+    
     super.dispose();
+  }
+
+  // 新增：安全的播放器释放方法
+  Future<void> _disposePlayers() async {
+    try {
+      // 先暂停播放器
+      if (mainPlayer.state.playing) {
+        await mainPlayer.pause();
+      }
+      
+      // 等待一下确保暂停完成
+      await Future.delayed(Duration(milliseconds: 100));
+      
+      // 释放播放器
+      await mainPlayer.dispose();
+      
+      print('Players disposed successfully'); // 调试信息
+    } catch (e) {
+      print('Error during player disposal: $e'); // 调试信息
+      // 即使出错也要尝试强制释放
+      try {
+        mainPlayer.dispose();
+      } catch (e2) {
+        print('Force disposal also failed: $e2'); // 调试信息
+      }
+    }
   }
 
   void _replay() async {
@@ -200,6 +332,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       await _safePlay();
     }
   }
+
+
 
   // 修改导航逻辑，在同一窗口中切换clip
   void _navigateToClip(VideoClip? targetClip) async {
@@ -219,7 +353,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       });
       
       // 重新初始化播放器
-      await _initializePlayer();
+      await _initializePlayers();
     }
   }
 
@@ -548,7 +682,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
                   children: [
-                    Video(controller: controller),
+                    Video(controller: mainController),
                     // 只保留重新播放按钮，位置调整到右下角避免与全屏按钮重叠
                     Positioned(
                       bottom: 8, // 更贴近边缘
@@ -645,8 +779,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                   const SizedBox(height: 4),
                   // 进度条
                   StreamBuilder<Duration>(
-                    stream: player.stream.duration,
-                    initialData: player.state.duration,
+                    stream: mainPlayer.stream.duration,
+                    initialData: mainPlayer.state.duration,
                     builder: (context, snapshot) {
                       final totalDuration = snapshot.data ?? Duration.zero;
                       if (totalDuration == Duration.zero) {
@@ -656,18 +790,15 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                       return Container(
                         margin: const EdgeInsets.symmetric(horizontal: 8),
                         child: CustomProgressBar(
-                          player: player,
+                          player: mainPlayer,
                           startTime: currentClip.startTime,
                           endTime: currentClip.endTime,
-                          onSetStart: (time) {
-                            // 播放模式下不需要修改clip，这里只是为了满足接口要求
-                          },
-                          onSetEnd: (time) {
-                            // 播放模式下不需要修改clip，这里只是为了满足接口要求
-                          },
+                          onSetStart: (time) {},
+                          onSetEnd: (time) {},
                           showThumbnailPreview: true,
-                          isPlaybackMode: true, // 启用播放模式
-                          showClipRelativeProgress: _showClipRelativeProgress, // 使用状态变量
+                          isPlaybackMode: true,
+                          showClipRelativeProgress: _showClipRelativeProgress,
+                          videoPath: currentClip.videoPath, // 新增
                         ),
                       );
                     },
