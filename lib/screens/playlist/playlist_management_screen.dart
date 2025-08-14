@@ -438,6 +438,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       clip.name,
@@ -445,26 +446,28 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontWeight: FontWeight.w500,
-                        fontSize: 14,
+                        fontSize: 13, // 稍微减小字体
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 1), // 进一步减少间距
                     Text(
                       '时长: ${_formatDuration(itemWithClip.effectiveDuration)}',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11, // 减小字体
                         color: Colors.grey.shade600,
                       ),
                     ),
                     if (item.customStartTime != null ||
                         item.customEndTime != null) ...[
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1),
                       Text(
-                        '自定义时间: ${item.customStartTime != null ? _formatDuration(item.customStartTime!) : "0:00"} - ${item.customEndTime != null ? _formatDuration(item.customEndTime!) : _formatDuration(clip.endTime - clip.startTime)}',
+                        '自定义: ${item.customStartTime != null ? _formatDuration(item.customStartTime!) : "0:00"}-${item.customEndTime != null ? _formatDuration(item.customEndTime!) : _formatDuration(clip.endTime - clip.startTime)}',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 10, // 进一步减小字体
                           color: Colors.orange.shade600,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ],
@@ -473,11 +476,11 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
               IconButton(
                 icon: const Icon(
                   Icons.remove_circle_outline,
-                  size: 20,
+                  size: 18, // 稍微减小图标
                   color: Colors.red,
                 ),
                 onPressed: () => _removeClipFromPlaylist(itemWithClip),
-                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36), // 减小按钮约束
               ),
             ],
           ),

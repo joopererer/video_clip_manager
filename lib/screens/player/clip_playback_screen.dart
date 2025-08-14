@@ -740,22 +740,30 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                 child: Stack(
                   children: [
                     Video(controller: mainController),
-                    // 只保留重新播放按钮，位置调整到右下角避免与全屏按钮重叠
+                    // 重播按钮
                     Positioned(
-                      bottom: 8, // 更贴近边缘
-                      right: 60, // 避免与全屏按钮重叠
-                      child: GestureDetector(
-                        onTap: _replay,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Icon(
-                            Icons.replay,
-                            color: Colors.white,
-                            size: 24,
+                      bottom: 8, // 恢复原来的位置
+                      right: 60, // 恢复原来的位置，避免与全屏按钮重叠
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            // 添加点击反馈
+                            HapticFeedback.lightImpact();
+                            _replay();
+                          },
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Icon(
+                              Icons.replay,
+                              color: Colors.white,
+                              size: 24,
+                            ),
                           ),
                         ),
                       ),

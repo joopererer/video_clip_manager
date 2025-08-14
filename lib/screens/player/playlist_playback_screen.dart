@@ -52,14 +52,38 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     
     // 使用传入的播放列表数据，而不是从 AppState 重新获取
     // 这样可以确保播放的是当前管理界面的状态
-    _playlistItems = widget.playlist.items.map((playlistItem) {
-      // 从 AppState 获取对应的 clip 数据
-      final clip = appState.clips.firstWhere(
-        (clip) => clip.id == playlistItem.clipId,
-        orElse: () => throw Exception('Clip not found: ${playlistItem.clipId}'),
+    _playlistItems = <PlaylistItemWithClip>[];
+    
+    for (final playlistItem in widget.playlist.items) {
+      try {
+        // 从 AppState 获取对应的 clip 数据
+        final clip = appState.clips.firstWhere(
+          (clip) => clip.id == playlistItem.clipId,
+        );
+        _playlistItems.add(PlaylistItemWithClip(item: playlistItem, clip: clip));
+      } catch (e) {
+        // 如果找不到clip，跳过这个播放列表项
+        print('Clip not found: ${playlistItem.clipId}, skipping...');
+        continue;
+      }
+    }
+    
+    if (_playlistItems.isEmpty) {
+      // 如果没有有效的播放列表项，显示错误信息
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('播放列表中没有有效的片段，可能某些片段已被删除'),
+          backgroundColor: Colors.orange,
+        ),
       );
-      return PlaylistItemWithClip(item: playlistItem, clip: clip);
-    }).toList();
+      // 延迟返回上一页
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      });
+      return;
+    }
     
     if (_playlistItems.isNotEmpty) {
       _currentItem = _playlistItems[0];

@@ -225,17 +225,17 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   @override
   void initState() {
     super.initState();
-    _updatePreviewProgress();
     
-    // 添加定时器，每2秒刷新一次进度
-    _progressTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
-      if (mounted && _previewProgress < 1.0) {
-        _updatePreviewProgress();
-      } else if (_previewProgress >= 1.0) {
-        // 如果进度达到100%，停止定时器
-        timer.cancel();
-      }
-    });
+    // 只在需要时启动进度更新定时器
+    if (widget.showThumbnailPreview && widget.videoPath != null) {
+      _progressTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+        if (mounted && _previewProgress < 1.0) {
+          _updatePreviewProgress();
+        } else if (_previewProgress >= 1.0) {
+          timer.cancel();
+        }
+      });
+    }
   }
 
   @override
@@ -250,16 +250,13 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     
     try {
       final progress = await PreviewService().getVideoProgress(widget.videoPath!);
-      final status = await PreviewService().getVideoStatus(widget.videoPath!);
-      
       if (mounted) {
         setState(() {
           _previewProgress = progress;
-          _previewStatus = status;
         });
       }
     } catch (e) {
-      print('CustomProgressBar: Error updating preview progress: $e');
+      // 静默处理错误，避免频繁的错误日志
     }
   }
 

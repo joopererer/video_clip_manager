@@ -30,21 +30,25 @@ class ClipThumbnail extends StatefulWidget {
 class _ClipThumbnailState extends State<ClipThumbnail> {
   double _previewProgress = 0.0;
   Timer? _progressTimer;
+  bool _isProgressComplete = false;
 
   @override
   void initState() {
     super.initState();
     _loadPreviewStatus();
     
-    // 添加定时器，每2秒刷新一次进度
-    _progressTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
-      if (mounted && _previewProgress < 1.0) {
-        _loadPreviewStatus();
-      } else if (_previewProgress >= 1.0) {
-        // 如果进度达到100%，停止定时器
-        timer.cancel();
-      }
-    });
+    // 只在进度未完成时启动定时器，减少不必要的检测
+    if (!_isProgressComplete) {
+      _progressTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+        if (mounted && !_isProgressComplete && _previewProgress < 1.0) {
+          _loadPreviewStatus();
+        } else if (_previewProgress >= 1.0 || _isProgressComplete) {
+          // 如果进度达到100%，停止定时器
+          timer.cancel();
+          _isProgressComplete = true;
+        }
+      });
+    }
   }
 
   @override
@@ -60,6 +64,10 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
       if (mounted) {
         setState(() {
           _previewProgress = progress;
+          if (progress >= 1.0) {
+            _isProgressComplete = true;
+            _progressTimer?.cancel();
+          }
         });
       }
     } catch (e) {
@@ -96,23 +104,17 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
           ),
           
           // 预览生成进度覆盖层 - 只在未完成时显示
-          if (_previewProgress < 1.0)
+          if (_previewProgress < 1.0 && !_isProgressComplete)
             Positioned(
               bottom: 0,
               left: 0,
               right: 0,
               child: Container(
-                height: 2, // 2像素高度
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.5),
-                ),
+                height: 2,
                 child: LinearProgressIndicator(
                   value: _previewProgress,
-                  backgroundColor: Colors.grey.withOpacity(0.3),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    _previewProgress > 0.5 ? Colors.green : Colors.orange,
-                  ),
-                  minHeight: 2,
+                  backgroundColor: Colors.grey.shade400,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
                 ),
               ),
             ),
@@ -121,28 +123,31 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
     );
   }
 
-  Widget _buildImage(String path) {
-    final imageFile = File(path);
-    if (!imageFile.existsSync()) {
+  Widget _buildPlaceholder() {
+    return Container(
+      color: Colors.grey.shade200,
+      child: const Center(
+        child: Icon(
+          Icons.video_library,
+          color: Colors.grey,
+          size: 32,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImage(String fullPath) {
+    final file = File(fullPath);
+    if (!file.existsSync()) {
       return _buildPlaceholder();
     }
 
     return Image.file(
-      imageFile,
+      file,
       fit: widget.fit,
-      width: widget.width,
-      height: widget.height,
-      key: ValueKey(path),
       errorBuilder: (context, error, stackTrace) {
         return _buildPlaceholder();
       },
-    );
-  }
-
-  Widget _buildPlaceholder() {
-    return Icon(
-      Icons.image_not_supported_outlined,
-      color: Colors.grey.shade500,
     );
   }
 }
