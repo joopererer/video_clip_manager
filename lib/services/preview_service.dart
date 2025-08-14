@@ -35,6 +35,12 @@ class PreviewService {
   late final VideoController _videoController;
   String? _currentlyOpenVideoPath;
   
+  // 失败重试机制
+  final Map<String, int> _failureCount = {}; // 记录每个视频的失败次数
+  final Map<String, DateTime> _lastFailureTime = {}; // 记录最后失败时间
+  static const int _maxFailures = 3; // 最大失败次数
+  static const Duration _failureResetDuration = Duration(hours: 24); // 失败记录重置时间
+  
   PreviewService._internal() {
     _videoController = VideoController(_player);
   }
@@ -451,6 +457,15 @@ class PreviewService {
         print('PreviewService: Processing video ${i + 1}/${videoPaths.length}: $videoName');
         
         try {
+          // 检查是否因为多次失败而被跳过
+          final failureInfo = getVideoFailureInfo(videoPath);
+          print('PreviewService: Failure info for $videoName: $failureInfo');
+          
+          if (_isVideoSkipped(videoPath)) {
+            print('PreviewService: Skipping $videoName - too many previous failures');
+            continue;
+          }
+          
           // 检查是否已经有足够的缓存
           print('PreviewService: Checking cache for $videoName...');
           final hasCache = await _hasSufficientCache(videoPath);
@@ -469,6 +484,8 @@ class PreviewService {
           await Future.delayed(Duration(milliseconds: 100));
         } catch (e) {
           print('PreviewService: Error pre-generating for $videoName: $e');
+          // 记录失败
+          _recordFailure(videoPath);
           // 继续处理下一个视频，不要因为一个视频失败而停止整个流程
         }
       }
@@ -535,7 +552,7 @@ class PreviewService {
     }
   }
   
-  /// 为单个视频预生成（后台执行）
+    /// 为单个视频预生成（后台执行）
   Future<void> _preGenerateForVideo(String videoPath) async {
     final cacheKey = _getCacheKey(videoPath);
     final videoName = videoPath.split('/').last;
@@ -553,6 +570,7 @@ class PreviewService {
       final videoFile = File(videoPath);
       if (!await videoFile.exists()) {
         print('PreviewService: Video file does not exist: $videoPath');
+        _recordFailure(videoPath);
         return;
       }
       
@@ -560,6 +578,7 @@ class PreviewService {
       final fileSize = await videoFile.length();
       if (fileSize == 0) {
         print('PreviewService: Video file is empty: $videoPath');
+        _recordFailure(videoPath);
         return;
       }
       
@@ -581,6 +600,7 @@ class PreviewService {
         } catch (e) {
           print('PreviewService: Error opening video $videoName: $e');
           _currentlyOpenVideoPath = null; // 重置状态
+          _recordFailure(videoPath);
           return;
         }
       }
@@ -591,6 +611,7 @@ class PreviewService {
       if (duration == Duration.zero) {
         print('PreviewService: Failed to get duration for $videoName - duration is zero');
         _currentlyOpenVideoPath = null; // 重置状态
+        _recordFailure(videoPath);
         return;
       }
       
@@ -667,18 +688,32 @@ class PreviewService {
             print('PreviewService: Generated keyframe at ${time.inSeconds}s for $videoName');
           } else {
             print('PreviewService: Failed to generate screenshot at ${time.inSeconds}s for $videoName');
+            // 如果截图失败，记录为失败
+            _recordFailure(videoPath);
+            print('PreviewService: Recorded failure for $videoName due to screenshot failure, failure count: ${_failureCount[cacheKey]}');
+            break; // 如果截图失败，停止生成更多关键帧
           }
         } catch (e) {
           print('PreviewService: Error generating keyframe at ${time.inSeconds}s for $videoName: $e');
-          // 继续处理下一个关键帧，不要因为一个失败而停止
+          // 记录失败
+          _recordFailure(videoPath);
+          print('PreviewService: Recorded failure for $videoName due to keyframe error, failure count: ${_failureCount[cacheKey]}');
+          break; // 如果出错，停止生成更多关键帧
         }
       }
       
       print('PreviewService: Completed pre-generation for $videoName - ${_keyframeCache[cacheKey]!.length} keyframes generated');
       
+      // 记录成功生成
+      _recordSuccess(videoPath);
+      
     } catch (e) {
       print('PreviewService: Error pre-generating for $videoName: $e');
       _currentlyOpenVideoPath = null; // 重置，下次重新打开
+      
+      // 记录失败
+      _recordFailure(videoPath);
+      print('PreviewService: Recorded failure for $videoName, failure count: ${_failureCount[cacheKey]}');
     } finally {
       _preGenerating[cacheKey] = false;
     }
@@ -796,6 +831,20 @@ class PreviewService {
     final isGenerating = _preGenerating[cacheKey] == true;
     final progress = await getVideoProgress(videoPath);
     
+    // 检查是否因为多次失败而被跳过
+    if (_isVideoSkipped(videoPath)) {
+      final failureInfo = getVideoFailureInfo(videoPath);
+      final timeUntilReset = failureInfo['timeUntilReset'] as Duration;
+      final hoursUntilReset = timeUntilReset.inHours;
+      final minutesUntilReset = (timeUntilReset.inMinutes % 60);
+      
+      if (hoursUntilReset > 0) {
+        return '生成失败，${hoursUntilReset}小时${minutesUntilReset}分钟后重试';
+      } else {
+        return '生成失败，${minutesUntilReset}分钟后重试';
+      }
+    }
+    
     if (isGenerating) {
       return '生成中... ${(progress * 100).toStringAsFixed(0)}%';
     } else if (progress >= 0.8) {
@@ -814,5 +863,96 @@ class PreviewService {
     _preGenerating.clear();
     _player.dispose();
     print('PreviewService: Disposed');
+  }
+
+  /// 检查视频是否因为多次失败而被跳过
+  bool _isVideoSkipped(String videoPath) {
+    final cacheKey = _getCacheKey(videoPath);
+    final failureCount = _failureCount[cacheKey] ?? 0;
+    final lastFailure = _lastFailureTime[cacheKey];
+    
+    print('PreviewService: _isVideoSkipped - checking $videoPath, failureCount: $failureCount, maxFailures: $_maxFailures');
+    
+    // 如果失败次数超过限制
+    if (failureCount >= _maxFailures) {
+      // 检查是否已经过了重置时间
+      if (lastFailure != null && DateTime.now().difference(lastFailure) > _failureResetDuration) {
+        // 重置失败记录
+        _failureCount.remove(cacheKey);
+        _lastFailureTime.remove(cacheKey);
+        print('PreviewService: Reset failure count for $videoPath after ${_failureResetDuration.inHours} hours');
+        return false;
+      }
+      
+      print('PreviewService: Skipping $videoPath due to ${failureCount} previous failures');
+      return true;
+    }
+    
+    print('PreviewService: Not skipping $videoPath (failureCount: $failureCount < $_maxFailures)');
+    return false;
+  }
+  
+  /// 记录视频生成失败
+  void _recordFailure(String videoPath) {
+    final cacheKey = _getCacheKey(videoPath);
+    final currentCount = _failureCount[cacheKey] ?? 0;
+    _failureCount[cacheKey] = currentCount + 1;
+    _lastFailureTime[cacheKey] = DateTime.now();
+    
+    print('PreviewService: Recorded failure for $videoPath (count: ${currentCount + 1}/${_maxFailures})');
+    print('PreviewService: Current failure records: ${getAllFailureInfo()}');
+  }
+  
+  /// 记录视频生成成功（重置失败计数）
+  void _recordSuccess(String videoPath) {
+    final cacheKey = _getCacheKey(videoPath);
+    if (_failureCount.containsKey(cacheKey)) {
+      _failureCount.remove(cacheKey);
+      _lastFailureTime.remove(cacheKey);
+      print('PreviewService: Reset failure count for $videoPath after successful generation');
+    }
+  }
+  
+  /// 获取视频的失败状态信息
+  Map<String, dynamic> getVideoFailureInfo(String videoPath) {
+    final cacheKey = _getCacheKey(videoPath);
+    final failureCount = _failureCount[cacheKey] ?? 0;
+    final lastFailure = _lastFailureTime[cacheKey];
+    
+    return {
+      'failureCount': failureCount,
+      'isSkipped': _isVideoSkipped(videoPath),
+      'lastFailureTime': lastFailure?.toIso8601String(),
+      'timeUntilReset': lastFailure != null 
+          ? _failureResetDuration - DateTime.now().difference(lastFailure)
+          : Duration.zero,
+    };
+  }
+  
+  /// 获取所有失败记录（调试用）
+  Map<String, dynamic> getAllFailureInfo() {
+    final result = <String, dynamic>{};
+    for (final entry in _failureCount.entries) {
+      final videoHash = entry.key;
+      final failureCount = entry.value;
+      final lastFailure = _lastFailureTime[videoHash];
+      
+      result[videoHash] = {
+        'failureCount': failureCount,
+        'lastFailureTime': lastFailure?.toIso8601String(),
+        'timeUntilReset': lastFailure != null 
+            ? _failureResetDuration - DateTime.now().difference(lastFailure)
+            : Duration.zero,
+      };
+    }
+    return result;
+  }
+  
+  /// 手动重置某个视频的失败记录（调试用）
+  void resetFailureRecord(String videoPath) {
+    final cacheKey = _getCacheKey(videoPath);
+    _failureCount.remove(cacheKey);
+    _lastFailureTime.remove(cacheKey);
+    print('PreviewService: Manually reset failure record for $videoPath');
   }
 }

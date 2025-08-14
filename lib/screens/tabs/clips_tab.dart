@@ -545,14 +545,14 @@ class _ClipsTabState extends State<ClipsTab> {
             minWidth: 800,  // 最小宽度
             minHeight: 600, // 最小高度
           ),
-          child: ClipPlaybackScreen(
-            clip: clip,
-            allClips: appState.clips.toList(),
-            searchQuery: widget.searchQuery,
-            selectedTags: widget.selectedTags,
-            selectedRating: widget.selectedRating,
-            selectedFavorite: widget.selectedFavorite,
-            currentSortOption: _currentSortOption,
+        child: ClipPlaybackScreen(
+          clip: clip,
+          allClips: appState.clips.toList(),
+          searchQuery: widget.searchQuery,
+          selectedTags: widget.selectedTags,
+          selectedRating: widget.selectedRating,
+          selectedFavorite: widget.selectedFavorite,
+          currentSortOption: _currentSortOption,
           ),
         ),
       ),

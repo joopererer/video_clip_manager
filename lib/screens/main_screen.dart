@@ -60,9 +60,23 @@ class _MainScreenState extends State<MainScreen>
     }
     
     final appState = context.read<AppState>();
-    final videoPaths = appState.originalVideos.map((v) => v.path).toList();
     
-    print('MainScreen: Found ${videoPaths.length} videos in appState');
+    // 收集所有视频路径：OriginalVideo + VideoClip
+    final Set<String> allVideoPaths = {};
+    
+    // 添加 OriginalVideo 路径
+    for (final video in appState.originalVideos) {
+      allVideoPaths.add(video.path);
+    }
+    
+         // 添加 VideoClip 中的视频路径
+     for (final clip in appState.clips) {
+       allVideoPaths.add(clip.videoPath);
+     }
+     
+     final videoPaths = allVideoPaths.toList();
+     
+     print('MainScreen: Found ${videoPaths.length} unique videos (${appState.originalVideos.length} original + ${appState.clips.length} clips)');
     print('MainScreen: Video paths: ${videoPaths.map((p) => p.split('/').last).join(', ')}');
     
     if (videoPaths.isNotEmpty) {
