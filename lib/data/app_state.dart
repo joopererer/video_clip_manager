@@ -194,6 +194,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // 处理缺少元数据的视频
       final videosNeedingMetadata = _originalVideos
           .where((v) => v.duration == null)
           .toList();
@@ -206,14 +207,78 @@ class AppState extends ChangeNotifier {
         );
       }
 
+      // 处理缺少缩略图的视频（有duration但没有缩略图或缩略图文件不存在）
+      final videosNeedingThumbnails = <OriginalVideo>[];
+      if (currentDbFullPath != null) {
+        for (final video in _originalVideos) {
+          if (video.duration != null) {
+            bool needsThumbnail = false;
+            
+            if (video.thumbnailPath == null) {
+              // 没有缩略图路径
+              needsThumbnail = true;
+            } else {
+              // 有缩略图路径，检查文件是否存在
+              final thumbPath = _thumbnailService.getThumbnailPathForDatabase(
+                currentDbFullPath!,
+                video.id,
+              );
+              final fileExists = await File(thumbPath).exists();
+              if (!fileExists) {
+                needsThumbnail = true;
+              }
+            }
+            
+            if (needsThumbnail) {
+              videosNeedingThumbnails.add(video);
+            }
+          }
+        }
+      }
+
+      if (videosNeedingThumbnails.isNotEmpty) {
+        debugPrint(
+          'Populating thumbnails for ${videosNeedingThumbnails.length} videos...',
+        );
+        final futures = videosNeedingThumbnails.map((video) async {
+          final thumbnailFileName = await _thumbnailService.generateThumbnail(
+            video.path,
+            Duration(milliseconds: video.duration!.inMilliseconds ~/ 2),
+            video.id,
+            dbPath: _currentDbPath!,
+          );
+          if (thumbnailFileName != null) {
+            final index = _originalVideos.indexWhere((v) => v.id == video.id);
+            if (index != -1) {
+              _originalVideos[index] = video.copyWith(thumbnailPath: thumbnailFileName);
+            }
+          }
+        });
+        await Future.wait(futures);
+      }
+
+      // 处理缺少缩略图的clips
       final clipsNeedingThumbnails = <VideoClip>[];
       if (currentDbFullPath != null) {
         for (final clip in _clips) {
-          final thumbPath = _thumbnailService.getThumbnailPathForDatabase(
-            currentDbFullPath!,
-            clip.id,
-          );
-          if (!await File(thumbPath).exists()) {
+          bool needsThumbnail = false;
+          
+          if (clip.thumbnailPath == null) {
+            // 没有缩略图路径
+            needsThumbnail = true;
+          } else {
+            // 有缩略图路径，检查文件是否存在
+            final thumbPath = _thumbnailService.getThumbnailPathForDatabase(
+              currentDbFullPath!,
+              clip.id,
+            );
+            final fileExists = await File(thumbPath).exists();
+            if (!fileExists) {
+              needsThumbnail = true;
+            }
+          }
+          
+          if (needsThumbnail) {
             clipsNeedingThumbnails.add(clip);
           }
         }
