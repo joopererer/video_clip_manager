@@ -182,11 +182,22 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     double maxWidth,
     Duration totalDuration,
   ) {
-    final tapTime = _getTimeFromDx(
-      details.localPosition.dx,
-      maxWidth,
-      totalDuration,
-    );
+    Duration tapTime;
+    
+    if (widget.showClipRelativeProgress && widget.isPlaybackMode) {
+      // 相对进度模式：基于clip时长计算点击时间
+      final clipDuration = widget.endTime - widget.startTime;
+      final progress = (details.localPosition.dx / maxWidth).clamp(0.0, 1.0);
+      final relativeTime = clipDuration * progress;
+      tapTime = widget.startTime + relativeTime;
+    } else {
+      // 完整进度模式或编辑模式：基于完整视频时长计算
+      tapTime = _getTimeFromDx(
+        details.localPosition.dx,
+        maxWidth,
+        totalDuration,
+      );
+    }
 
     if (widget.isPlaybackMode) {
       // 播放模式：seek到点击位置
@@ -213,6 +224,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     Duration totalDuration,
   ) {
     if (!widget.isPlaybackMode) {
+      // 直接使用 localPosition.dx，它已经是相对于进度条的坐标
       final tapTime = _getTimeFromDx(
         details.localPosition.dx,
         maxWidth,
@@ -238,11 +250,22 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     double maxWidth,
     Duration totalDuration,
   ) {
-    final tapTime = _getTimeFromDx(
-      details.localPosition.dx,
-      maxWidth,
-      totalDuration,
-    );
+    Duration tapTime;
+    
+    if (widget.showClipRelativeProgress && widget.isPlaybackMode) {
+      // 相对进度模式：基于clip时长计算点击时间
+      final clipDuration = widget.endTime - widget.startTime;
+      final progress = (details.localPosition.dx / maxWidth).clamp(0.0, 1.0);
+      final relativeTime = clipDuration * progress;
+      tapTime = widget.startTime + relativeTime;
+    } else {
+      // 完整进度模式或编辑模式：基于完整视频时长计算
+      tapTime = _getTimeFromDx(
+        details.localPosition.dx,
+        maxWidth,
+        totalDuration,
+      );
+    }
 
     if (widget.isPlaybackMode) {
       // 播放模式：seek到点击位置
@@ -259,6 +282,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     double maxWidth,
     Duration totalDuration,
   ) {
+    // 直接使用 localPosition.dx，它已经是相对于进度条的坐标
     final tapTime = _getTimeFromDx(
       details.localPosition.dx,
       maxWidth,
@@ -326,9 +350,11 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     double maxWidth,
     Duration totalDuration,
   ) {
-    // 直接使用 details.localPosition.dx，不需要额外偏移
-    // 因为 GestureDetector 的坐标系统已经考虑了圆圈的位置
-    final localX = details.localPosition.dx;
+    // 对于拖拽，details.localPosition.dx 是相对于 GestureDetector 的
+    // 而 GestureDetector 在 Positioned 中，left = dx - 10
+    // 所以我们需要加上这个偏移来得到相对于进度条的坐标
+    // 但是，我们希望圆圈中心对准鼠标，所以需要加上圆圈的半径（10）
+    final localX = details.localPosition.dx + 10.0;
     
     // 确保位置在有效范围内
     final clampedX = localX.clamp(0.0, maxWidth);
