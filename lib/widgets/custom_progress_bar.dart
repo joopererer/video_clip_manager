@@ -1,7 +1,9 @@
 import 'dart:typed_data';
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import '../services/preview_service.dart';
 
@@ -15,8 +17,10 @@ class CustomProgressBar extends StatefulWidget {
   final Player player;
   final Duration startTime;
   final Duration endTime;
+  final Duration? coverTime; // 新增：封面时间
   final Function(Duration) onSetStart;
   final Function(Duration) onSetEnd;
+  final Function(Duration)? onSetCover; // 新增：设置封面回调
   final bool showThumbnailPreview;
   final bool isPlaybackMode; // 新增：是否为播放模式
   final bool showClipRelativeProgress; // 新增：是否显示clip相对进度
@@ -27,8 +31,10 @@ class CustomProgressBar extends StatefulWidget {
     required this.player,
     required this.startTime,
     required this.endTime,
+    this.coverTime, // 新增
     required this.onSetStart,
     required this.onSetEnd,
+    this.onSetCover, // 新增
     this.showThumbnailPreview = false,
     this.isPlaybackMode = false, // 默认为编辑模式
     this.showClipRelativeProgress = false, // 默认为显示完整视频进度
@@ -49,9 +55,18 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
 
   // 新增：预览生成进度状态
   double _previewProgress = 0.0;
-  String _previewStatus = '未生成';
-  bool _isLoadingPreview = false;
   Timer? _progressTimer;
+
+  // 新增：拖拽状态
+  bool _isDraggingStart = false;
+  bool _isDraggingEnd = false;
+  bool _isDragging = false;
+
+  // 新增：设备检测
+  bool get isTouchDevice {
+    return Platform.isAndroid || Platform.isIOS || 
+           MediaQuery.of(context).size.shortestSide < 600;
+  }
 
   // --- Fonctions utilitaires ---
 
@@ -161,49 +176,206 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     });
   }
 
-  void _handlePrimaryTap(
+  // 新增：处理桌面端点击事件
+  void _handleDesktopTap(
     TapUpDetails details,
     double maxWidth,
     Duration totalDuration,
   ) {
-    print('Tap detected at: ${details.localPosition.dx} / $maxWidth'); // 调试信息
+    final tapTime = _getTimeFromDx(
+      details.localPosition.dx,
+      maxWidth,
+      totalDuration,
+    );
 
     if (widget.isPlaybackMode) {
       // 播放模式：seek到点击位置
-      if (widget.showClipRelativeProgress) {
-        // 相对进度模式：基于clip时长计算点击位置
-        final clipDuration = widget.endTime - widget.startTime;
-        final dx = details.localPosition.dx;
-        final progress = (dx / maxWidth).clamp(0.0, 1.0);
-        final relativeTime = clipDuration * progress;
-        final absoluteTime = widget.startTime + relativeTime;
-        print(
-          'Relative mode: progress=$progress, relativeTime=$relativeTime, absoluteTime=$absoluteTime',
-        ); // 调试信息
-
-        // 使用安全的seek方法
-        _safeSeek(absoluteTime);
+      _safeSeek(tapTime);
+    } else {
+      // 编辑模式：检查是否按住了 Shift 键
+      final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+      
+      if (isShiftPressed) {
+        // Shift + 左键：设置开始时间
+        widget.onSetStart(tapTime);
+        _safeSeek(tapTime); // 同步 seek
       } else {
-        // 完整进度模式：基于完整视频时长计算点击位置
-        final tapTime = _getTimeFromDx(
-          details.localPosition.dx,
-          maxWidth,
-          totalDuration,
-        );
-        print('Full mode: tapTime=$tapTime'); // 调试信息
-
-        // 使用安全的seek方法
+        // 普通左键：seek 定位
         _safeSeek(tapTime);
       }
-    } else {
-      // 编辑模式：设置开始时间
+    }
+  }
+
+  // 新增：处理桌面端右键事件
+  void _handleDesktopSecondaryTap(
+    TapUpDetails details,
+    double maxWidth,
+    Duration totalDuration,
+  ) {
+    if (!widget.isPlaybackMode) {
       final tapTime = _getTimeFromDx(
         details.localPosition.dx,
         maxWidth,
         totalDuration,
       );
-      print('Edit mode: tapTime=$tapTime'); // 调试信息
-      widget.onSetStart(tapTime);
+      
+      final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+      
+      if (isShiftPressed) {
+        // Shift + 右键：设置结束时间
+        widget.onSetEnd(tapTime);
+        _safeSeek(tapTime); // 同步 seek
+      } else {
+        // 普通右键：显示上下文菜单
+        _showContextMenu(context, tapTime);
+      }
+    }
+  }
+
+  // 新增：处理移动端点击事件
+  void _handleMobileTap(
+    TapUpDetails details,
+    double maxWidth,
+    Duration totalDuration,
+  ) {
+    final tapTime = _getTimeFromDx(
+      details.localPosition.dx,
+      maxWidth,
+      totalDuration,
+    );
+
+    if (widget.isPlaybackMode) {
+      // 播放模式：seek到点击位置
+      _safeSeek(tapTime);
+    } else {
+      // 编辑模式：seek 定位
+      _safeSeek(tapTime);
+    }
+  }
+
+  // 新增：处理移动端长按事件
+  void _handleMobileLongPress(
+    LongPressStartDetails details,
+    double maxWidth,
+    Duration totalDuration,
+  ) {
+    final tapTime = _getTimeFromDx(
+      details.localPosition.dx,
+      maxWidth,
+      totalDuration,
+    );
+    
+    _showContextMenu(context, tapTime);
+  }
+
+  // 新增：显示上下文菜单
+  void _showContextMenu(BuildContext context, Duration time) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+                      ListTile(
+              leading: const Icon(Icons.flag_outlined, color: Colors.blue),
+              title: const Text('设置开始时间'),
+            onTap: () {
+              widget.onSetStart(time);
+              _safeSeek(time);
+              Navigator.of(context).pop();
+            },
+          ),
+                      ListTile(
+              leading: const Icon(Icons.flag, color: Colors.red),
+              title: const Text('设置结束时间'),
+            onTap: () {
+              widget.onSetEnd(time);
+              _safeSeek(time);
+              Navigator.of(context).pop();
+            },
+          ),
+          if (widget.onSetCover != null)
+            ListTile(
+              leading: const Icon(Icons.image, color: Colors.orange),
+              title: const Text('设置封面'),
+              onTap: () {
+                widget.onSetCover!(time);
+                Navigator.of(context).pop();
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  // 新增：处理拖拽开始
+  void _handleDragStart(DragStartDetails details, bool isStartMarker) {
+    setState(() {
+      if (isStartMarker) {
+        _isDraggingStart = true;
+      } else {
+        _isDraggingEnd = true;
+      }
+      _isDragging = true;
+    });
+  }
+
+  // 新增：处理拖拽更新
+  void _handleDragUpdate(
+    DragUpdateDetails details,
+    bool isStartMarker,
+    double maxWidth,
+    Duration totalDuration,
+  ) {
+    // 直接使用 details.localPosition.dx，不需要额外偏移
+    // 因为 GestureDetector 的坐标系统已经考虑了圆圈的位置
+    final localX = details.localPosition.dx;
+    
+    // 确保位置在有效范围内
+    final clampedX = localX.clamp(0.0, maxWidth);
+    final newTime = _getTimeFromDx(
+      clampedX,
+      maxWidth,
+      totalDuration,
+    );
+
+    if (isStartMarker) {
+      widget.onSetStart(newTime);
+    } else {
+      widget.onSetEnd(newTime);
+    }
+
+    // 同步 seek 到新位置
+    _safeSeek(newTime);
+  }
+
+  // 新增：处理拖拽结束
+  void _handleDragEnd(DragEndDetails details) {
+    setState(() {
+      _isDraggingStart = false;
+      _isDraggingEnd = false;
+      _isDragging = false;
+    });
+  }
+
+  void _handlePrimaryTap(
+    TapUpDetails details,
+    double maxWidth,
+    Duration totalDuration,
+  ) {
+    if (isTouchDevice) {
+      _handleMobileTap(details, maxWidth, totalDuration);
+    } else {
+      _handleDesktopTap(details, maxWidth, totalDuration);
+    }
+  }
+
+  void _handleSecondaryTap(
+    TapUpDetails details,
+    double maxWidth,
+    Duration totalDuration,
+  ) {
+    if (!isTouchDevice) {
+      _handleDesktopSecondaryTap(details, maxWidth, totalDuration);
     }
   }
 
@@ -235,22 +407,6 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       }
     } catch (e) {
       print('CustomProgressBar: Seek failed: $e'); // 调试信息
-    }
-  }
-
-  void _handleSecondaryTap(
-    TapUpDetails details,
-    double maxWidth,
-    Duration totalDuration,
-  ) {
-    if (!widget.isPlaybackMode) {
-      // 只在编辑模式下处理右键
-      final tapTime = _getTimeFromDx(
-        details.localPosition.dx,
-        maxWidth,
-        totalDuration,
-      );
-      widget.onSetEnd(tapTime);
     }
   }
 
@@ -357,10 +513,14 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
                             constraints.maxWidth,
                             totalDuration,
                           ),
+                          onLongPressStart: isTouchDevice ? (details) => 
+                              _handleMobileLongPress(
+                                details,
+                                constraints.maxWidth,
+                                totalDuration,
+                              ) : null,
                           child: Tooltip(
-                            message: widget.isPlaybackMode
-                                ? 'Click to seek to position'
-                                : 'Clic gauche: Définir Début / Clic droit: Définir Fin',
+                            message: _getTooltipMessage(),
                             child: Stack(
                               clipBehavior: Clip.none,
                               alignment: Alignment.centerLeft,
@@ -439,18 +599,27 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
                                 ),
                                 // 标记（只在非相对模式下显示）
                                 if (!widget.showClipRelativeProgress) ...[
-                                  _buildMarker(
+                                  _buildDraggableMarker(
                                     constraints.maxWidth,
                                     totalDuration,
                                     widget.startTime,
                                     Colors.blue,
+                                    true, // isStartMarker
                                   ),
-                                  _buildMarker(
+                                  _buildDraggableMarker(
                                     constraints.maxWidth,
                                     totalDuration,
                                     widget.endTime,
                                     Colors.red,
+                                    false, // isStartMarker
                                   ),
+                                  // 封面标记
+                                  if (widget.coverTime != null)
+                                    _buildCoverMarker(
+                                      constraints.maxWidth,
+                                      totalDuration,
+                                      widget.coverTime!,
+                                    ),
                                 ],
                                 // 悬停预览
                                 if (_isHovering && _hoverDx != null)
@@ -508,6 +677,17 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     );
   }
 
+  // 新增：获取工具提示消息
+  String _getTooltipMessage() {
+    if (widget.isPlaybackMode) {
+      return 'Click to seek to position';
+    } else if (isTouchDevice) {
+      return 'Tap to seek, Long press for options';
+    } else {
+      return 'Click to seek, Shift+Click to set start/end, Right click for menu';
+    }
+  }
+
   // --- Widgets de construction (inchangés) ---
 
   Widget _buildPositionedBar(
@@ -532,26 +712,83 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     );
   }
 
-  Widget _buildMarker(
+  // 新增：可拖拽的标记
+  Widget _buildDraggableMarker(
     double maxWidth,
     Duration total,
     Duration time,
     Color color,
+    bool isStartMarker,
   ) {
     final dx = (time.inMilliseconds / total.inMilliseconds) * maxWidth;
     return Positioned(
-      left: dx.clamp(0.0, maxWidth) - 8,
-      child: Container(
-        width: 16,
-        height: 16,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
+      left: dx.clamp(0.0, maxWidth) - 10,
+      child: GestureDetector(
+        onPanStart: (details) => _handleDragStart(details, isStartMarker),
+        onPanUpdate: (details) => _handleDragUpdate(
+          details,
+          isStartMarker,
+          maxWidth,
+          total,
+        ),
+        onPanEnd: _handleDragEnd,
+        child: Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: _isDragging && 
+                ((isStartMarker && _isDraggingStart) || 
+                 (!isStartMarker && _isDraggingEnd))
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.5),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Icon(
+            isStartMarker ? Icons.flag_outlined : Icons.flag,
+            color: Colors.white,
+            size: 14,
+          ),
         ),
       ),
     );
   }
+
+  // 新增：封面标记
+  Widget _buildCoverMarker(
+    double maxWidth,
+    Duration total,
+    Duration time,
+  ) {
+    final dx = (time.inMilliseconds / total.inMilliseconds) * maxWidth;
+    return Positioned(
+      left: dx.clamp(0.0, maxWidth) - 1,
+      child: Container(
+        width: 2,
+        height: 20,
+        decoration: BoxDecoration(
+          color: Colors.orange,
+          borderRadius: BorderRadius.circular(1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.orange.withValues(alpha: 0.5),
+              blurRadius: 2,
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
 
   Widget _buildThumbnailPreview() {
     // 在相对进度模式下显示相对时间，否则显示绝对时间

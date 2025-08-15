@@ -566,12 +566,14 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                 player: player,
                 startTime: _formClip.startTime,
                 endTime: _formClip.endTime,
+                coverTime: _formClip.coverFrameTime,
                 onSetStart: (time) => setState(
                   () => _formClip = _formClip.copyWith(startTime: time),
                 ),
                 onSetEnd: (time) => setState(
                   () => _formClip = _formClip.copyWith(endTime: time),
                 ),
+                onSetCover: (time) => _generateCoverAtTime(time),
               ),
             );
           },
