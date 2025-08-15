@@ -58,6 +58,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   bool _showHints = false; // 控制提示显示
   bool _showCustomProgressBar = true; // 控制是否显示自定义进度条
   bool _showClipRelativeProgress = true; // 控制是否显示clip相对进度
+  bool _isMuted = false; // 静音状态
   
   @override
   void initState() {
@@ -584,6 +585,21 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     }
   }
 
+  // 切换静音状态
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+    });
+
+    if (_isMuted) {
+      mainPlayer.setVolume(0);
+      print('ClipPlayback: Audio muted');
+    } else {
+      mainPlayer.setVolume(100);
+      print('ClipPlayback: Audio unmuted');
+    }
+  }
+
   // 处理键盘快捷键
   void _handleKeyPress(RawKeyEvent event) {
     if (event is RawKeyDownEvent) {
@@ -639,6 +655,11 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
           setState(() {
             _showClipRelativeProgress = !_showClipRelativeProgress;
           });
+          break;
+        case 'S':
+        case 's':
+          // S键：切换静音
+          _toggleMute();
           break;
       }
     }
@@ -768,6 +789,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                         ),
                       ),
                     ),
+
                     // 快捷键提示悬浮窗
                     if (_showHints)
                       Positioned(
@@ -794,6 +816,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                               const SizedBox(height: 8),
                               _buildShortcutHint('Space', 'Play/Pause'),
                               _buildShortcutHint('R', 'Replay'),
+                              _buildShortcutHint('S', 'Mute/Unmute'),
                               _buildShortcutHint('← / A', 'Previous'),
                               _buildShortcutHint('→ / D', 'Next'),
                               _buildShortcutHint('E', 'Edit'),
