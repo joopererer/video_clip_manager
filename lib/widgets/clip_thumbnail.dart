@@ -36,7 +36,7 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
   void initState() {
     super.initState();
     _loadPreviewStatus();
-    
+
     // 只在进度未完成时启动定时器，减少不必要的检测
     if (!_isProgressComplete) {
       _progressTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
@@ -59,8 +59,10 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
 
   Future<void> _loadPreviewStatus() async {
     try {
-      final progress = await PreviewService().getVideoProgress(widget.clip.videoPath);
-      
+      final progress = await PreviewService().getVideoProgress(
+        widget.clip.videoPath,
+      );
+
       if (mounted) {
         setState(() {
           _previewProgress = progress;
@@ -86,8 +88,10 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
 
     String? fullThumbPath;
     if (widget.clip.thumbnailPath != null && dbPath != null) {
-      fullThumbPath =
-          thumbnailService.buildThumbnailPath(dbPath, widget.clip.thumbnailPath!);
+      fullThumbPath = thumbnailService.buildThumbnailPath(
+        dbPath,
+        widget.clip.thumbnailPath!,
+      );
     }
 
     return Container(
@@ -102,7 +106,7 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
                 ? _buildPlaceholder()
                 : _buildImage(fullThumbPath),
           ),
-          
+
           // 预览生成进度覆盖层 - 只在未完成时显示
           if (_previewProgress < 1.0 && !_isProgressComplete)
             Positioned(
@@ -114,7 +118,9 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
                 child: LinearProgressIndicator(
                   value: _previewProgress,
                   backgroundColor: Colors.grey.shade400,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Colors.blue.shade600,
+                  ),
                 ),
               ),
             ),
@@ -127,11 +133,7 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
     return Container(
       color: Colors.grey.shade200,
       child: const Center(
-        child: Icon(
-          Icons.video_library,
-          color: Colors.grey,
-          size: 32,
-        ),
+        child: Icon(Icons.video_library, color: Colors.grey, size: 32),
       ),
     );
   }

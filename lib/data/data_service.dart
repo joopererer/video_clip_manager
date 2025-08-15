@@ -73,17 +73,22 @@ class DataService {
     }
   }
 
-  Future<String> saveDataToPath(List<VideoClip> clips, List<OriginalVideo> videos, List<Playlist> playlists, String path) async {
+  Future<String> saveDataToPath(
+    List<VideoClip> clips,
+    List<OriginalVideo> videos,
+    List<Playlist> playlists,
+    String path,
+  ) async {
     try {
       await ensureDirectoryExists(p.dirname(path));
       final file = File(path);
-      
+
       final data = {
         'clips': clips.map((clip) => clip.toJson()).toList(),
         'videos': videos.map((video) => video.toJson()).toList(),
         'playlists': playlists.map((playlist) => playlist.toJson()).toList(),
       };
-      
+
       final jsonString = const JsonEncoder.withIndent('  ').convert(data);
       await file.writeAsString(jsonString);
       return 'Successfully saved to $path';
@@ -101,7 +106,7 @@ class DataService {
         await file.create();
         return LoadResult(clips: [], path: path);
       }
-      
+
       final jsonString = await file.readAsString();
       if (jsonString.isEmpty) return LoadResult(clips: [], path: path);
 
@@ -109,12 +114,23 @@ class DataService {
       try {
         final Map<String, dynamic> data = json.decode(jsonString);
         if (data.containsKey('clips') && data.containsKey('videos')) {
-          final clips = (data['clips'] as List).map((json) => VideoClip.fromJson(json)).toList();
-          final videos = (data['videos'] as List).map((json) => OriginalVideo.fromJson(json)).toList();
-          final playlists = data.containsKey('playlists') 
-              ? (data['playlists'] as List).map((json) => Playlist.fromJson(json)).toList()
+          final clips = (data['clips'] as List)
+              .map((json) => VideoClip.fromJson(json))
+              .toList();
+          final videos = (data['videos'] as List)
+              .map((json) => OriginalVideo.fromJson(json))
+              .toList();
+          final playlists = data.containsKey('playlists')
+              ? (data['playlists'] as List)
+                    .map((json) => Playlist.fromJson(json))
+                    .toList()
               : <Playlist>[];
-          return LoadResult(clips: clips, videos: videos, playlists: playlists, path: path);
+          return LoadResult(
+            clips: clips,
+            videos: videos,
+            playlists: playlists,
+            path: path,
+          );
         }
       } catch (e) {
         // 如果解析为新格式失败，尝试旧格式

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
@@ -14,11 +15,6 @@ import '../services/thumbnail_service.dart'; // 添加缩略图服务导入
 import 'tabs/videos_tab.dart';
 import 'tabs/clips_tab.dart';
 import 'tabs/playlists_tab.dart';
-import 'player/clip_playback_screen.dart';
-import 'player/clip_editor_screen.dart';
-import 'player/playlist_playback_screen.dart';
-import '../widgets/video_import_dialog.dart';
-import '../widgets/playlist_import_export_dialog.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -46,54 +42,72 @@ class _MainScreenState extends State<MainScreen>
     );
     _startGlobalPreGeneration();
   }
-  
+
   /// 启动全局预览预生成
   Future<void> _startGlobalPreGeneration() async {
-    print('MainScreen: _startGlobalPreGeneration called');
-    
+    if (kDebugMode) {
+      print('MainScreen: _startGlobalPreGeneration called');
+    }
+
     // 延迟启动，避免与界面初始化冲突
     await Future.delayed(Duration(seconds: 3));
-    
+
     if (!mounted) {
-      print('MainScreen: Widget not mounted, aborting global pre-generation');
+      if (kDebugMode) {
+        print('MainScreen: Widget not mounted, aborting global pre-generation');
+      }
       return;
     }
-    
+
     final appState = context.read<AppState>();
-    
+
     // 收集所有视频路径：OriginalVideo + VideoClip
     final Set<String> allVideoPaths = {};
-    
+
     // 添加 OriginalVideo 路径
     for (final video in appState.originalVideos) {
       allVideoPaths.add(video.path);
     }
-    
-         // 添加 VideoClip 中的视频路径
-     for (final clip in appState.clips) {
-       allVideoPaths.add(clip.videoPath);
-     }
-     
-     final videoPaths = allVideoPaths.toList();
-     
-     print('MainScreen: Found ${videoPaths.length} unique videos (${appState.originalVideos.length} original + ${appState.clips.length} clips)');
-    print('MainScreen: Video paths: ${videoPaths.map((p) => p.split('/').last).join(', ')}');
-    
+
+    // 添加 VideoClip 中的视频路径
+    for (final clip in appState.clips) {
+      allVideoPaths.add(clip.videoPath);
+    }
+
+    final videoPaths = allVideoPaths.toList();
+
+    if (kDebugMode) {
+      print(
+        'MainScreen: Found ${videoPaths.length} unique videos (${appState.originalVideos.length} original + ${appState.clips.length} clips)',
+      );
+      print(
+        'MainScreen: Video paths: ${videoPaths.map((p) => p.split('/').last).join(', ')}',
+      );
+    }
+
     if (videoPaths.isNotEmpty) {
-      print('MainScreen: Loading existing cache first...');
-      
+      if (kDebugMode) {
+        print('MainScreen: Loading existing cache first...');
+      }
+
       // 首先加载已有的缓存文件到内存
       await PreviewService().loadExistingCache();
-      
-      print('MainScreen: Starting global pre-generation for ${videoPaths.length} videos');
-      
+
+      if (kDebugMode) {
+        print(
+          'MainScreen: Starting global pre-generation for ${videoPaths.length} videos',
+        );
+      }
+
       // 在后台启动全局预生成
       PreviewService().startGlobalPreGeneration(videoPaths);
     } else {
-      print('MainScreen: No videos found, skipping global pre-generation');
+      if (kDebugMode) {
+        print('MainScreen: No videos found, skipping global pre-generation');
+      }
     }
   }
-  
+
   @override
   void dispose() {
     // 停止全局预生成
@@ -401,22 +415,16 @@ class _MainScreenState extends State<MainScreen>
           children: [
             Text(
               'Video Clip Manager',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 8),
-            Text('Version: 1.0.0'),
+            Text('Version: 1.0.1'),
             SizedBox(height: 4),
             Text('Author: AI Assistant'),
             SizedBox(height: 4),
             Text('Description: A powerful video clip management tool'),
             SizedBox(height: 8),
-            Text(
-              'Features:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            Text('Features:', style: TextStyle(fontWeight: FontWeight.bold)),
             SizedBox(height: 4),
             Text('• Video clip creation and editing'),
             Text('• Playlist management'),
@@ -447,9 +455,7 @@ class _MainScreenState extends State<MainScreen>
           // The main UI
           Scaffold(
             appBar: AppBar(
-              title: Text(
-                'Video Clip Manager (${appState.currentDbPath ?? "No DB"})',
-              ),
+              title: Text('Video Clip Manager (${appState.currentDbPath})'),
               actions: [
                 IconButton(
                   icon: const Icon(Icons.refresh),
@@ -591,85 +597,88 @@ class _MainScreenState extends State<MainScreen>
                                       onDeleted: () =>
                                           appState.clearSelectedFavorite(),
                                     ),
-                                if (_tabController.index == 0)
-                                  PopupMenuButton<String>(
-                                    icon: const Icon(Icons.filter_list),
-                                    onSelected: (value) {
-                                      switch (value) {
-                                        case 'tags':
-                                          _showTagFilterDialog();
-                                          break;
-                                        case 'rating':
-                                          _showRatingFilterDialog();
-                                          break;
-                                        case 'favorite':
-                                          _showFavoriteFilterDialog();
-                                          break;
-                                        case 'clear_all':
-                                          appState.clearAllFilters();
-                                          break;
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem<String>(
-                                        value: 'tags',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.label),
-                                            SizedBox(width: 8),
-                                            Text('Filter by Tags'),
-                                          ],
-                                        ),
-                                      ),
-                                      const PopupMenuItem<String>(
-                                        value: 'rating',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.star),
-                                            SizedBox(width: 8),
-                                            Text('Filter by Rating'),
-                                          ],
-                                        ),
-                                      ),
-                                      const PopupMenuItem<String>(
-                                        value: 'favorite',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.favorite),
-                                            SizedBox(width: 8),
-                                            Text('Filter by Favorite'),
-                                          ],
-                                        ),
-                                      ),
-                                      if (appState.selectedTags.isNotEmpty ||
-                                          appState.selectedRating != null ||
-                                          appState.selectedFavorite != null)
-                                        const PopupMenuDivider(),
-                                      if (appState.selectedTags.isNotEmpty ||
-                                          appState.selectedRating != null ||
-                                          appState.selectedFavorite != null)
+                                  if (_tabController.index == 0)
+                                    PopupMenuButton<String>(
+                                      icon: const Icon(Icons.filter_list),
+                                      onSelected: (value) {
+                                        switch (value) {
+                                          case 'tags':
+                                            _showTagFilterDialog();
+                                            break;
+                                          case 'rating':
+                                            _showRatingFilterDialog();
+                                            break;
+                                          case 'favorite':
+                                            _showFavoriteFilterDialog();
+                                            break;
+                                          case 'clear_all':
+                                            appState.clearAllFilters();
+                                            break;
+                                        }
+                                      },
+                                      itemBuilder: (context) => [
                                         const PopupMenuItem<String>(
-                                          value: 'clear_all',
+                                          value: 'tags',
                                           child: Row(
                                             children: [
-                                              Icon(Icons.clear_all),
+                                              Icon(Icons.label),
                                               SizedBox(width: 8),
-                                              Text('Clear All Filters'),
+                                              Text('Filter by Tags'),
                                             ],
                                           ),
                                         ),
-                                    ],
-                                  ),
-                                                                  if (_searchQuery.isNotEmpty)
+                                        const PopupMenuItem<String>(
+                                          value: 'rating',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.star),
+                                              SizedBox(width: 8),
+                                              Text('Filter by Rating'),
+                                            ],
+                                          ),
+                                        ),
+                                        const PopupMenuItem<String>(
+                                          value: 'favorite',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.favorite),
+                                              SizedBox(width: 8),
+                                              Text('Filter by Favorite'),
+                                            ],
+                                          ),
+                                        ),
+                                        if (appState.selectedTags.isNotEmpty ||
+                                            appState.selectedRating != null ||
+                                            appState.selectedFavorite != null)
+                                          const PopupMenuDivider(),
+                                        if (appState.selectedTags.isNotEmpty ||
+                                            appState.selectedRating != null ||
+                                            appState.selectedFavorite != null)
+                                          const PopupMenuItem<String>(
+                                            value: 'clear_all',
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.clear_all),
+                                                SizedBox(width: 8),
+                                                Text('Clear All Filters'),
+                                              ],
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  if (_searchQuery.isNotEmpty)
                                     IconButton(
                                       icon: const Icon(Icons.clear),
-                                      onPressed: () => _searchController.clear(),
+                                      onPressed: () =>
+                                          _searchController.clear(),
                                     ),
                                 ],
                               ),
                             ),
                             border: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(8.0)),
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(8.0),
+                              ),
                             ),
                           ),
                         ),
@@ -698,7 +707,7 @@ class _MainScreenState extends State<MainScreen>
                   ),
                   if (_isDraggingFile)
                     Container(
-                      color: Colors.blue.withOpacity(0.3),
+                      color: Colors.blue.withValues(alpha: 0.3),
                       child: const Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -725,7 +734,7 @@ class _MainScreenState extends State<MainScreen>
                       appState.isSaving ||
                       appState.isGeneratingThumbnails)
                     Container(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withValues(alpha: 0.5),
                       child: Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -764,7 +773,8 @@ class _MainScreenState extends State<MainScreen>
           ),
           // This is the global, 1x1 pixel "drawing board" for preview screenshots
           Positioned(
-            left: -2, // Use -2 to ensure it's fully off-screen and separate from thumbnail widget
+            left:
+                -2, // Use -2 to ensure it's fully off-screen and separate from thumbnail widget
             top: -2,
             width: 1,
             height: 1,

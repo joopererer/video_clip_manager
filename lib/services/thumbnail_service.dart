@@ -83,7 +83,7 @@ class ThumbnailService {
 
     try {
       final thumbDir = getThumbnailDirForDatabase(dbPath);
-      final fileName = isTemp 
+      final fileName = isTemp
           ? getTempThumbnailFileName(entityId)
           : getThumbnailFileName(entityId);
       final thumbFile = File(p.join(thumbDir, fileName));
@@ -146,12 +146,15 @@ class ThumbnailService {
       for (final file in files) {
         if (file is File) {
           final fileName = p.basename(file.path);
-          if (fileName.startsWith('${clipId}_temp_') && fileName.endsWith('.jpg')) {
+          if (fileName.startsWith('${clipId}_temp_') &&
+              fileName.endsWith('.jpg')) {
             try {
               file.deleteSync();
               debugPrint('ThumbnailService: Cleaned up temp file $fileName');
             } catch (e) {
-              debugPrint('ThumbnailService: Failed to delete temp file $fileName: $e');
+              debugPrint(
+                'ThumbnailService: Failed to delete temp file $fileName: $e',
+              );
             }
           }
         }

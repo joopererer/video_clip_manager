@@ -11,10 +11,7 @@ import 'playlist_import_preview_dialog.dart';
 class PlaylistImportExportDialog extends StatefulWidget {
   final Playlist? playlist; // 如果为null，则为导入模式；否则为导出模式
 
-  const PlaylistImportExportDialog({
-    super.key,
-    this.playlist,
-  });
+  const PlaylistImportExportDialog({super.key, this.playlist});
 
   @override
   State<PlaylistImportExportDialog> createState() =>
@@ -154,10 +151,7 @@ class _PlaylistImportExportDialogState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '导出选项',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        const Text('导出选项', style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -205,10 +199,7 @@ class _PlaylistImportExportDialogState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '选择文件',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        const Text('选择文件', style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -267,10 +258,7 @@ class _PlaylistImportExportDialogState
           Expanded(
             child: Text(
               _errorMessage,
-              style: TextStyle(
-                color: Colors.red.shade700,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: Colors.red.shade700, fontSize: 12),
             ),
           ),
         ],
@@ -288,18 +276,10 @@ class _PlaylistImportExportDialogState
             width: 60,
             child: Text(
               '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                fontSize: 12,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 12))),
         ],
       ),
     );
@@ -371,10 +351,10 @@ class _PlaylistImportExportDialogState
 
     try {
       final playlist = widget.playlist!;
-      
+
       // 获取 AppState 来访问 clips
       final appState = Provider.of<AppState>(context, listen: false);
-      
+
       // 创建导出数据
       final exportData = {
         'version': '1.0',
@@ -388,13 +368,10 @@ class _PlaylistImportExportDialogState
             // 尝试找到对应的 clip
             final clip = appState.clips.firstWhere(
               (c) => c.id == item.clipId,
-              orElse: () => VideoClip(
-                id: item.clipId,
-                name: '未知片段',
-                videoPath: '',
-              ),
+              orElse: () =>
+                  VideoClip(id: item.clipId, name: '未知片段', videoPath: ''),
             );
-            
+
             return {
               'id': item.id,
               'clipId': item.clipId,
@@ -474,7 +451,7 @@ class _PlaylistImportExportDialogState
       }
 
       final playlistData = data['playlist'] as Map<String, dynamic>;
-      
+
       // 创建导入的播放列表数据
       final importedPlaylist = {
         'name': playlistData['name'] ?? '导入的播放列表',
@@ -485,15 +462,14 @@ class _PlaylistImportExportDialogState
       if (mounted) {
         // 关闭当前对话框
         Navigator.of(context).pop();
-        
+
         // 显示导入预览对话框
         final result = await showDialog<bool>(
           context: context,
-          builder: (context) => PlaylistImportPreviewDialog(
-            playlistData: importedPlaylist,
-          ),
+          builder: (context) =>
+              PlaylistImportPreviewDialog(playlistData: importedPlaylist),
         );
-        
+
         // 如果用户确认导入，结果已经在预览对话框中处理了
         if (result == true) {
           // 导入成功，不需要额外操作
@@ -516,7 +492,7 @@ class _PlaylistImportExportDialogState
     final hours = duration.inHours;
     final minutes = duration.inMinutes % 60;
     final seconds = duration.inSeconds % 60;
-    
+
     if (hours > 0) {
       return '${hours}h ${minutes}m ${seconds}s';
     } else if (minutes > 0) {
@@ -529,4 +505,4 @@ class _PlaylistImportExportDialogState
   String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
-} 
+}

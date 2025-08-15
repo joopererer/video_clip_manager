@@ -18,7 +18,9 @@ class _PlaylistDialogState extends State<PlaylistDialog> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.playlist?.name ?? '');
-    _descriptionController = TextEditingController(text: widget.playlist?.description ?? '');
+    _descriptionController = TextEditingController(
+      text: widget.playlist?.description ?? '',
+    );
     // Add listeners to trigger setState when text changes, enabling/disabling the button
     _nameController.addListener(_onInputChanged);
     _descriptionController.addListener(_onInputChanged);
@@ -45,7 +47,7 @@ class _PlaylistDialogState extends State<PlaylistDialog> {
   Widget build(BuildContext context) {
     final isEditing = widget.playlist != null;
     final isButtonEnabled = _nameController.text.trim().isNotEmpty;
-    
+
     return AlertDialog(
       title: Text(isEditing ? '编辑播放列表' : '创建播放列表'),
       content: Column(
@@ -84,9 +86,7 @@ class _PlaylistDialogState extends State<PlaylistDialog> {
                   final description = _descriptionController.text.trim().isEmpty
                       ? null
                       : _descriptionController.text.trim();
-                  
 
-                  
                   Navigator.of(context).pop(<String, String?>{
                     'name': name,
                     'description': description,
@@ -98,4 +98,4 @@ class _PlaylistDialogState extends State<PlaylistDialog> {
       ],
     );
   }
-} 
+}

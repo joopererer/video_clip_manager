@@ -30,10 +30,12 @@ class VideoThumbnail extends StatelessWidget {
 
     String? fullThumbPath;
     if (video.thumbnailPath != null && dbPath != null) {
-      fullThumbPath =
-          thumbnailService.buildThumbnailPath(dbPath, video.thumbnailPath!);
+      fullThumbPath = thumbnailService.buildThumbnailPath(
+        dbPath,
+        video.thumbnailPath!,
+      );
     }
-    
+
     // The main container that defines the shape and background
     return Container(
       width: width,
@@ -42,7 +44,8 @@ class VideoThumbnail extends StatelessWidget {
         borderRadius: borderRadius ?? BorderRadius.circular(8),
         color: Colors.grey.shade300, // Placeholder background color
       ),
-      clipBehavior: Clip.antiAlias, // Ensures the child respects the border radius
+      clipBehavior:
+          Clip.antiAlias, // Ensures the child respects the border radius
       child: fullThumbPath == null
           ? _buildPlaceholder()
           : _buildImage(fullThumbPath),
@@ -51,7 +54,7 @@ class VideoThumbnail extends StatelessWidget {
 
   Widget _buildImage(String path) {
     final imageFile = File(path);
-    
+
     // Use a simple check for existence, can be improved with FutureBuilder
     // for very large lists, but this is often sufficient and simpler.
     if (!imageFile.existsSync()) {
@@ -62,7 +65,7 @@ class VideoThumbnail extends StatelessWidget {
       imageFile,
       fit: fit,
       // Add a key to ensure the widget updates when the path changes
-      key: ValueKey(path), 
+      key: ValueKey(path),
       errorBuilder: (context, error, stackTrace) {
         // This catches errors like file corruption or read permissions
         debugPrint('Error loading thumbnail for $path: $error');

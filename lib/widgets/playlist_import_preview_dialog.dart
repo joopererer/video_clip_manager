@@ -13,10 +13,7 @@ String _formatDuration(Duration d) {
 class PlaylistImportPreviewDialog extends StatefulWidget {
   final Map<String, dynamic> playlistData;
 
-  const PlaylistImportPreviewDialog({
-    super.key,
-    required this.playlistData,
-  });
+  const PlaylistImportPreviewDialog({super.key, required this.playlistData});
 
   @override
   State<PlaylistImportPreviewDialog> createState() =>
@@ -38,38 +35,45 @@ class _PlaylistImportPreviewDialogState
   void _analyzeImportData() {
     final appState = Provider.of<AppState>(context, listen: false);
     final items = widget.playlistData['items'] as List<dynamic>? ?? [];
-    
+
     _analysisResults = [];
-    
+
     for (int i = 0; i < items.length; i++) {
       final itemData = items[i] as Map<String, dynamic>;
       final clipId = itemData['clipId'] as String?;
       final clipInfo = itemData['clipInfo'] as Map<String, dynamic>?;
-      
+
       if (clipId != null) {
-        final existingClip = appState.clips.firstWhereOrNull((c) => c.id == clipId);
-        
+        final existingClip = appState.clips.firstWhereOrNull(
+          (c) => c.id == clipId,
+        );
+
         if (clipInfo != null) {
           final videoPath = clipInfo['videoPath'] as String? ?? '';
-          final videoFileExists = videoPath.isNotEmpty && File(videoPath).existsSync();
-          
-          _analysisResults.add(ImportItemAnalysis(
-            index: i,
-            clipId: clipId,
-            clipName: clipInfo['name'] as String? ?? 'Unknown Clip',
-            videoPath: videoPath,
-            existingClip: existingClip,
-            videoFileExists: videoFileExists,
-          ));
+          final videoFileExists =
+              videoPath.isNotEmpty && File(videoPath).existsSync();
+
+          _analysisResults.add(
+            ImportItemAnalysis(
+              index: i,
+              clipId: clipId,
+              clipName: clipInfo['name'] as String? ?? 'Unknown Clip',
+              videoPath: videoPath,
+              existingClip: existingClip,
+              videoFileExists: videoFileExists,
+            ),
+          );
         } else {
-          _analysisResults.add(ImportItemAnalysis(
-            index: i,
-            clipId: clipId,
-            clipName: 'Clip $clipId (Legacy)',
-            videoPath: '',
-            existingClip: existingClip,
-            videoFileExists: false,
-          ));
+          _analysisResults.add(
+            ImportItemAnalysis(
+              index: i,
+              clipId: clipId,
+              clipName: 'Clip $clipId (Legacy)',
+              videoPath: '',
+              existingClip: existingClip,
+              videoFileExists: false,
+            ),
+          );
         }
       }
     }
@@ -77,7 +81,9 @@ class _PlaylistImportPreviewDialogState
 
   @override
   Widget build(BuildContext context) {
-    final missingClips = _analysisResults.where((item) => item.existingClip == null).length;
+    final missingClips = _analysisResults
+        .where((item) => item.existingClip == null)
+        .length;
     final existingClips = _analysisResults.length - missingClips;
 
     return AlertDialog(
@@ -87,8 +93,12 @@ class _PlaylistImportPreviewDialogState
         height: 500,
         child: Column(
           children: [
-            Text('Playlist: ${widget.playlistData['name'] ?? 'Imported Playlist'}'),
-            Text('Found $existingClips existing clips and $missingClips missing clips.'),
+            Text(
+              'Playlist: ${widget.playlistData['name'] ?? 'Imported Playlist'}',
+            ),
+            Text(
+              'Found $existingClips existing clips and $missingClips missing clips.',
+            ),
             Expanded(
               child: ListView.builder(
                 itemCount: _analysisResults.length,
@@ -96,11 +106,21 @@ class _PlaylistImportPreviewDialogState
                   final item = _analysisResults[index];
                   return ListTile(
                     leading: Icon(
-                      item.existingClip != null ? Icons.check_circle : (item.videoFileExists ? Icons.warning : Icons.error),
-                      color: item.existingClip != null ? Colors.green : (item.videoFileExists ? Colors.orange : Colors.red),
+                      item.existingClip != null
+                          ? Icons.check_circle
+                          : (item.videoFileExists
+                                ? Icons.warning
+                                : Icons.error),
+                      color: item.existingClip != null
+                          ? Colors.green
+                          : (item.videoFileExists ? Colors.orange : Colors.red),
                     ),
                     title: Text(item.clipName),
-                    subtitle: Text(item.videoPath.isNotEmpty ? item.videoPath : "No video path info"),
+                    subtitle: Text(
+                      item.videoPath.isNotEmpty
+                          ? item.videoPath
+                          : "No video path info",
+                    ),
                   );
                 },
               ),
@@ -138,14 +158,14 @@ class _PlaylistImportPreviewDialogState
 
     try {
       final appState = Provider.of<AppState>(context, listen: false);
-      
+
       if (_createMissingClips) {
         for (final item in _analysisResults) {
           if (item.existingClip == null && item.videoFileExists) {
             final itemsData = widget.playlistData['items'] as List<dynamic>;
             final itemData = itemsData[item.index] as Map<String, dynamic>;
             final clipInfo = itemData['clipInfo'] as Map<String, dynamic>?;
-            
+
             if (clipInfo != null) {
               final clip = VideoClip.fromJson(clipInfo);
               await appState.addClip(clip);
@@ -153,14 +173,16 @@ class _PlaylistImportPreviewDialogState
           }
         }
       }
-      
+
       appState.importPlaylist(widget.playlistData);
-      
+
       if (mounted) {
         Navigator.of(context).pop(true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Playlist "${widget.playlistData['name']}" imported successfully!'),
+            content: Text(
+              'Playlist "${widget.playlistData['name']}" imported successfully!',
+            ),
             backgroundColor: Colors.green,
           ),
         );

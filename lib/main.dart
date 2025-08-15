@@ -11,7 +11,7 @@ import 'services/thumbnail_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // 添加错误处理来避免 media_kit 初始化失败
   try {
     MediaKit.ensureInitialized();
@@ -47,14 +47,18 @@ void main() async {
           useMaterial3: true,
           brightness: Brightness.light,
           scaffoldBackgroundColor: Colors.grey[100],
-          dialogTheme: const DialogThemeData(backgroundColor: Colors.white), // Fixed
+          dialogTheme: const DialogThemeData(
+            backgroundColor: Colors.white,
+          ), // Fixed
         ),
         darkTheme: ThemeData(
           primarySwatch: Colors.blue,
           useMaterial3: true,
           brightness: Brightness.dark,
           scaffoldBackgroundColor: const Color(0xFF121212),
-          dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF1e1e1e)), // Fixed
+          dialogTheme: const DialogThemeData(
+            backgroundColor: Color(0xFF1e1e1e),
+          ), // Fixed
         ),
         themeMode: ThemeMode.system,
         home: const MainScreen(),

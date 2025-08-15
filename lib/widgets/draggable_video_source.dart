@@ -39,11 +39,8 @@ class DraggableVideoSource extends StatelessWidget {
           ),
         ),
       ),
-      childWhenDragging: Opacity(
-        opacity: 0.5,
-        child: child,
-      ),
+      childWhenDragging: Opacity(opacity: 0.5, child: child),
       child: child,
     );
   }
-} 
+}

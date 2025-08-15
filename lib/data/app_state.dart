@@ -82,7 +82,7 @@ class AppState extends ChangeNotifier {
     _videosIsGridView = _prefs.getBool('videosIsGridView') ?? false;
     _playlistsIsGridView = _prefs.getBool('playlistsIsGridView') ?? false;
     _playlistsSortBy = _prefs.getString('playlistsSortBy') ?? 'name';
-    
+
     // 设置静态实例
     _instance = this;
   }
@@ -219,7 +219,7 @@ class AppState extends ChangeNotifier {
         for (final video in _originalVideos) {
           if (video.duration != null) {
             bool needsThumbnail = false;
-            
+
             if (video.thumbnailPath == null) {
               // 没有缩略图路径
               needsThumbnail = true;
@@ -234,7 +234,7 @@ class AppState extends ChangeNotifier {
                 needsThumbnail = true;
               }
             }
-            
+
             if (needsThumbnail) {
               videosNeedingThumbnails.add(video);
             }
@@ -256,7 +256,9 @@ class AppState extends ChangeNotifier {
           if (thumbnailFileName != null) {
             final index = _originalVideos.indexWhere((v) => v.id == video.id);
             if (index != -1) {
-              _originalVideos[index] = video.copyWith(thumbnailPath: thumbnailFileName);
+              _originalVideos[index] = video.copyWith(
+                thumbnailPath: thumbnailFileName,
+              );
             }
           }
         });
@@ -268,7 +270,7 @@ class AppState extends ChangeNotifier {
       if (currentDbFullPath != null) {
         for (final clip in _clips) {
           bool needsThumbnail = false;
-          
+
           if (clip.thumbnailPath == null) {
             // 没有缩略图路径
             needsThumbnail = true;
@@ -283,7 +285,7 @@ class AppState extends ChangeNotifier {
               needsThumbnail = true;
             }
           }
-          
+
           if (needsThumbnail) {
             clipsNeedingThumbnails.add(clip);
           }

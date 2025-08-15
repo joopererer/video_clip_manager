@@ -146,19 +146,23 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
           _buildHeaderAction(
             label: '导入:',
             tooltip: '导入播放列表',
-            onTap: _isImporting ? null : () {
-              _importPlaylist(context, appState);
-            },
-            icon: _isImporting 
-              ? SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.purple.shade600),
-                  ),
-                )
-              : Icon(Icons.file_upload, size: 18),
+            onTap: _isImporting
+                ? null
+                : () {
+                    _importPlaylist(context, appState);
+                  },
+            icon: _isImporting
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Colors.purple.shade600,
+                      ),
+                    ),
+                  )
+                : Icon(Icons.file_upload, size: 18),
           ),
 
           const SizedBox(width: 24),
@@ -311,10 +315,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
             const SizedBox(height: 8),
             Text(
               '开始创建您的第一个播放列表',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade600,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
@@ -324,7 +325,10 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.purple.shade600,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -604,14 +608,72 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                 Positioned(
                   bottom: 8,
                   right: 8,
-                  child: itemsWithClips.isNotEmpty 
-                    ? Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
+                  child: itemsWithClips.isNotEmpty
+                      ? Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildActionButton(
+                                icon: Icons.edit,
+                                color: Colors.blue.shade600,
+                                tooltip: "编辑",
+                                onPressed: () => _handlePlaylistAction(
+                                  context,
+                                  appState,
+                                  playlist,
+                                  'edit',
+                                ),
+                                isMini: true,
+                              ),
+                              const SizedBox(width: 4),
+                              _buildActionButton(
+                                icon: Icons.list,
+                                color: Colors.orange.shade600,
+                                tooltip: "管理片段",
+                                onPressed: () => _handlePlaylistAction(
+                                  context,
+                                  appState,
+                                  playlist,
+                                  'manage',
+                                ),
+                                isMini: true,
+                              ),
+                              const SizedBox(width: 4),
+                              _buildActionButton(
+                                icon: Icons.file_download,
+                                color: Colors.blue.shade600,
+                                tooltip: "导出",
+                                onPressed: () => _handlePlaylistAction(
+                                  context,
+                                  appState,
+                                  playlist,
+                                  'export',
+                                ),
+                                isMini: true,
+                                isLoading: _isExporting,
+                              ),
+                              const SizedBox(width: 4),
+                              _buildActionButton(
+                                icon: Icons.delete,
+                                color: Colors.red.shade600,
+                                tooltip: "删除",
+                                onPressed: () => _handlePlaylistAction(
+                                  context,
+                                  appState,
+                                  playlist,
+                                  'delete',
+                                ),
+                                isMini: true,
+                              ),
+                            ],
+                          ),
+                        )
+                      : Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             _buildActionButton(
@@ -668,64 +730,6 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                             ),
                           ],
                         ),
-                      )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildActionButton(
-                            icon: Icons.edit,
-                            color: Colors.blue.shade600,
-                            tooltip: "编辑",
-                            onPressed: () => _handlePlaylistAction(
-                              context,
-                              appState,
-                              playlist,
-                              'edit',
-                            ),
-                            isMini: true,
-                          ),
-                          const SizedBox(width: 4),
-                          _buildActionButton(
-                            icon: Icons.list,
-                            color: Colors.orange.shade600,
-                            tooltip: "管理片段",
-                            onPressed: () => _handlePlaylistAction(
-                              context,
-                              appState,
-                              playlist,
-                              'manage',
-                            ),
-                            isMini: true,
-                          ),
-                          const SizedBox(width: 4),
-                          _buildActionButton(
-                            icon: Icons.file_download,
-                            color: Colors.blue.shade600,
-                            tooltip: "导出",
-                            onPressed: () => _handlePlaylistAction(
-                              context,
-                              appState,
-                              playlist,
-                              'export',
-                            ),
-                            isMini: true,
-                            isLoading: _isExporting,
-                          ),
-                          const SizedBox(width: 4),
-                          _buildActionButton(
-                            icon: Icons.delete,
-                            color: Colors.red.shade600,
-                            tooltip: "删除",
-                            onPressed: () => _handlePlaylistAction(
-                              context,
-                              appState,
-                              playlist,
-                              'delete',
-                            ),
-                            isMini: true,
-                          ),
-                        ],
-                      ),
                 ),
               ],
             ),
@@ -838,9 +842,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
               topLeft: Radius.circular(8),
               topRight: Radius.circular(8),
             ),
-            child: ClipThumbnail(
-              clip: itemsWithClips.first.clip,
-            ),
+            child: ClipThumbnail(clip: itemsWithClips.first.clip),
           ),
 
         // 2. 堆叠的缩略图 (从第二个 Clip 开始)
@@ -925,9 +927,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
         ),
       );
     }
-    return ClipThumbnail(
-      clip: itemsWithClips.first.clip,
-    );
+    return ClipThumbnail(clip: itemsWithClips.first.clip);
   }
 
   Widget _buildActionButton({
@@ -947,16 +947,16 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
       child: IconButton(
         tooltip: tooltip,
         padding: EdgeInsets.zero,
-        icon: isLoading 
-          ? SizedBox(
-              width: iconSize,
-              height: iconSize,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(color),
-              ),
-            )
-          : Icon(icon, color: color, size: iconSize),
+        icon: isLoading
+            ? SizedBox(
+                width: iconSize,
+                height: iconSize,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              )
+            : Icon(icon, color: color, size: iconSize),
         onPressed: isLoading ? null : onPressed,
         style: IconButton.styleFrom(
           backgroundColor: color.withValues(alpha: 0.1),
