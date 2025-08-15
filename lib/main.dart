@@ -11,7 +11,14 @@ import 'services/thumbnail_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  MediaKit.ensureInitialized();
+  
+  // 添加错误处理来避免 media_kit 初始化失败
+  try {
+    MediaKit.ensureInitialized();
+  } catch (e) {
+    print('MediaKit initialization failed: $e');
+    // 继续运行，即使 media_kit 初始化失败
+  }
 
   final pathService = PathService();
   await pathService.init();

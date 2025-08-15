@@ -384,6 +384,58 @@ class _MainScreenState extends State<MainScreen>
     );
   }
 
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.blue),
+            SizedBox(width: 8),
+            Text('About Video Clip Manager'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Video Clip Manager',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text('Version: 1.0.0'),
+            SizedBox(height: 4),
+            Text('Author: AI Assistant'),
+            SizedBox(height: 4),
+            Text('Description: A powerful video clip management tool'),
+            SizedBox(height: 8),
+            Text(
+              'Features:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 4),
+            Text('• Video clip creation and editing'),
+            Text('• Playlist management'),
+            Text('• Tag-based organization'),
+            Text('• Rating and favorite system'),
+            Text('• Thumbnail generation'),
+            Text('• Cross-platform support'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -429,6 +481,12 @@ class _MainScreenState extends State<MainScreen>
                     ),
                   ],
                 ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.info_outline),
+                  tooltip: 'About',
+                  onPressed: _showAboutDialog,
+                ),
               ],
               bottom: TabBar(
                 controller: _tabController,
@@ -467,70 +525,72 @@ class _MainScreenState extends State<MainScreen>
                           decoration: InputDecoration(
                             labelText: 'Search...',
                             prefixIcon: const Icon(Icons.search),
-                            suffixIcon: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (_tabController.index == 0 &&
-                                    appState.selectedTags.isNotEmpty)
-                                  Chip(
-                                    label: Text(
-                                      '${appState.selectedTags.length}',
+                            suffixIcon: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_tabController.index == 0 &&
+                                      appState.selectedTags.isNotEmpty)
+                                    Chip(
+                                      label: Text(
+                                        '${appState.selectedTags.length}',
+                                      ),
+                                      onDeleted: () =>
+                                          appState.clearSelectedTags(),
                                     ),
-                                    onDeleted: () =>
-                                        appState.clearSelectedTags(),
-                                  ),
-                                if (_tabController.index == 0 &&
-                                    appState.selectedRating != null)
-                                  Chip(
-                                    label: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        appState.selectedRating == 0
-                                            ? const Icon(
-                                                Icons.star_border,
-                                                size: 16,
-                                                color: Colors.grey,
-                                              )
-                                            : const Icon(
-                                                Icons.star,
-                                                size: 16,
-                                                color: Colors.amber,
-                                              ),
-                                        Text(
+                                  if (_tabController.index == 0 &&
+                                      appState.selectedRating != null)
+                                    Chip(
+                                      label: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
                                           appState.selectedRating == 0
-                                              ? 'No Rating'
-                                              : '${appState.selectedRating}',
-                                        ),
-                                      ],
+                                              ? const Icon(
+                                                  Icons.star_border,
+                                                  size: 16,
+                                                  color: Colors.grey,
+                                                )
+                                              : const Icon(
+                                                  Icons.star,
+                                                  size: 16,
+                                                  color: Colors.amber,
+                                                ),
+                                          Text(
+                                            appState.selectedRating == 0
+                                                ? 'No Rating'
+                                                : '${appState.selectedRating}',
+                                          ),
+                                        ],
+                                      ),
+                                      onDeleted: () =>
+                                          appState.clearSelectedRating(),
                                     ),
-                                    onDeleted: () =>
-                                        appState.clearSelectedRating(),
-                                  ),
-                                if (_tabController.index == 0 &&
-                                    appState.selectedFavorite != null)
-                                  Chip(
-                                    label: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          appState.selectedFavorite!
-                                              ? Icons.favorite
-                                              : Icons.favorite_border,
-                                          size: 16,
-                                          color: appState.selectedFavorite!
-                                              ? Colors.red
-                                              : Colors.grey,
-                                        ),
-                                        Text(
-                                          appState.selectedFavorite!
-                                              ? 'Fav'
-                                              : 'Not Fav',
-                                        ),
-                                      ],
+                                  if (_tabController.index == 0 &&
+                                      appState.selectedFavorite != null)
+                                    Chip(
+                                      label: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            appState.selectedFavorite!
+                                                ? Icons.favorite
+                                                : Icons.favorite_border,
+                                            size: 16,
+                                            color: appState.selectedFavorite!
+                                                ? Colors.red
+                                                : Colors.grey,
+                                          ),
+                                          Text(
+                                            appState.selectedFavorite!
+                                                ? 'Fav'
+                                                : 'Not Fav',
+                                          ),
+                                        ],
+                                      ),
+                                      onDeleted: () =>
+                                          appState.clearSelectedFavorite(),
                                     ),
-                                    onDeleted: () =>
-                                        appState.clearSelectedFavorite(),
-                                  ),
                                 if (_tabController.index == 0)
                                   PopupMenuButton<String>(
                                     icon: const Icon(Icons.filter_list),
@@ -600,15 +660,16 @@ class _MainScreenState extends State<MainScreen>
                                         ),
                                     ],
                                   ),
-                                if (_searchQuery.isNotEmpty)
-                                  IconButton(
-                                    icon: const Icon(Icons.clear),
-                                    onPressed: () => _searchController.clear(),
-                                  ),
-                              ],
+                                                                  if (_searchQuery.isNotEmpty)
+                                    IconButton(
+                                      icon: const Icon(Icons.clear),
+                                      onPressed: () => _searchController.clear(),
+                                    ),
+                                ],
+                              ),
                             ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8.0),
+                            border: const OutlineInputBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(8.0)),
                             ),
                           ),
                         ),
