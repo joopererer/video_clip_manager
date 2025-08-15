@@ -99,7 +99,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
           time,
         );
 
-        if (mounted && _isHovering && data != null) {
+        if (mounted && (_isHovering || _isDragging) && data != null) {
           setState(() {
             _thumbnailData = data;
           });
@@ -387,7 +387,15 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     // 拖曳过程中不 seek，只更新 UI
     // 如果需要预览图，可以在这里触发预览图更新
     if (widget.showThumbnailPreview) {
+      print('CustomProgressBar: Drag update - showThumbnailPreview: true, clampedX: $clampedX, newTime: $newTime');
+      // 更新预览图位置
+      setState(() {
+        _hoverDx = clampedX;
+        _hoverTime = newTime;
+      });
       _updatePreview(newTime);
+    } else {
+      print('CustomProgressBar: Drag update - showThumbnailPreview: false');
     }
   }
 
@@ -404,6 +412,12 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       // 清除拖曳起始位置记录
       _dragStartDx = null;
       _dragStartTime = null;
+      // 清除拖曳时的预览图状态
+      if (!_isHovering) {
+        _hoverDx = null;
+        _hoverTime = null;
+        _thumbnailData = null;
+      }
     });
   }
 
@@ -674,11 +688,12 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
                                     ),
                                 ],
                                 // 悬停预览
-                                if (_isHovering && _hoverDx != null)
+                                if ((_isHovering && _hoverDx != null) || 
+                                    (_isDragging && _thumbnailData != null))
                                   Positioned(
-                                    left:
-                                        _hoverDx! -
-                                        (widget.showThumbnailPreview ? 50 : 28),
+                                    left: _isDragging 
+                                        ? (_hoverDx ?? 0) - (widget.showThumbnailPreview ? 50 : 28)
+                                        : _hoverDx! - (widget.showThumbnailPreview ? 50 : 28),
                                     bottom: 20,
                                     child: widget.showThumbnailPreview
                                         ? _buildThumbnailPreview()

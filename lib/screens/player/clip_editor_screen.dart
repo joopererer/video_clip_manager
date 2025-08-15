@@ -794,6 +794,8 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                   () => _formClip = _formClip.copyWith(endTime: time),
                 ),
                 onSetCover: (time) => _generateCoverAtTime(time),
+                showThumbnailPreview: true,
+                videoPath: _originalEditingClip?.videoPath,
               ),
             );
           },
