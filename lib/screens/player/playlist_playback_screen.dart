@@ -180,12 +180,44 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         break;
     }
 
-    // 重新生成播放列表，将当前片段放在第一个位置
-    _generatePlaylistWithCurrentFirst(currentItem);
+    // 根据播放模式重新生成播放列表
+    if (_playbackMode == PlaybackMode.random) {
+      // 随机模式：生成随机播放列表，将当前片段放在第一个位置
+      _generatePlaylistWithCurrentFirst(currentItem);
+    } else {
+      // 顺序和循环模式：使用默认列表次序，不重新排列
+      _useDefaultPlaylistOrder();
+    }
 
-    // 更新当前索引为0（第一个位置）
-    _currentItemIndex = 0;
-    _currentItem = _generatedPlaylist[0];
+    // 根据播放模式设置当前索引
+    if (_playbackMode == PlaybackMode.random) {
+      // 随机模式：当前片段放在第一个位置
+      _currentItemIndex = 0;
+      _currentItem = _generatedPlaylist[0];
+    } else {
+      // 顺序和循环模式：找到当前片段在默认列表中的位置
+      if (currentItem != null) {
+        int currentItemIndexInDefault = -1;
+        for (int i = 0; i < _generatedPlaylist.length; i++) {
+          if (_generatedPlaylist[i].clip.id == currentItem.clip.id) {
+            currentItemIndexInDefault = i;
+            break;
+          }
+        }
+        
+        if (currentItemIndexInDefault >= 0) {
+          _currentItemIndex = currentItemIndexInDefault;
+          _currentItem = _generatedPlaylist[currentItemIndexInDefault];
+        } else {
+          _currentItemIndex = 0;
+          _currentItem = _generatedPlaylist[0];
+        }
+      } else {
+        _currentItemIndex = 0;
+        _currentItem = _generatedPlaylist[0];
+      }
+    }
+    
     _currentItemDuration = _currentItem!.effectiveDuration;
 
     // 重新计算总时长
@@ -363,22 +395,22 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
               }
             }
           } else if (_playbackMode == PlaybackMode.loop) {
-            // 循环播放：计算当前轮次 + 当前片段进度
-            final completedRounds =
-                _playedItems.length ~/ _generatedPlaylist.length;
-            final currentRoundItems =
-                _playedItems.length % _generatedPlaylist.length;
-
+            // 循环播放：基于播放历史计算进度
+            // 计算当前轮次：已播放片段数 / 总长度
+            final completedRounds = _playedItems.length ~/ _generatedPlaylist.length;
+            final currentPositionInRound = _currentItemIndex;
+            
             // 完整轮次的总时长
             _totalPlayedTime = _totalDuration * completedRounds;
-
+            
             // 当前轮次已播放的片段
-            for (int i = 0; i < currentRoundItems; i++) {
-              if (i < _generatedPlaylist.length) {
-                _totalPlayedTime +=
-                    _generatedPlaylist[_playedItems[i]].effectiveDuration;
-              }
+            for (int i = 0; i < currentPositionInRound; i++) {
+              _totalPlayedTime += _generatedPlaylist[i].effectiveDuration;
             }
+            
+            // 添加调试信息
+            print('Playlist: Loop mode progress - completedRounds: $completedRounds, currentPositionInRound: $currentPositionInRound');
+            print('Playlist: Loop mode progress - totalPlayedTime: $_totalPlayedTime, totalDuration: $_totalDuration');
           } else if (_playbackMode == PlaybackMode.random) {
             // 随机播放：按实际播放的片段累积
             for (int i = 0; i < _playedItems.length; i++) {
@@ -554,7 +586,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       'Playlist: Total playlist items: ${_generatedPlaylist.length}',
     ); // 调试信息
 
-    // 记录当前片段为已播放
+    // 记录当前片段为已播放（在切换到下一个片段之前）
     if (!_playedItems.contains(_currentItemIndex)) {
       _playedItems.add(_currentItemIndex);
     }
@@ -592,18 +624,19 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
             unplayedItems.add(i);
           }
         }
+        
+        print('Playlist: Random mode - playedItems: $_playedItems, unplayedItems: $unplayedItems'); // 调试信息
 
         // 如果所有片段都播放过了，重新开始
         if (unplayedItems.isEmpty) {
+          print('Playlist: All items played, resetting for new round'); // 调试信息
           _playedItems.clear();
           // 重新生成随机播放列表
           _generatePlaylist();
-          for (int i = 0; i < _generatedPlaylist.length; i++) {
-            unplayedItems.add(i);
-          }
-        }
-
-        if (unplayedItems.isNotEmpty) {
+          // 随机选择一个索引（不需要排除当前，因为列表已经重新生成）
+          nextIndex = Random().nextInt(_generatedPlaylist.length);
+          print('Playlist: New random playlist generated, selected index: $nextIndex'); // 调试信息
+        } else {
           nextIndex = unplayedItems[Random().nextInt(unplayedItems.length)];
         }
         print('Playlist: Random mode - next index will be $nextIndex'); // 调试信息
@@ -637,13 +670,48 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
   }
 
   void _playPreviousItem() async {
-    if (_currentItemIndex > 0) {
-      _currentItemIndex--;
-      _currentItem = _generatedPlaylist[_currentItemIndex];
+    if (_generatedPlaylist.isEmpty) return;
+
+    int previousIndex = -1;
+
+    switch (_playbackMode) {
+      case PlaybackMode.sequential:
+        // 顺序模式：只有当前不是第一个时才可播放上一个
+        if (_currentItemIndex > 0) {
+          previousIndex = _currentItemIndex - 1;
+        }
+        break;
+      case PlaybackMode.loop:
+        // 循环模式：可以循环到最后一个
+        previousIndex = (_currentItemIndex - 1 + _generatedPlaylist.length) % _generatedPlaylist.length;
+        break;
+      case PlaybackMode.random:
+        // 随机模式：随机选择一个片段
+        if (_generatedPlaylist.length > 1) {
+          // 确保不会选择当前片段
+          List<int> availableIndices = [];
+          for (int i = 0; i < _generatedPlaylist.length; i++) {
+            if (i != _currentItemIndex) {
+              availableIndices.add(i);
+            }
+          }
+          if (availableIndices.isNotEmpty) {
+            previousIndex = availableIndices[Random().nextInt(availableIndices.length)];
+          }
+        }
+        break;
+    }
+
+    if (previousIndex >= 0 && previousIndex < _generatedPlaylist.length) {
+      print('Playlist: Playing previous item at index $previousIndex'); // 调试信息
+      _currentItemIndex = previousIndex;
+      _currentItem = _generatedPlaylist[previousIndex];
       _currentItemDuration = _currentItem!.effectiveDuration;
 
       // 重新初始化播放器
       await _initializePlayer();
+    } else {
+      print('Playlist: No previous item to play'); // 调试信息
     }
   }
 
@@ -801,6 +869,17 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         _generatedPlaylist.shuffle(Random());
         break;
     }
+
+    // 重新计算总时长
+    _totalDuration = _calculateTotalDuration();
+    
+    // 强制更新UI以确保底色分段同步
+    if (mounted) {
+      setState(() {});
+    }
+    
+    print('Playlist: Generated playlist with ${_generatedPlaylist.length} items for ${_playbackMode} mode');
+    print('Playlist: Total duration updated to: $_totalDuration');
   }
 
   // 生成包含当前片段的播放列表，并将其放在第一位
@@ -816,12 +895,28 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     switch (_playbackMode) {
       case PlaybackMode.sequential:
       case PlaybackMode.loop:
-        // 顺序/循环模式：将当前片段放在第一个，其他按原始顺序
-        _generatedPlaylist.add(currentItem);
-        for (final item in _playlistItems) {
-          if (item.clip.id != currentItem.clip.id) {
-            _generatedPlaylist.add(item);
+        // 顺序/循环模式：使用默认列表次序，重新定位到当前片段
+        // 找到当前片段在默认列表中的位置
+        int currentItemIndexInDefault = -1;
+        for (int i = 0; i < _playlistItems.length; i++) {
+          if (_playlistItems[i].clip.id == currentItem.clip.id) {
+            currentItemIndexInDefault = i;
+            break;
           }
+        }
+        
+        if (currentItemIndexInDefault >= 0) {
+          // 从当前片段开始，按默认列表次序重新排列
+          for (int i = currentItemIndexInDefault; i < _playlistItems.length; i++) {
+            _generatedPlaylist.add(_playlistItems[i]);
+          }
+          // 添加当前片段之前的片段（循环）
+          for (int i = 0; i < currentItemIndexInDefault; i++) {
+            _generatedPlaylist.add(_playlistItems[i]);
+          }
+        } else {
+          // 如果找不到当前片段，使用默认列表
+          _generatedPlaylist = List.from(_playlistItems);
         }
         break;
 
@@ -835,6 +930,65 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         _generatedPlaylist.addAll(remainingItems);
         break;
     }
+
+    // 强制更新UI以确保底色分段同步
+    if (mounted) {
+      setState(() {});
+    }
+    
+    print('Playlist: Generated playlist with current first, ${_generatedPlaylist.length} items for ${_playbackMode} mode');
+  }
+
+  // 恢复默认播放列表并定位到当前片段
+  void _restoreDefaultPlaylistWithCurrentItem(PlaylistItemWithClip? currentItem) {
+    _generatedPlaylist.clear();
+
+    if (currentItem == null) {
+      // 如果没有当前片段，使用默认列表
+      _generatedPlaylist = List.from(_playlistItems);
+    } else {
+      // 找到当前片段在默认列表中的位置
+      int currentItemIndexInDefault = -1;
+      for (int i = 0; i < _playlistItems.length; i++) {
+        if (_playlistItems[i].clip.id == currentItem.clip.id) {
+          currentItemIndexInDefault = i;
+          break;
+        }
+      }
+      
+      if (currentItemIndexInDefault >= 0) {
+        // 从当前片段开始，按默认列表次序重新排列
+        for (int i = currentItemIndexInDefault; i < _playlistItems.length; i++) {
+          _generatedPlaylist.add(_playlistItems[i]);
+        }
+        // 添加当前片段之前的片段（循环）
+        for (int i = 0; i < currentItemIndexInDefault; i++) {
+          _generatedPlaylist.add(_playlistItems[i]);
+        }
+      } else {
+        // 如果找不到当前片段，使用默认列表
+        _generatedPlaylist = List.from(_playlistItems);
+      }
+    }
+
+    // 强制更新UI以确保底色分段同步
+    if (mounted) {
+      setState(() {});
+    }
+    
+    print('Playlist: Restored default playlist with current item, ${_generatedPlaylist.length} items for ${_playbackMode} mode');
+  }
+
+  // 使用默认播放列表次序（不重新排列）
+  void _useDefaultPlaylistOrder() {
+    _generatedPlaylist = List.from(_playlistItems);
+
+    // 强制更新UI以确保底色分段同步
+    if (mounted) {
+      setState(() {});
+    }
+    
+    print('Playlist: Using default playlist order, ${_generatedPlaylist.length} items for ${_playbackMode} mode');
   }
 
   // 重置播放进度状态
@@ -1048,7 +1202,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.skip_previous),
-                              onPressed: _currentItemIndex > 0
+                              onPressed: _canPlayPrevious()
                                   ? _playPreviousItem
                                   : null,
                               tooltip: '上一个片段 (← / A)',
@@ -1062,8 +1216,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                             ),
                             IconButton(
                               icon: const Icon(Icons.skip_next),
-                              onPressed:
-                                  _currentItemIndex < _playlistItems.length - 1
+                              onPressed: _canPlayNext()
                                   ? _playNextItem
                                   : null,
                               tooltip: '下一个片段 (→ / D)',
@@ -1338,17 +1491,19 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     if (_playbackMode == PlaybackMode.loop) {
       // 循环模式：显示当前轮次内的播放时间
       final completedRounds = _playedItems.length ~/ _generatedPlaylist.length;
-      final currentRoundItems = _playedItems.length % _generatedPlaylist.length;
+      final currentPositionInRound = _currentItemIndex;
       
       // 计算当前轮次内的播放时间
       Duration currentRoundPlayedTime = Duration.zero;
       
       // 当前轮次已播放的片段
-      for (int i = 0; i < currentRoundItems; i++) {
-        if (i < _generatedPlaylist.length) {
-          currentRoundPlayedTime += _generatedPlaylist[_playedItems[i]].effectiveDuration;
-        }
+      for (int i = 0; i < currentPositionInRound; i++) {
+        currentRoundPlayedTime += _generatedPlaylist[i].effectiveDuration;
       }
+      
+      // 添加调试信息
+      print('Playlist: Display time - completedRounds: $completedRounds, currentPositionInRound: $currentPositionInRound');
+      print('Playlist: Display time - currentRoundPlayedTime: $currentRoundPlayedTime');
       
       // 加上当前片段的播放时间
       if (_currentItem != null) {
@@ -1385,16 +1540,14 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     if (_playbackMode == PlaybackMode.loop) {
       // 循环模式：计算当前轮次内的进度
       final completedRounds = _playedItems.length ~/ _generatedPlaylist.length;
-      final currentRoundItems = _playedItems.length % _generatedPlaylist.length;
+      final currentPositionInRound = _currentItemIndex;
       
       // 计算当前轮次内的播放时间
       Duration currentRoundPlayedTime = Duration.zero;
       
       // 当前轮次已播放的片段
-      for (int i = 0; i < currentRoundItems; i++) {
-        if (i < _generatedPlaylist.length) {
-          currentRoundPlayedTime += _generatedPlaylist[_playedItems[i]].effectiveDuration;
-        }
+      for (int i = 0; i < currentPositionInRound; i++) {
+        currentRoundPlayedTime += _generatedPlaylist[i].effectiveDuration;
       }
       
       // 加上当前片段的播放时间
@@ -1520,7 +1673,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     final List<Widget> segments = [];
     double accumulatedProgress = 0.0;
 
-    // 绘制所有clip的底色分段
+    // 绘制所有clip的底色分段（确保与当前播放列表同步）
     for (int i = 0; i < _generatedPlaylist.length; i++) {
       final item = _generatedPlaylist[i];
       final itemDuration = item.effectiveDuration;
@@ -1544,6 +1697,17 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       accumulatedProgress += itemProgress;
     }
 
+    // 添加详细的调试信息
+    print('Playlist: Background segments built for ${_generatedPlaylist.length} items');
+    print('Playlist: Current playback mode: $_playbackMode');
+    print('Playlist: Current item index: $_currentItemIndex');
+    print('Playlist: Total duration: $_totalDuration');
+    for (int i = 0; i < _generatedPlaylist.length; i++) {
+      final itemDuration = _generatedPlaylist[i].effectiveDuration;
+      final itemProgress = itemDuration.inMilliseconds / _totalDuration.inMilliseconds;
+      print('Playlist: Segment $i: ${_generatedPlaylist[i].clip.name} (duration: $itemDuration, progress: ${(itemProgress * 100).toStringAsFixed(1)}%)');
+    }
+
     return Stack(children: segments);
   }
 
@@ -1556,16 +1720,14 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     if (_playbackMode == PlaybackMode.loop) {
       // 循环模式：计算当前轮次内的进度
       final completedRounds = _playedItems.length ~/ _generatedPlaylist.length;
-      final currentRoundItems = _playedItems.length % _generatedPlaylist.length;
+      final currentPositionInRound = _currentItemIndex;
       
       // 当前轮次已完成的片段
-      for (int i = 0; i < currentRoundItems; i++) {
-        if (i < _generatedPlaylist.length) {
-          final item = _generatedPlaylist[_playedItems[i]];
-          final itemDuration = item.effectiveDuration;
-          totalPlayedProgress +=
-              itemDuration.inMilliseconds / _totalDuration.inMilliseconds;
-        }
+      for (int i = 0; i < currentPositionInRound; i++) {
+        final item = _generatedPlaylist[i];
+        final itemDuration = item.effectiveDuration;
+        totalPlayedProgress +=
+            itemDuration.inMilliseconds / _totalDuration.inMilliseconds;
       }
       
       // 当前片段的进度
@@ -1645,6 +1807,54 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         ),
       ),
     );
+  }
+
+  bool _canPlayPrevious() {
+    if (_generatedPlaylist.isEmpty) return false;
+    
+    switch (_playbackMode) {
+      case PlaybackMode.sequential:
+        // 顺序模式：只有在不是第一个时才可点击
+        return _currentItemIndex > 0;
+      case PlaybackMode.loop:
+        // 循环模式：始终可以点击（会循环到最后一个）
+        return true;
+      case PlaybackMode.random:
+        // 随机模式：始终可以点击（会随机选择）
+        return true;
+    }
+  }
+
+  int _getNextRandomIndex({bool excludeCurrent = false}) {
+    List<int> availableIndices = [];
+    for (int i = 0; i < _generatedPlaylist.length; i++) {
+      if (!excludeCurrent || i != _currentItemIndex) {
+        availableIndices.add(i);
+      }
+    }
+    if (availableIndices.isEmpty) {
+      return -1; // 没有可用索引
+    }
+    
+    int selectedIndex = availableIndices[Random().nextInt(availableIndices.length)];
+    print('Playlist: Random index selected: $selectedIndex (excludeCurrent: $excludeCurrent, currentIndex: $_currentItemIndex)');
+    return selectedIndex;
+  }
+
+  bool _canPlayNext() {
+    if (_generatedPlaylist.isEmpty) return false;
+    
+    switch (_playbackMode) {
+      case PlaybackMode.sequential:
+        // 顺序模式：只有在不是最后一个时才可点击
+        return _currentItemIndex < _generatedPlaylist.length - 1;
+      case PlaybackMode.loop:
+        // 循环模式：始终可以点击（会循环到第一个）
+        return true;
+      case PlaybackMode.random:
+        // 随机模式：始终可以点击（会随机选择）
+        return true;
+    }
   }
 
   Color _getClipColor(VideoClip clip) {
