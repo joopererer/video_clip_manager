@@ -60,13 +60,24 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   bool _showClipRelativeProgress = true; // 控制是否显示clip相对进度
   bool _isMuted = false; // 静音状态
   
+  // 新增：全局焦点节点
+  late final FocusNode _focusNode;
+  
   @override
   void initState() {
     super.initState();
     _currentClip = widget.clip; // 初始化当前clip
     mainPlayer = Player();
     mainController = VideoController(mainPlayer);
+    _focusNode = FocusNode(); // 初始化焦点节点
     _initializePlayers();
+    
+    // 延迟请求焦点，确保组件完全初始化
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
+    });
   }
 
   Future<void> _initializePlayers() async {
@@ -343,6 +354,9 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     _recoveryTimer?.cancel();
     _positionSubscription?.cancel();
     _playingSubscription?.cancel();
+    
+    // 释放焦点节点
+    _focusNode.dispose();
     
     // 安全地停止和释放播放器
     _disposePlayers();
@@ -677,7 +691,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     final nextClip = _getNextClip();
 
     return RawKeyboardListener(
-      focusNode: FocusNode(),
+      focusNode: _focusNode, // 使用全局焦点节点
       onKey: _handleKeyPress,
       child: Container(
         padding: const EdgeInsets.all(16.0),

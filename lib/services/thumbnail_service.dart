@@ -37,6 +37,11 @@ class ThumbnailService {
     return '$clipId.jpg';
   }
 
+  String getTempThumbnailFileName(String clipId) {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    return '${clipId}_temp_$timestamp.jpg';
+  }
+
   String buildThumbnailPath(String dbPath, String thumbnailFileName) {
     final thumbDir = getThumbnailDirForDatabase(dbPath);
     return p.join(thumbDir, thumbnailFileName);
@@ -48,6 +53,25 @@ class ThumbnailService {
     String entityId, {
     required String dbPath,
   }) async {
+    return _generateThumbnailInternal(videoPath, time, entityId, dbPath, false);
+  }
+
+  Future<String?> generateTempThumbnail(
+    String videoPath,
+    Duration time,
+    String entityId, {
+    required String dbPath,
+  }) async {
+    return _generateThumbnailInternal(videoPath, time, entityId, dbPath, true);
+  }
+
+  Future<String?> _generateThumbnailInternal(
+    String videoPath,
+    Duration time,
+    String entityId,
+    String dbPath,
+    bool isTemp,
+  ) async {
     final previousFuture = _processingFuture;
     final completer = Completer<String?>();
     _processingFuture = completer.future.then(
@@ -59,7 +83,10 @@ class ThumbnailService {
 
     try {
       final thumbDir = getThumbnailDirForDatabase(dbPath);
-      final thumbFile = File(p.join(thumbDir, getThumbnailFileName(entityId)));
+      final fileName = isTemp 
+          ? getTempThumbnailFileName(entityId)
+          : getThumbnailFileName(entityId);
+      final thumbFile = File(p.join(thumbDir, fileName));
 
       await Directory(thumbDir).create(recursive: true);
 
@@ -86,7 +113,6 @@ class ThumbnailService {
 
       if (data != null) {
         await thumbFile.writeAsBytes(data);
-        final fileName = getThumbnailFileName(entityId);
         debugPrint(
           'ThumbnailService: Generated thumbnail at ${thumbFile.path}',
         );
@@ -110,6 +136,27 @@ class ThumbnailService {
       return true;
     }
     return false;
+  }
+
+  void cleanupTempThumbnails(String dbPath, String clipId) {
+    final thumbDir = getThumbnailDirForDatabase(dbPath);
+    final dir = Directory(thumbDir);
+    if (dir.existsSync()) {
+      final files = dir.listSync();
+      for (final file in files) {
+        if (file is File) {
+          final fileName = p.basename(file.path);
+          if (fileName.startsWith('${clipId}_temp_') && fileName.endsWith('.jpg')) {
+            try {
+              file.deleteSync();
+              debugPrint('ThumbnailService: Cleaned up temp file $fileName');
+            } catch (e) {
+              debugPrint('ThumbnailService: Failed to delete temp file $fileName: $e');
+            }
+          }
+        }
+      }
+    }
   }
 
   void dispose() {
