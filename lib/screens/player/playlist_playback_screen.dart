@@ -2050,20 +2050,19 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
           _thumbnailData = null;
         });
       },
-      onHover: (event) {
-        final dx = event.localPosition.dx;
-        final hoverTime = _getTimeFromDx(dx, containerWidth, _totalDuration);
-        
-        print('Playlist: Mouse hover at dx: $dx, time: $hoverTime');
-        
-        setState(() {
-          _hoverDx = dx;
-          _hoverTime = hoverTime;
-          if (_thumbnailData == null) {
-            _updatePreview(hoverTime);
-          }
-        });
-      },
+             onHover: (event) {
+         final dx = event.localPosition.dx;
+         final hoverTime = _getTimeFromDx(dx, containerWidth, _totalDuration);
+         
+         print('Playlist: Mouse hover at dx: $dx, time: $hoverTime');
+         
+         setState(() {
+           _hoverDx = dx;
+           _hoverTime = hoverTime;
+           // 始终更新预览图，确保跨clip移动时能正确更新
+           _updatePreview(hoverTime);
+         });
+       },
       child: GestureDetector(
         onTapUp: (details) {
           final tapTime = _getTimeFromDx(
@@ -2168,8 +2167,8 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
           final videoPath = clipMapping.videoPath;
           final previewTime = time - clipMapping.globalStartTime + clipMapping.clipStartTime;
           
-          // 使用关键帧预览系统
-          final data = await PreviewService().getNearestKeyframe(videoPath, previewTime);
+          // 使用关键帧预览系统 - 这是同步方法，直接调用
+          final data = PreviewService().getNearestKeyframe(videoPath, previewTime);
           
           if (mounted && _isHoveringGlobalProgress) {
             setState(() {
