@@ -384,12 +384,19 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       widget.onSetEnd(newTime);
     }
 
-    // 同步 seek 到新位置
-    _safeSeek(newTime);
+    // 拖曳过程中不 seek，只更新 UI
+    // 如果需要预览图，可以在这里触发预览图更新
+    if (widget.showThumbnailPreview) {
+      _updatePreview(newTime);
+    }
   }
 
   // 新增：处理拖拽结束
   void _handleDragEnd(DragEndDetails details) {
+    // 拖曳结束后执行精确 seek
+    final currentTime = _isDraggingStart ? widget.startTime : widget.endTime;
+    _safeSeek(currentTime);
+    
     setState(() {
       _isDraggingStart = false;
       _isDraggingEnd = false;
@@ -422,6 +429,8 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     }
   }
 
+
+
   // 新增：安全的seek方法
   Future<void> _safeSeek(Duration position) async {
     try {
@@ -434,8 +443,8 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       print('CustomProgressBar: Executing seek to $position...'); // 调试信息
       await widget.player.seek(position);
 
-      // 验证seek是否成功
-      await Future.delayed(Duration(milliseconds: 100));
+      // 验证seek是否成功 - 减少等待时间
+      await Future.delayed(Duration(milliseconds: 50));
       final newPosition = widget.player.state.position;
       print(
         'CustomProgressBar: Seek completed. New position: $newPosition, Target: $position',
@@ -778,22 +787,22 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
         child: Container(
           width: 20,
           height: 20,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
-            boxShadow: _isDragging && 
-                ((isStartMarker && _isDraggingStart) || 
-                 (!isStartMarker && _isDraggingEnd))
-                ? [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.5),
-                      blurRadius: 8,
-                      spreadRadius: 2,
-                    ),
-                  ]
-                : null,
-          ),
+                     decoration: BoxDecoration(
+             color: color,
+             shape: BoxShape.circle,
+             border: Border.all(color: Colors.white, width: 2),
+             boxShadow: _isDragging && 
+                 ((isStartMarker && _isDraggingStart) || 
+                  (!isStartMarker && _isDraggingEnd))
+                 ? [
+                     BoxShadow(
+                       color: color.withValues(alpha: 0.7),
+                       blurRadius: 12,
+                       spreadRadius: 3,
+                     ),
+                   ]
+                 : null,
+           ),
           child: Icon(
             isStartMarker ? Icons.flag_outlined : Icons.flag,
             color: Colors.white,
