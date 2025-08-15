@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart' hide Playlist;
@@ -10,7 +11,6 @@ import '../../data/models.dart';
 import '../../data/app_state.dart';
 // 添加颜色生成函数的导入
 import '../../widgets/custom_progress_bar.dart';
-import '../../widgets/custom_player_controls.dart';
 
 // 播放模式枚举
 enum PlaybackMode {
@@ -36,7 +36,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
   // 添加焦点节点
   late final FocusNode _focusNode;
-  
+
   bool _isPlaying = false;
   bool _isPlayerReady = false; // 播放器就绪状态
   bool _disposed = false; // 组件销毁状态
@@ -50,16 +50,16 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
   Duration _currentItemDuration = Duration.zero;
-  
+
   bool _showPlaylistInfo = true;
-  bool _showCustomProgressBar = true;
   bool _showHints = false; // 控制提示显示
   bool _showGlobalProgress = false; // 控制进度条模式：false=片段进度，true=全局进度
+  bool _isMuted = false; // 静音状态
 
   // 播放模式相关
   PlaybackMode _playbackMode = PlaybackMode.sequential;
   Duration _totalPlayedTime = Duration.zero; // 总播放时间
-  List<int> _playedItems = []; // 已播放的片段索引
+  final List<int> _playedItems = []; // 已播放的片段索引
   List<PlaylistItemWithClip> _generatedPlaylist = []; // 预生成的播放列表
 
   @override
@@ -81,7 +81,9 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
   // 处理键盘快捷键
   void _handleKeyPress(RawKeyEvent event) {
-    print('Playlist: Key pressed: ${event.logicalKey.keyLabel}'); // 调试信息
+    if (kDebugMode) {
+      print('Playlist: Key pressed: ${event.logicalKey.keyLabel}');
+    } // 调试信息
 
     if (event is RawKeyDownEvent) {
       switch (event.logicalKey.keyLabel) {
@@ -133,6 +135,11 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
             _showPlaylistInfo = !_showPlaylistInfo;
           });
           break;
+        case 'S':
+        case 's':
+          // S键：切换静音
+          _toggleMute();
+          break;
         default:
           // 检查Ctrl + 数字键
           if (event.isControlPressed && event.logicalKey.keyLabel.length == 1) {
@@ -159,6 +166,21 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
           }
           break;
       }
+    }
+  }
+
+  // 切换静音状态
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+    });
+
+    if (_isMuted) {
+      player.setVolume(0);
+      print('Playlist: Audio muted');
+    } else {
+      player.setVolume(100);
+      print('Playlist: Audio unmuted');
     }
   }
 
@@ -204,7 +226,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
             break;
           }
         }
-        
+
         if (currentItemIndexInDefault >= 0) {
           _currentItemIndex = currentItemIndexInDefault;
           _currentItem = _generatedPlaylist[currentItemIndexInDefault];
@@ -217,7 +239,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         _currentItem = _generatedPlaylist[0];
       }
     }
-    
+
     _currentItemDuration = _currentItem!.effectiveDuration;
 
     // 重新计算总时长
@@ -273,14 +295,14 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
   void _initializePlaylist() {
     final appState = context.read<AppState>();
-    
+
     _playlistItems = <PlaylistItemWithClip>[];
 
     for (final playlistItem in widget.playlist.items) {
       try {
-      // 从 AppState 获取对应的 clip 数据
-      final clip = appState.clips.firstWhere(
-        (clip) => clip.id == playlistItem.clipId,
+        // 从 AppState 获取对应的 clip 数据
+        final clip = appState.clips.firstWhere(
+          (clip) => clip.id == playlistItem.clipId,
         );
         _playlistItems.add(
           PlaylistItemWithClip(item: playlistItem, clip: clip),
@@ -308,14 +330,18 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       });
       return;
     }
-    
+
     if (_playlistItems.isNotEmpty) {
       // 打印默认播放列表信息
-      print('Playlist: Default playlist initialized with ${_playlistItems.length} items:');
+      print(
+        'Playlist: Default playlist initialized with ${_playlistItems.length} items:',
+      );
       for (int i = 0; i < _playlistItems.length; i++) {
-        print('Playlist: Default item $i: ${_playlistItems[i].clip.name} (ID: ${_playlistItems[i].clip.id})');
+        print(
+          'Playlist: Default item $i: ${_playlistItems[i].clip.name} (ID: ${_playlistItems[i].clip.id})',
+        );
       }
-      
+
       // 生成初始播放列表
       _generatePlaylist();
 
@@ -335,7 +361,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
     final clip = _currentItem!.clip;
     final item = _currentItem!.item;
-    
+
     // 确定播放的起始和结束时间
     final startTime = item.customStartTime ?? clip.startTime;
     final endTime = item.customEndTime ?? clip.endTime;
@@ -360,23 +386,23 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     setState(() {
       _isPlayerReady = false;
     });
-    
+
     // 打开媒体文件
     await player.open(Media(clip.videoPath), play: false);
-    
+
     if (mounted) {
       // 等待媒体加载完成
       await Future.delayed(Duration(milliseconds: 200));
-      
+
       // 跳转到开始时间
       await player.seek(startTime);
-      
+
       // 再等待一下确保seek完成
       await Future.delayed(Duration(milliseconds: 50));
-      
+
       // 开始播放
       await player.play();
-      
+
       setState(() {
         _isPlaying = true;
       });
@@ -403,20 +429,25 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
           } else if (_playbackMode == PlaybackMode.loop) {
             // 循环播放：基于播放历史计算进度
             // 计算当前轮次：已播放片段数 / 总长度
-            final completedRounds = _playedItems.length ~/ _generatedPlaylist.length;
+            final completedRounds =
+                _playedItems.length ~/ _generatedPlaylist.length;
             final currentPositionInRound = _currentItemIndex;
-            
+
             // 完整轮次的总时长
             _totalPlayedTime = _totalDuration * completedRounds;
-            
+
             // 当前轮次已播放的片段
             for (int i = 0; i < currentPositionInRound; i++) {
               _totalPlayedTime += _generatedPlaylist[i].effectiveDuration;
             }
-            
+
             // 添加调试信息
-            print('Playlist: Loop mode progress - completedRounds: $completedRounds, currentPositionInRound: $currentPositionInRound');
-            print('Playlist: Loop mode progress - totalPlayedTime: $_totalPlayedTime, totalDuration: $_totalDuration');
+            print(
+              'Playlist: Loop mode progress - completedRounds: $completedRounds, currentPositionInRound: $currentPositionInRound',
+            );
+            print(
+              'Playlist: Loop mode progress - totalPlayedTime: $_totalPlayedTime, totalDuration: $_totalDuration',
+            );
           } else if (_playbackMode == PlaybackMode.random) {
             // 随机播放：按实际播放的片段累积
             for (int i = 0; i < _playedItems.length; i++) {
@@ -451,7 +482,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
             _totalPlayedTime += currentItemPlayedTime;
           }
         });
-        
+
         // 检查是否到达当前片段的结束时间
         final currentEndTime =
             _currentItem?.item.customEndTime ?? _currentItem?.clip.endTime;
@@ -520,9 +551,9 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       if (mounted) {
         // 只在状态真正改变时才更新UI
         if (_isPlaying != playing) {
-        setState(() {
-          _isPlaying = playing;
-        });
+          setState(() {
+            _isPlaying = playing;
+          });
           print('Playlist: UI state updated, _isPlaying: $_isPlaying'); // 调试信息
         } else {
           print(
@@ -630,30 +661,36 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
             unplayedItems.add(i);
           }
         }
-        
-        print('Playlist: Random mode - playedItems: $_playedItems, unplayedItems: $unplayedItems'); // 调试信息
+
+        print(
+          'Playlist: Random mode - playedItems: $_playedItems, unplayedItems: $unplayedItems',
+        ); // 调试信息
 
         // 如果所有片段都播放过了，重新开始
         if (unplayedItems.isEmpty) {
           print('Playlist: All items played, resetting for new round'); // 调试信息
           _playedItems.clear();
-          
+
           // 保存当前播放的片段（刚播放完的片段）
           final lastPlayedClip = _currentItem;
-          
+
           // 重新生成随机播放列表，确保第一个片段与刚播放完的不同
           _generateRandomPlaylistExcluding(lastPlayedClip);
-          
+
           // 新列表的第一个片段开始播放
           nextIndex = 0;
-          print('Playlist: New random playlist generated, starting with index 0'); // 调试信息
-          
+          print(
+            'Playlist: New random playlist generated, starting with index 0',
+          ); // 调试信息
+
           // 强制更新UI以确保底色分段同步（在重新生成播放列表后）
           if (mounted) {
             setState(() {});
-            print('Playlist: UI updated after playlist regeneration in _playNextItem');
+            print(
+              'Playlist: UI updated after playlist regeneration in _playNextItem',
+            );
           }
-          
+
           // 重要：重新生成播放列表后，需要重新计算未播放的片段
           unplayedItems = [];
           for (int i = 0; i < _generatedPlaylist.length; i++) {
@@ -661,7 +698,9 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
               unplayedItems.add(i);
             }
           }
-          print('Playlist: After regeneration - playedItems: $_playedItems, unplayedItems: $unplayedItems'); // 调试信息
+          print(
+            'Playlist: After regeneration - playedItems: $_playedItems, unplayedItems: $unplayedItems',
+          ); // 调试信息
         } else {
           nextIndex = unplayedItems[Random().nextInt(unplayedItems.length)];
         }
@@ -673,16 +712,18 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
     if (nextIndex >= 0 && nextIndex < _generatedPlaylist.length) {
       print('Playlist: Playing next item at index $nextIndex'); // 调试信息
-      print('Playlist: Current item will be: ${_generatedPlaylist[nextIndex].clip.name}'); // 调试信息
+      print(
+        'Playlist: Current item will be: ${_generatedPlaylist[nextIndex].clip.name}',
+      ); // 调试信息
       _currentItemIndex = nextIndex;
       _currentItem = _generatedPlaylist[_currentItemIndex];
       _currentItemDuration = _currentItem!.effectiveDuration;
-      
+
       // 强制更新UI以确保底色分段同步
       if (mounted) {
         setState(() {});
       }
-      
+
       // 重新初始化播放器
       await _initializePlayer();
     } else {
@@ -709,54 +750,66 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     switch (_playbackMode) {
       case PlaybackMode.sequential:
         // 顺序模式：只有当前不是第一个时才可播放上一个
-    if (_currentItemIndex > 0) {
+        if (_currentItemIndex > 0) {
           previousIndex = _currentItemIndex - 1;
         }
         break;
       case PlaybackMode.loop:
         // 循环模式：可以循环到最后一个
-        previousIndex = (_currentItemIndex - 1 + _generatedPlaylist.length) % _generatedPlaylist.length;
+        previousIndex =
+            (_currentItemIndex - 1 + _generatedPlaylist.length) %
+            _generatedPlaylist.length;
         break;
       case PlaybackMode.random:
         // 随机模式：如果当前是第一个，重新生成列表
         if (_currentItemIndex == 0) {
-          print('Playlist: At first item in random mode, regenerating playlist');
-          
+          print(
+            'Playlist: At first item in random mode, regenerating playlist',
+          );
+
           // 保存当前播放的片段
           final currentClip = _currentItem;
-          
+
           // 重新生成随机播放列表，确保第一个不是当前播放的
           _generateRandomPlaylistExcluding(currentClip);
-          
+
           // 新列表的第一个位置开始播放
           previousIndex = 0;
-          print('Playlist: New random playlist generated, starting from first position: $previousIndex');
-          
+          print(
+            'Playlist: New random playlist generated, starting from first position: $previousIndex',
+          );
+
           // 强制更新UI以确保底色分段同步（在重新生成播放列表后）
           if (mounted) {
             setState(() {});
-            print('Playlist: UI updated after playlist regeneration in _playPreviousItem');
+            print(
+              'Playlist: UI updated after playlist regeneration in _playPreviousItem',
+            );
           }
         } else {
           // 如果不在第一个，跳到当前列表的前一个位置
           previousIndex = _currentItemIndex - 1;
-          print('Playlist: Random mode - going to previous item at index $previousIndex');
+          print(
+            'Playlist: Random mode - going to previous item at index $previousIndex',
+          );
         }
         break;
     }
 
     if (previousIndex >= 0 && previousIndex < _generatedPlaylist.length) {
       print('Playlist: Playing previous item at index $previousIndex'); // 调试信息
-      print('Playlist: Previous item will be: ${_generatedPlaylist[previousIndex].clip.name}'); // 调试信息
+      print(
+        'Playlist: Previous item will be: ${_generatedPlaylist[previousIndex].clip.name}',
+      ); // 调试信息
       _currentItemIndex = previousIndex;
       _currentItem = _generatedPlaylist[previousIndex];
       _currentItemDuration = _currentItem!.effectiveDuration;
-      
+
       // 强制更新UI以确保底色分段同步
       if (mounted) {
         setState(() {});
       }
-      
+
       // 重新初始化播放器
       await _initializePlayer();
     } else {
@@ -769,7 +822,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       _currentItemIndex = index;
       _currentItem = _generatedPlaylist[index];
       _currentItemDuration = _currentItem!.effectiveDuration;
-      
+
       // 重新初始化播放器
       await _initializePlayer();
     }
@@ -789,11 +842,11 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     try {
       if (player.state.playing) {
         print('Playlist: Player is playing, pausing...'); // 调试信息
-      await player.pause();
+        await player.pause();
         print('Playlist: Player paused successfully'); // 调试信息
-    } else {
+      } else {
         print('Playlist: Player is paused, playing...'); // 调试信息
-      await player.play();
+        await player.play();
         print('Playlist: Player played successfully'); // 调试信息
       }
 
@@ -833,30 +886,6 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     }
   }
 
-  Future<void> _safePlay() async {
-    print(
-      'Playlist: _safePlay called, _isPlayerReady: $_isPlayerReady, _disposed: $_disposed',
-    ); // 调试信息
-    if (!_isPlayerReady || _disposed) {
-      print('Playlist: Cannot play - player not ready or disposed'); // 调试信息
-      return;
-    }
-
-    try {
-      print('Playlist: Calling player.play()'); // 调试信息
-      await player.play();
-      print('Playlist: player.play() completed'); // 调试信息
-      if (mounted && !_disposed) {
-        setState(() {
-          _isPlaying = true;
-        });
-        print('Playlist: UI state set to _isPlaying: true'); // 调试信息
-      }
-    } catch (e) {
-      print('Playlist: Error during play: $e'); // 调试信息
-    }
-  }
-
   void _replayCurrentItem() async {
     if (_currentItem != null) {
       await _initializePlayer();
@@ -866,28 +895,6 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
   // 获取当前clip的唯一标识
   String _getCurrentClipKey() {
     return "${_currentItem?.clip.id}_$_currentItemIndex";
-  }
-
-  // 检查位置是否在合理范围内
-  bool _isPositionReasonable(
-    Duration position,
-    Duration startTime,
-    Duration endTime,
-  ) {
-    // 位置应该在开始时间和结束时间之间，允许1秒的容错
-    return position >= startTime && position <= endTime + Duration(seconds: 1);
-  }
-
-  // 验证位置是否正确重置到开始时间
-  bool _isPositionReset(Duration position, Duration startTime) {
-    return (position - startTime).abs() < Duration(milliseconds: 200);
-  }
-
-  // 检查初始化延迟
-  bool _isInitializationDelayPassed() {
-    if (_initializationStartTime == null) return false;
-    return DateTime.now().difference(_initializationStartTime!) >=
-        Duration(milliseconds: 500);
   }
 
   // 触发播放下一个片段的保护方法
@@ -921,13 +928,15 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
     // 重新计算总时长
     _totalDuration = _calculateTotalDuration();
-    
+
     // 强制更新UI以确保底色分段同步
     if (mounted) {
       setState(() {});
     }
-    
-    print('Playlist: Generated playlist with ${_generatedPlaylist.length} items for ${_playbackMode} mode');
+
+    print(
+      'Playlist: Generated playlist with ${_generatedPlaylist.length} items for ${_playbackMode} mode',
+    );
     print('Playlist: Total duration updated to: $_totalDuration');
   }
 
@@ -942,14 +951,18 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     }
 
     print('Playlist: Original playlist has ${_playlistItems.length} items');
-    print('Playlist: Ensuring ${excludeItem.clip.name} is not at first position');
-    
+    print(
+      'Playlist: Ensuring ${excludeItem.clip.name} is not at first position',
+    );
+
     // 打印所有原始片段的ID，检查是否有重复
     print('Playlist: All original items:');
     for (int i = 0; i < _playlistItems.length; i++) {
-      print('Playlist: Item $i: ${_playlistItems[i].clip.name} (ID: ${_playlistItems[i].clip.id})');
+      print(
+        'Playlist: Item $i: ${_playlistItems[i].clip.name} (ID: ${_playlistItems[i].clip.id})',
+      );
     }
-    
+
     // 检查是否有重复的ID
     final Set<String> allIds = {};
     final List<String> duplicateIds = [];
@@ -960,7 +973,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         allIds.add(item.clip.id);
       }
     }
-    
+
     if (duplicateIds.isNotEmpty) {
       print('Playlist: WARNING - Found duplicate IDs: $duplicateIds');
     } else {
@@ -970,27 +983,34 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     // 生成随机播放列表，确保指定片段不在第一个位置
     _generatedPlaylist = List.from(_playlistItems);
     _generatedPlaylist.shuffle(Random());
-    
+
     // 如果指定片段在第一个位置，将其移动到其他随机位置
     if (_generatedPlaylist[0].clip.id == excludeItem.clip.id) {
-      print('Playlist: Excluded item was at first position, moving to random position');
-      
+      print(
+        'Playlist: Excluded item was at first position, moving to random position',
+      );
+
       // 随机选择一个非第一个位置
-      final randomPosition = Random().nextInt(_generatedPlaylist.length - 1) + 1;
-      
+      final randomPosition =
+          Random().nextInt(_generatedPlaylist.length - 1) + 1;
+
       // 交换第一个位置和随机位置
       final temp = _generatedPlaylist[0];
       _generatedPlaylist[0] = _generatedPlaylist[randomPosition];
       _generatedPlaylist[randomPosition] = temp;
-      
-      print('Playlist: Moved ${excludeItem.clip.name} from position 0 to position $randomPosition');
+
+      print(
+        'Playlist: Moved ${excludeItem.clip.name} from position 0 to position $randomPosition',
+      );
     } else {
-      print('Playlist: Excluded item is not at first position, no need to move');
+      print(
+        'Playlist: Excluded item is not at first position, no need to move',
+      );
     }
 
     // 重新计算总时长
     _totalDuration = _calculateTotalDuration();
-    
+
     // 强制更新UI以确保底色分段同步
     if (mounted) {
       setState(() {});
@@ -998,17 +1018,19 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     } else {
       print('Playlist: WARNING - Widget not mounted, cannot update UI');
     }
-    
-    print('Playlist: Generated random playlist ensuring ${excludeItem.clip.name} not at first');
+
+    print(
+      'Playlist: Generated random playlist ensuring ${excludeItem.clip.name} not at first',
+    );
     print('Playlist: New playlist has ${_generatedPlaylist.length} items');
     print('Playlist: Total duration updated to: $_totalDuration');
-    
+
     // 打印最终播放列表
     print('Playlist: Final playlist order:');
     for (int i = 0; i < _generatedPlaylist.length; i++) {
       print('Playlist: Position $i: ${_generatedPlaylist[i].clip.name}');
     }
-    
+
     // 验证播放列表是否正确更新
     print('Playlist: Verification - _generatedPlaylist content:');
     for (int i = 0; i < _generatedPlaylist.length; i++) {
@@ -1027,14 +1049,18 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     }
 
     print('Playlist: Original playlist has ${_playlistItems.length} items');
-    print('Playlist: Ensuring ${excludeItem.clip.name} is not at last position');
-    
+    print(
+      'Playlist: Ensuring ${excludeItem.clip.name} is not at last position',
+    );
+
     // 打印所有原始片段的ID，检查是否有重复
     print('Playlist: All original items:');
     for (int i = 0; i < _playlistItems.length; i++) {
-      print('Playlist: Item $i: ${_playlistItems[i].clip.name} (ID: ${_playlistItems[i].clip.id})');
+      print(
+        'Playlist: Item $i: ${_playlistItems[i].clip.name} (ID: ${_playlistItems[i].clip.id})',
+      );
     }
-    
+
     // 检查是否有重复的ID
     final Set<String> allIds = {};
     final List<String> duplicateIds = [];
@@ -1045,7 +1071,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         allIds.add(item.clip.id);
       }
     }
-    
+
     if (duplicateIds.isNotEmpty) {
       print('Playlist: WARNING - Found duplicate IDs: $duplicateIds');
     } else {
@@ -1055,36 +1081,44 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     // 生成随机播放列表，确保指定片段不在最后一个位置
     _generatedPlaylist = List.from(_playlistItems);
     _generatedPlaylist.shuffle(Random());
-    
+
     // 如果指定片段在最后一个位置，将其移动到其他随机位置
-    if (_generatedPlaylist[_generatedPlaylist.length - 1].clip.id == excludeItem.clip.id) {
-      print('Playlist: Excluded item was at last position, moving to random position');
-      
+    if (_generatedPlaylist[_generatedPlaylist.length - 1].clip.id ==
+        excludeItem.clip.id) {
+      print(
+        'Playlist: Excluded item was at last position, moving to random position',
+      );
+
       // 随机选择一个非最后一个位置
       final randomPosition = Random().nextInt(_generatedPlaylist.length - 1);
-      
+
       // 交换最后一个位置和随机位置
       final temp = _generatedPlaylist[_generatedPlaylist.length - 1];
-      _generatedPlaylist[_generatedPlaylist.length - 1] = _generatedPlaylist[randomPosition];
+      _generatedPlaylist[_generatedPlaylist.length - 1] =
+          _generatedPlaylist[randomPosition];
       _generatedPlaylist[randomPosition] = temp;
-      
-      print('Playlist: Moved ${excludeItem.clip.name} from last position to position $randomPosition');
+
+      print(
+        'Playlist: Moved ${excludeItem.clip.name} from last position to position $randomPosition',
+      );
     } else {
       print('Playlist: Excluded item is not at last position, no need to move');
     }
 
     // 重新计算总时长
     _totalDuration = _calculateTotalDuration();
-    
+
     // 强制更新UI以确保底色分段同步
     if (mounted) {
       setState(() {});
     }
-    
-    print('Playlist: Generated random playlist ensuring ${excludeItem.clip.name} not at last');
+
+    print(
+      'Playlist: Generated random playlist ensuring ${excludeItem.clip.name} not at last',
+    );
     print('Playlist: New playlist has ${_generatedPlaylist.length} items');
     print('Playlist: Total duration updated to: $_totalDuration');
-    
+
     // 打印最终播放列表
     print('Playlist: Final playlist order:');
     for (int i = 0; i < _generatedPlaylist.length; i++) {
@@ -1114,10 +1148,14 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
             break;
           }
         }
-        
+
         if (currentItemIndexInDefault >= 0) {
           // 从当前片段开始，按默认列表次序重新排列
-          for (int i = currentItemIndexInDefault; i < _playlistItems.length; i++) {
+          for (
+            int i = currentItemIndexInDefault;
+            i < _playlistItems.length;
+            i++
+          ) {
             _generatedPlaylist.add(_playlistItems[i]);
           }
           // 添加当前片段之前的片段（循环）
@@ -1145,12 +1183,16 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     if (mounted) {
       setState(() {});
     }
-    
-    print('Playlist: Generated playlist with current first, ${_generatedPlaylist.length} items for ${_playbackMode} mode');
+
+    print(
+      'Playlist: Generated playlist with current first, ${_generatedPlaylist.length} items for ${_playbackMode} mode',
+    );
   }
 
   // 恢复默认播放列表并定位到当前片段
-  void _restoreDefaultPlaylistWithCurrentItem(PlaylistItemWithClip? currentItem) {
+  void _restoreDefaultPlaylistWithCurrentItem(
+    PlaylistItemWithClip? currentItem,
+  ) {
     _generatedPlaylist.clear();
 
     if (currentItem == null) {
@@ -1165,10 +1207,14 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
           break;
         }
       }
-      
+
       if (currentItemIndexInDefault >= 0) {
         // 从当前片段开始，按默认列表次序重新排列
-        for (int i = currentItemIndexInDefault; i < _playlistItems.length; i++) {
+        for (
+          int i = currentItemIndexInDefault;
+          i < _playlistItems.length;
+          i++
+        ) {
           _generatedPlaylist.add(_playlistItems[i]);
         }
         // 添加当前片段之前的片段（循环）
@@ -1185,8 +1231,10 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     if (mounted) {
       setState(() {});
     }
-    
-    print('Playlist: Restored default playlist with current item, ${_generatedPlaylist.length} items for ${_playbackMode} mode');
+
+    print(
+      'Playlist: Restored default playlist with current item, ${_generatedPlaylist.length} items for ${_playbackMode} mode',
+    );
   }
 
   // 使用默认播放列表次序（不重新排列）
@@ -1197,8 +1245,10 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     if (mounted) {
       setState(() {});
     }
-    
-    print('Playlist: Using default playlist order, ${_generatedPlaylist.length} items for ${_playbackMode} mode');
+
+    print(
+      'Playlist: Using default playlist order, ${_generatedPlaylist.length} items for ${_playbackMode} mode',
+    );
   }
 
   // 重置播放进度状态
@@ -1295,18 +1345,18 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         focusNode: _focusNode, // 使用焦点节点
         onKey: _handleKeyPress,
         child: Column(
-        children: [
-          // 播放器区域
-          Expanded(
-            flex: 3,
-            child: Card(
-              elevation: 4.0,
-              margin: const EdgeInsets.all(8.0),
-              clipBehavior: Clip.antiAlias,
+          children: [
+            // 播放器区域
+            Expanded(
+              flex: 3,
+              child: Card(
+                elevation: 4.0,
+                margin: const EdgeInsets.all(8.0),
+                clipBehavior: Clip.antiAlias,
                 child: Stack(
                   children: [
                     GestureDetector(
-                onTap: _togglePlayPause,
+                      onTap: _togglePlayPause,
                       child: Video(controller: controller),
                     ),
                     // 快捷键提示悬浮窗
@@ -1339,6 +1389,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                               _buildShortcutHint('→ / D', 'Next'),
                               _buildShortcutHint('P', 'Toggle Progress Mode'),
                               _buildShortcutHint('M', 'Toggle Playback Mode'),
+                              _buildShortcutHint('S', 'Toggle Mute'),
                               _buildShortcutHint('Ctrl+1-9', 'Play Item 1-9'),
                               _buildShortcutHint('Ctrl+0', 'Play Item 10'),
                               _buildShortcutHint('F1', 'Toggle Hints'),
@@ -1347,40 +1398,40 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                         ),
                       ),
                   ],
+                ),
               ),
             ),
-          ),
-          
-          // 播放列表信息区域
-          if (_showPlaylistInfo) ...[
-            Container(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 当前播放信息
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '当前播放: ${_currentItem?.clip.name ?? ""}',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+
+            // 播放列表信息区域
+            if (_showPlaylistInfo) ...[
+              Container(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 当前播放信息
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '当前播放: ${_currentItem?.clip.name ?? ""}',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
                               Row(
                                 spacing: 8,
                                 children: [
-                            Text(
+                                  Text(
                                     '${_currentItemIndex + 1} / ${_generatedPlaylist.length}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey.shade600,
-                              ),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade600,
+                                    ),
                                   ),
                                   const SizedBox(width: 8, child: Text("|")),
                                   // 添加播放模式信息
@@ -1403,46 +1454,51 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                                     ),
                                   ),
                                 ],
-                            ),
-                          ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      // 播放控制按钮
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.skip_previous),
+                        // 播放控制按钮
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.skip_previous),
                               onPressed: _canPlayPrevious()
                                   ? _playPreviousItem
                                   : null,
                               tooltip: '上一个片段 (← / A)',
-                          ),
-                          IconButton(
+                            ),
+                            IconButton(
                               icon: Icon(
                                 _isPlaying ? Icons.pause : Icons.play_arrow,
                               ),
-                            onPressed: _togglePlayPause,
+                              onPressed: _togglePlayPause,
                               tooltip: _isPlaying ? '暂停 (Space)' : '播放 (Space)',
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.skip_next),
-                              onPressed: _canPlayNext()
-                                  ? _playNextItem
-                                  : null,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.skip_next),
+                              onPressed: _canPlayNext() ? _playNextItem : null,
                               tooltip: '下一个片段 (→ / D)',
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.replay),
-                            onPressed: _replayCurrentItem,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.replay),
+                              onPressed: _replayCurrentItem,
                               tooltip: '重播当前片段 (R)',
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 8),
-                  
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                _isMuted ? Icons.volume_off : Icons.volume_up,
+                              ),
+                              onPressed: _toggleMute,
+                              tooltip: _isMuted ? '取消静音 (S)' : '静音 (S)',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 8),
+
                     // 统一进度条（固定高度，避免跳动）
                     Container(
                       height: 40, // 固定高度
@@ -1451,35 +1507,35 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                           ? _buildGlobalProgressBar()
                           : _buildClipProgressBar(),
                     ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
-          
-          // 播放列表轨道视图
-          Expanded(
-            flex: 2,
-            child: Container(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '播放列表轨道',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+            ],
+
+            // 播放列表轨道视图
+            Expanded(
+              flex: 2,
+              child: Container(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '播放列表轨道',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     Expanded(child: _buildPlaylistTimeline()),
                   ],
                 ),
               ),
-                  ),
-                ],
-              ),
             ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1536,13 +1592,13 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
             (item) => item.clip.id == itemWithClip.clip.id,
           );
           final sortOrder = generatedIndex >= 0 ? generatedIndex + 1 : null;
-          
+
           return GestureDetector(
             onTap: () => _playItemAtIndex(index),
             child: Container(
               margin: const EdgeInsets.symmetric(vertical: 2),
               decoration: BoxDecoration(
-                color: isCurrentItem 
+                color: isCurrentItem
                     ? _getClipColor(itemWithClip.clip).withValues(
                         alpha: 0.3,
                       ) // 当前播放项使用更深的颜色
@@ -1559,31 +1615,31 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
               ),
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
-              child: Row(
-                children: [
+                child: Row(
+                  children: [
                     // 播放状态指示器
                     Container(
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                    color: isCurrentItem 
+                        color: isCurrentItem
                             ? _getClipColor(itemWithClip.clip)
-                        : isPlayed 
+                            : isPlayed
                             ? Colors.green.shade400
                             : Colors.grey.shade400,
                         shape: BoxShape.circle,
-                  ),
+                      ),
                     ),
                     const SizedBox(width: 12),
-                  
-                  // 片段信息
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          itemWithClip.clip.name,
-                          style: TextStyle(
+
+                    // 片段信息
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            itemWithClip.clip.name,
+                            style: TextStyle(
                               fontWeight: isCurrentItem
                                   ? FontWeight.bold
                                   : FontWeight.normal,
@@ -1591,17 +1647,17 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                                   ? Colors.blue.shade700
                                   : Colors.black87,
                               fontSize: isCurrentItem ? 14 : 13,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
                           Row(
                             children: [
-                        Text(
-                          '时长: ${_formatDuration(itemWithClip.effectiveDuration)}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
+                              Text(
+                                '时长: ${_formatDuration(itemWithClip.effectiveDuration)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
                                 ),
                               ),
                               if (itemWithClip.item.customStartTime != null ||
@@ -1628,11 +1684,11 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                               ],
                             ],
                           ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  
-                  // 序号
+
+                    // 序号
                     Container(
                       width: 24,
                       height: 24,
@@ -1644,10 +1700,10 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                       ),
                       child: Center(
                         child: Text(
-                    '${index + 1}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+                          '${index + 1}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
                             color: isCurrentItem
                                 ? Colors.blue.shade600
                                 : Colors.grey.shade600,
@@ -1702,26 +1758,32 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       // 循环模式：显示当前轮次内的播放时间
       final completedRounds = _playedItems.length ~/ _generatedPlaylist.length;
       final currentPositionInRound = _currentItemIndex;
-      
+
       // 计算当前轮次内的播放时间
       Duration currentRoundPlayedTime = Duration.zero;
-      
+
       // 当前轮次已播放的片段
       for (int i = 0; i < currentPositionInRound; i++) {
         currentRoundPlayedTime += _generatedPlaylist[i].effectiveDuration;
       }
-      
+
       // 添加调试信息
-      print('Playlist: Display time - completedRounds: $completedRounds, currentPositionInRound: $currentPositionInRound');
-      print('Playlist: Display time - currentRoundPlayedTime: $currentRoundPlayedTime');
-      
+      print(
+        'Playlist: Display time - completedRounds: $completedRounds, currentPositionInRound: $currentPositionInRound',
+      );
+      print(
+        'Playlist: Display time - currentRoundPlayedTime: $currentRoundPlayedTime',
+      );
+
       // 加上当前片段的播放时间
       if (_currentItem != null) {
-        final currentItemStartTime = _currentItem!.item.customStartTime ?? _currentItem!.clip.startTime;
-        final currentItemEndTime = _currentItem!.item.customEndTime ?? _currentItem!.clip.endTime;
+        final currentItemStartTime =
+            _currentItem!.item.customStartTime ?? _currentItem!.clip.startTime;
+        final currentItemEndTime =
+            _currentItem!.item.customEndTime ?? _currentItem!.clip.endTime;
         final currentItemDuration = currentItemEndTime - currentItemStartTime;
         final relativePosition = _currentPosition - currentItemStartTime;
-        
+
         Duration currentItemPlayedTime;
         if (relativePosition < Duration.zero) {
           currentItemPlayedTime = Duration.zero;
@@ -1730,10 +1792,10 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         } else {
           currentItemPlayedTime = relativePosition;
         }
-        
+
         currentRoundPlayedTime += currentItemPlayedTime;
       }
-      
+
       return currentRoundPlayedTime;
     } else {
       // 顺序和随机模式：显示总播放时间
@@ -1751,22 +1813,24 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       // 循环模式：计算当前轮次内的进度
       final completedRounds = _playedItems.length ~/ _generatedPlaylist.length;
       final currentPositionInRound = _currentItemIndex;
-      
+
       // 计算当前轮次内的播放时间
       Duration currentRoundPlayedTime = Duration.zero;
-      
+
       // 当前轮次已播放的片段
       for (int i = 0; i < currentPositionInRound; i++) {
         currentRoundPlayedTime += _generatedPlaylist[i].effectiveDuration;
       }
-      
+
       // 加上当前片段的播放时间
       if (_currentItem != null) {
-        final currentItemStartTime = _currentItem!.item.customStartTime ?? _currentItem!.clip.startTime;
-        final currentItemEndTime = _currentItem!.item.customEndTime ?? _currentItem!.clip.endTime;
+        final currentItemStartTime =
+            _currentItem!.item.customStartTime ?? _currentItem!.clip.startTime;
+        final currentItemEndTime =
+            _currentItem!.item.customEndTime ?? _currentItem!.clip.endTime;
         final currentItemDuration = currentItemEndTime - currentItemStartTime;
         final relativePosition = _currentPosition - currentItemStartTime;
-        
+
         Duration currentItemPlayedTime;
         if (relativePosition < Duration.zero) {
           currentItemPlayedTime = Duration.zero;
@@ -1775,16 +1839,18 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         } else {
           currentItemPlayedTime = relativePosition;
         }
-        
+
         currentRoundPlayedTime += currentItemPlayedTime;
       }
-      
+
       // 计算当前轮次内的百分比
-      final percentage = (currentRoundPlayedTime.inSeconds / _totalDuration.inSeconds) * 100;
+      final percentage =
+          (currentRoundPlayedTime.inSeconds / _totalDuration.inSeconds) * 100;
       return percentage.clamp(0.0, 100.0).toStringAsFixed(0);
     } else {
       // 顺序和随机模式：使用原有的计算方式
-      final percentage = (_totalPlayedTime.inSeconds / _totalDuration.inSeconds) * 100;
+      final percentage =
+          (_totalPlayedTime.inSeconds / _totalDuration.inSeconds) * 100;
       return percentage.clamp(0.0, 100.0).toStringAsFixed(0);
     }
   }
@@ -1884,17 +1950,24 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
     // 强制刷新：确保使用最新的播放列表
     // 添加调试信息来确认播放列表状态
-    print('Playlist: _buildBackgroundSegments - Current item index: $_currentItemIndex');
-    print('Playlist: _buildBackgroundSegments - Generated playlist length: ${_generatedPlaylist.length}');
-    print('Playlist: _buildBackgroundSegments - Current item name: ${_currentItem?.clip.name ?? "null"}');
-    
+    print(
+      'Playlist: _buildBackgroundSegments - Current item index: $_currentItemIndex',
+    );
+    print(
+      'Playlist: _buildBackgroundSegments - Generated playlist length: ${_generatedPlaylist.length}',
+    );
+    print(
+      'Playlist: _buildBackgroundSegments - Current item name: ${_currentItem?.clip.name ?? "null"}',
+    );
+
     // 绘制所有clip的底色分段（按照播放列表顺序显示）
     double accumulatedProgress = 0.0;
-    
+
     for (int i = 0; i < _generatedPlaylist.length; i++) {
       final item = _generatedPlaylist[i];
       final itemDuration = item.effectiveDuration;
-      final itemProgress = itemDuration.inMilliseconds / _totalDuration.inMilliseconds;
+      final itemProgress =
+          itemDuration.inMilliseconds / _totalDuration.inMilliseconds;
 
       segments.add(
         Positioned(
@@ -1919,12 +1992,14 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
           ),
         ),
       );
-      
+
       accumulatedProgress += itemProgress;
     }
 
     // 添加详细的调试信息
-    print('Playlist: Background segments built for ${_generatedPlaylist.length} items');
+    print(
+      'Playlist: Background segments built for ${_generatedPlaylist.length} items',
+    );
     print('Playlist: Current playback mode: $_playbackMode');
     print('Playlist: Current item index: $_currentItemIndex');
     print('Playlist: Total duration: $_totalDuration');
@@ -1932,9 +2007,12 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     print('Playlist: Generated playlist order:');
     for (int i = 0; i < _generatedPlaylist.length; i++) {
       final itemDuration = _generatedPlaylist[i].effectiveDuration;
-      final itemProgress = itemDuration.inMilliseconds / _totalDuration.inMilliseconds;
+      final itemProgress =
+          itemDuration.inMilliseconds / _totalDuration.inMilliseconds;
       final isCurrentItem = i == _currentItemIndex;
-      print('Playlist: Generated[$i]: ${_generatedPlaylist[i].clip.name} (duration: $itemDuration, progress: ${(itemProgress * 100).toStringAsFixed(1)}%) ${isCurrentItem ? " [CURRENT]" : ""}');
+      print(
+        'Playlist: Generated[$i]: ${_generatedPlaylist[i].clip.name} (duration: $itemDuration, progress: ${(itemProgress * 100).toStringAsFixed(1)}%) ${isCurrentItem ? " [CURRENT]" : ""}',
+      );
     }
 
     return Stack(children: segments);
@@ -1950,7 +2028,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       // 循环模式：计算当前轮次内的进度
       final completedRounds = _playedItems.length ~/ _generatedPlaylist.length;
       final currentPositionInRound = _currentItemIndex;
-      
+
       // 当前轮次已完成的片段
       for (int i = 0; i < currentPositionInRound; i++) {
         final item = _generatedPlaylist[i];
@@ -1958,7 +2036,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         totalPlayedProgress +=
             itemDuration.inMilliseconds / _totalDuration.inMilliseconds;
       }
-      
+
       // 当前片段的进度
       if (_currentItem != null) {
         final currentItemPlayedTime = _getCurrentItemRelativePosition();
@@ -2040,7 +2118,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
   bool _canPlayPrevious() {
     if (_generatedPlaylist.isEmpty) return false;
-    
+
     switch (_playbackMode) {
       case PlaybackMode.sequential:
         // 顺序模式：只有在不是第一个时才可点击
@@ -2064,15 +2142,18 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     if (availableIndices.isEmpty) {
       return -1; // 没有可用索引
     }
-    
-    int selectedIndex = availableIndices[Random().nextInt(availableIndices.length)];
-    print('Playlist: Random index selected: $selectedIndex (excludeCurrent: $excludeCurrent, currentIndex: $_currentItemIndex)');
+
+    int selectedIndex =
+        availableIndices[Random().nextInt(availableIndices.length)];
+    print(
+      'Playlist: Random index selected: $selectedIndex (excludeCurrent: $excludeCurrent, currentIndex: $_currentItemIndex)',
+    );
     return selectedIndex;
   }
 
   bool _canPlayNext() {
     if (_generatedPlaylist.isEmpty) return false;
-    
+
     switch (_playbackMode) {
       case PlaybackMode.sequential:
         // 顺序模式：只有在不是最后一个时才可点击
