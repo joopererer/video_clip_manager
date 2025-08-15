@@ -18,6 +18,9 @@ import 'models.dart';
 const String _prefsKeyDbPath = 'db_path';
 
 class AppState extends ChangeNotifier {
+  // 静态实例，用于全局访问
+  static AppState? _instance;
+  static AppState? get instance => _instance;
   final SharedPreferences _prefs;
   final PathService _pathService;
   final ThumbnailService _thumbnailService;
@@ -79,6 +82,9 @@ class AppState extends ChangeNotifier {
     _videosIsGridView = _prefs.getBool('videosIsGridView') ?? false;
     _playlistsIsGridView = _prefs.getBool('playlistsIsGridView') ?? false;
     _playlistsSortBy = _prefs.getString('playlistsSortBy') ?? 'name';
+    
+    // 设置静态实例
+    _instance = this;
   }
 
   void _setLoading(bool value) {

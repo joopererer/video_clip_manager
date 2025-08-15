@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
+import '../data/app_state.dart'; // Added for AppState
 
 /// 使用media_kit生成视频预览图的服务
 /// 预生成关键帧预览图，避免播放时的卡顿
@@ -52,8 +53,27 @@ class PreviewService {
   Future<void> _initCacheDir() async {
     if (_cacheDir != null) return;
     
-    final appDir = await getApplicationDocumentsDirectory();
-    _cacheDir = Directory(path.join(appDir.path, 'preview_cache'));
+    // 修改：使用与数据库相同的目录，提高缓存持久性
+    // 从AppState获取当前数据库路径，如果不可用则使用默认路径
+    String cacheBasePath;
+    try {
+      // 尝试从全局状态获取数据库路径
+      final appState = AppState.instance;
+      if (appState?.currentDbFullPath != null) {
+        final dbDir = path.dirname(appState!.currentDbFullPath!);
+        cacheBasePath = path.join(dbDir, 'PreviewCache');
+      } else {
+        // 备用方案：使用应用文档目录
+        final appDir = await getApplicationDocumentsDirectory();
+        cacheBasePath = path.join(appDir.path, 'VideoClipManager', 'PreviewCache');
+      }
+    } catch (e) {
+      // 如果获取失败，使用默认路径
+      final appDir = await getApplicationDocumentsDirectory();
+      cacheBasePath = path.join(appDir.path, 'VideoClipManager', 'PreviewCache');
+    }
+    
+    _cacheDir = Directory(cacheBasePath);
     
     if (!await _cacheDir!.exists()) {
       await _cacheDir!.create(recursive: true);
@@ -102,11 +122,24 @@ class PreviewService {
               if (timeSeconds != null) {
                 final time = Duration(seconds: timeSeconds);
                 final data = await file.readAsBytes();
-                tempCache[time] = data;
+                
+                // 验证缓存文件完整性（检查文件大小）
+                if (data.length > 1000) { // 预览图应该至少1KB
+                  tempCache[time] = data;
+                } else {
+                  print('PreviewService: Removing corrupted cache file: ${file.path}');
+                  await file.delete();
+                }
               }
             }
           } catch (e) {
             print('PreviewService: Error loading cache file ${file.path}: $e');
+            // 删除损坏的缓存文件
+            try {
+              await file.delete();
+            } catch (deleteError) {
+              print('PreviewService: Error deleting corrupted file: $deleteError');
+            }
           }
         }
         
@@ -173,6 +206,47 @@ class PreviewService {
     }
   }
 
+  /// 缓存恢复机制：当缓存丢失时自动重新生成
+  Future<void> _recoverCache(String videoPath, Duration totalDuration) async {
+    final cacheKey = _getCacheKey(videoPath);
+    
+    // 检查是否需要恢复缓存
+    final hasAnyCache = _keyframeCache[cacheKey]?.isNotEmpty == true;
+    if (hasAnyCache) {
+      print('PreviewService: Cache exists for $videoPath, no recovery needed');
+      return;
+    }
+    
+    print('PreviewService: Cache recovery needed for $videoPath');
+    
+    // 检查文件缓存
+    try {
+      await _initCacheDir();
+      final files = _cacheDir!.listSync();
+      final videoHash = md5.convert(utf8.encode(videoPath)).toString();
+      
+      int fileCount = 0;
+      for (final file in files) {
+        if (file is File && file.path.contains(videoHash)) {
+          fileCount++;
+        }
+      }
+      
+      if (fileCount > 0) {
+        print('PreviewService: Found $fileCount cache files, attempting to reload');
+        // 重新加载缓存
+        await loadExistingCache();
+        return;
+      }
+    } catch (e) {
+      print('PreviewService: Error checking file cache: $e');
+    }
+    
+    // 如果文件缓存也不存在，标记为需要重新生成
+    print('PreviewService: No cache found, will regenerate for $videoPath');
+    _preGenerating[cacheKey] = false; // 重置状态，允许重新生成
+  }
+
   /// 预生成关键帧预览图
   /// [player] 播放器实例
   /// [videoPath] 视频文件路径
@@ -186,6 +260,15 @@ class PreviewService {
     
     // 如果已经在预生成，跳过
     if (_preGenerating[cacheKey] == true) {
+      return;
+    }
+    
+    // 尝试缓存恢复
+    await _recoverCache(videoPath, totalDuration);
+    
+    // 如果恢复后已有缓存，跳过生成
+    if (_keyframeCache[cacheKey]?.isNotEmpty == true) {
+      print('PreviewService: Cache recovered for $videoPath, skipping generation');
       return;
     }
     
