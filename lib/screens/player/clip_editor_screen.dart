@@ -542,13 +542,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                       }
                       player.playOrPause();
                     },
-                    child: Video(
-                      controller: controller,
-                      controls: (state) => CustomPlayerControls(
-                        player: player,
-                        videoState: state,
-                      ),
-                    ),
+                    child: Video(controller: controller),
                   ),
                 ),
               ),
@@ -1158,21 +1152,5 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
               },
             ),
     );
-  }
-}
-
-class CustomPlayerControls extends StatelessWidget {
-  final Player player;
-  final VideoState videoState;
-
-  const CustomPlayerControls({
-    super.key,
-    required this.player,
-    required this.videoState,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialVideoControls(videoState);
   }
 }
