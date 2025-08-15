@@ -113,13 +113,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
             _showHints = !_showHints;
           });
           break;
-        case 'P':
-        case 'p':
-          // P键：切换自定义进度条显示
-          setState(() {
-            _showCustomProgressBar = !_showCustomProgressBar;
-          });
-          break;
+
         case 'M':
         case 'm':
           // M键：切换播放模式
@@ -1340,15 +1334,96 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     return '${parts[0]}:${parts[1]}:${parts[2]}';
   }
 
+  Duration _getDisplayTime() {
+    if (_playbackMode == PlaybackMode.loop) {
+      // 循环模式：显示当前轮次内的播放时间
+      final completedRounds = _playedItems.length ~/ _generatedPlaylist.length;
+      final currentRoundItems = _playedItems.length % _generatedPlaylist.length;
+      
+      // 计算当前轮次内的播放时间
+      Duration currentRoundPlayedTime = Duration.zero;
+      
+      // 当前轮次已播放的片段
+      for (int i = 0; i < currentRoundItems; i++) {
+        if (i < _generatedPlaylist.length) {
+          currentRoundPlayedTime += _generatedPlaylist[_playedItems[i]].effectiveDuration;
+        }
+      }
+      
+      // 加上当前片段的播放时间
+      if (_currentItem != null) {
+        final currentItemStartTime = _currentItem!.item.customStartTime ?? _currentItem!.clip.startTime;
+        final currentItemEndTime = _currentItem!.item.customEndTime ?? _currentItem!.clip.endTime;
+        final currentItemDuration = currentItemEndTime - currentItemStartTime;
+        final relativePosition = _currentPosition - currentItemStartTime;
+        
+        Duration currentItemPlayedTime;
+        if (relativePosition < Duration.zero) {
+          currentItemPlayedTime = Duration.zero;
+        } else if (relativePosition > currentItemDuration) {
+          currentItemPlayedTime = currentItemDuration;
+        } else {
+          currentItemPlayedTime = relativePosition;
+        }
+        
+        currentRoundPlayedTime += currentItemPlayedTime;
+      }
+      
+      return currentRoundPlayedTime;
+    } else {
+      // 顺序和随机模式：显示总播放时间
+      return _totalPlayedTime;
+    }
+  }
+
   String _getGlobalProgressPercentage() {
     if (_totalDuration.inSeconds == 0) {
       return '0';
     }
 
-    // 计算百分比，但限制在100%以内
-    final percentage =
-        (_totalPlayedTime.inSeconds / _totalDuration.inSeconds) * 100;
-    return percentage.clamp(0.0, 100.0).toStringAsFixed(0);
+    // 根据播放模式计算百分比
+    if (_playbackMode == PlaybackMode.loop) {
+      // 循环模式：计算当前轮次内的进度
+      final completedRounds = _playedItems.length ~/ _generatedPlaylist.length;
+      final currentRoundItems = _playedItems.length % _generatedPlaylist.length;
+      
+      // 计算当前轮次内的播放时间
+      Duration currentRoundPlayedTime = Duration.zero;
+      
+      // 当前轮次已播放的片段
+      for (int i = 0; i < currentRoundItems; i++) {
+        if (i < _generatedPlaylist.length) {
+          currentRoundPlayedTime += _generatedPlaylist[_playedItems[i]].effectiveDuration;
+        }
+      }
+      
+      // 加上当前片段的播放时间
+      if (_currentItem != null) {
+        final currentItemStartTime = _currentItem!.item.customStartTime ?? _currentItem!.clip.startTime;
+        final currentItemEndTime = _currentItem!.item.customEndTime ?? _currentItem!.clip.endTime;
+        final currentItemDuration = currentItemEndTime - currentItemStartTime;
+        final relativePosition = _currentPosition - currentItemStartTime;
+        
+        Duration currentItemPlayedTime;
+        if (relativePosition < Duration.zero) {
+          currentItemPlayedTime = Duration.zero;
+        } else if (relativePosition > currentItemDuration) {
+          currentItemPlayedTime = currentItemDuration;
+        } else {
+          currentItemPlayedTime = relativePosition;
+        }
+        
+        currentRoundPlayedTime += currentItemPlayedTime;
+      }
+      
+      // 计算当前轮次内的百分比
+      final percentage = (currentRoundPlayedTime.inSeconds / _totalDuration.inSeconds) * 100;
+      return percentage.clamp(0.0, 100.0).toStringAsFixed(0);
+    } else {
+      // 顺序和随机模式：使用原有的计算方式
+      final percentage = (_totalPlayedTime.inSeconds / _totalDuration.inSeconds) * 100;
+      return percentage.clamp(0.0, 100.0).toStringAsFixed(0);
+    }
   }
 
   Duration _getCurrentItemRelativePosition() {
@@ -1377,7 +1452,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       children: [
         // 时间显示
         Text(
-          _formatDuration(_totalPlayedTime),
+          _formatDuration(_getDisplayTime()),
           style: const TextStyle(fontFamily: 'monospace'),
         ),
         const SizedBox(width: 8),
@@ -1475,51 +1550,89 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
   Widget _buildProgressOverlay(double containerWidth) {
     if (_totalDuration.inMilliseconds == 0) return const SizedBox.shrink();
 
-    // 计算总播放进度
+    // 根据播放模式计算进度
     double totalPlayedProgress = 0.0;
 
-    // 已完成的片段
-    for (
-      int i = 0;
-      i < _playedItems.length && i < _generatedPlaylist.length;
-      i++
-    ) {
-      final item = _generatedPlaylist[_playedItems[i]];
-      final itemDuration = item.effectiveDuration;
-      totalPlayedProgress +=
-          itemDuration.inMilliseconds / _totalDuration.inMilliseconds;
-    }
-
-    // 当前片段的进度
-    if (_currentItem != null) {
-      final currentItemPlayedTime = _getCurrentItemRelativePosition();
-      final currentItemDuration = _currentItem!.effectiveDuration;
-      if (currentItemDuration.inMilliseconds > 0) {
-        final currentItemProgress =
-            currentItemPlayedTime.inMilliseconds /
-            currentItemDuration.inMilliseconds;
-
-        // 计算当前片段在总进度中的位置
-        double currentItemPosition = 0.0;
-        for (
-          int i = 0;
-          i < _playedItems.length && i < _generatedPlaylist.length;
-          i++
-        ) {
+    if (_playbackMode == PlaybackMode.loop) {
+      // 循环模式：计算当前轮次内的进度
+      final completedRounds = _playedItems.length ~/ _generatedPlaylist.length;
+      final currentRoundItems = _playedItems.length % _generatedPlaylist.length;
+      
+      // 当前轮次已完成的片段
+      for (int i = 0; i < currentRoundItems; i++) {
+        if (i < _generatedPlaylist.length) {
           final item = _generatedPlaylist[_playedItems[i]];
           final itemDuration = item.effectiveDuration;
-          currentItemPosition +=
+          totalPlayedProgress +=
               itemDuration.inMilliseconds / _totalDuration.inMilliseconds;
         }
+      }
+      
+      // 当前片段的进度
+      if (_currentItem != null) {
+        final currentItemPlayedTime = _getCurrentItemRelativePosition();
+        final currentItemDuration = _currentItem!.effectiveDuration;
+        if (currentItemDuration.inMilliseconds > 0) {
+          final currentItemProgress =
+              currentItemPlayedTime.inMilliseconds /
+              currentItemDuration.inMilliseconds;
 
-        // 当前片段已播放的部分
-        final currentItemProgressInTotal =
-            (currentItemDuration.inMilliseconds /
-                _totalDuration.inMilliseconds) *
-            currentItemProgress;
-        totalPlayedProgress += currentItemProgressInTotal;
+          // 当前片段已播放的部分
+          final currentItemProgressInTotal =
+              (currentItemDuration.inMilliseconds /
+                  _totalDuration.inMilliseconds) *
+              currentItemProgress;
+          totalPlayedProgress += currentItemProgressInTotal;
+        }
+      }
+    } else {
+      // 顺序和随机模式：使用原有的计算方式
+      // 已完成的片段
+      for (
+        int i = 0;
+        i < _playedItems.length && i < _generatedPlaylist.length;
+        i++
+      ) {
+        final item = _generatedPlaylist[_playedItems[i]];
+        final itemDuration = item.effectiveDuration;
+        totalPlayedProgress +=
+            itemDuration.inMilliseconds / _totalDuration.inMilliseconds;
+      }
+
+      // 当前片段的进度
+      if (_currentItem != null) {
+        final currentItemPlayedTime = _getCurrentItemRelativePosition();
+        final currentItemDuration = _currentItem!.effectiveDuration;
+        if (currentItemDuration.inMilliseconds > 0) {
+          final currentItemProgress =
+              currentItemPlayedTime.inMilliseconds /
+              currentItemDuration.inMilliseconds;
+
+          // 计算当前片段在总进度中的位置
+          double currentItemPosition = 0.0;
+          for (
+            int i = 0;
+            i < _playedItems.length && i < _generatedPlaylist.length;
+            i++
+          ) {
+            final item = _generatedPlaylist[_playedItems[i]];
+            final itemDuration = item.effectiveDuration;
+            currentItemPosition +=
+                itemDuration.inMilliseconds / _totalDuration.inMilliseconds;
+          }
+
+          // 当前片段已播放的部分
+          final currentItemProgressInTotal =
+              (currentItemDuration.inMilliseconds /
+                  _totalDuration.inMilliseconds) *
+              currentItemProgress;
+          totalPlayedProgress += currentItemProgressInTotal;
+        }
       }
     }
+
+    // 限制进度不超过100%
+    totalPlayedProgress = totalPlayedProgress.clamp(0.0, 1.0);
 
     return Positioned(
       left: 0,
