@@ -61,6 +61,10 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   bool _isDraggingStart = false;
   bool _isDraggingEnd = false;
   bool _isDragging = false;
+  
+  // 新增：拖拽起始位置记录
+  double? _dragStartDx;
+  Duration? _dragStartTime;
 
   // 新增：设备检测
   bool get isTouchDevice {
@@ -333,6 +337,11 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
 
   // 新增：处理拖拽开始
   void _handleDragStart(DragStartDetails details, bool isStartMarker) {
+    // 记录拖曳开始时的位置
+    final currentTime = isStartMarker ? widget.startTime : widget.endTime;
+    _dragStartTime = currentTime;
+    _dragStartDx = details.localPosition.dx;
+    
     setState(() {
       if (isStartMarker) {
         _isDraggingStart = true;
@@ -350,14 +359,19 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     double maxWidth,
     Duration totalDuration,
   ) {
-    // 对于拖拽，details.localPosition.dx 是相对于 GestureDetector 的
-    // 而 GestureDetector 在 Positioned 中，left = dx - 10
-    // 所以我们需要加上这个偏移来得到相对于进度条的坐标
-    // 但是，我们希望圆圈中心对准鼠标，所以需要加上圆圈的半径（10）
-    final localX = details.localPosition.dx + 10.0;
+    if (_dragStartDx == null || _dragStartTime == null) return;
+    
+    // 计算拖曳偏移量
+    final dragOffset = details.localPosition.dx - _dragStartDx!;
+    
+    // 计算起始位置在进度条上的坐标
+    final startDx = (_dragStartTime!.inMilliseconds / totalDuration.inMilliseconds) * maxWidth;
+    
+    // 计算新的位置
+    final newDx = startDx + dragOffset;
     
     // 确保位置在有效范围内
-    final clampedX = localX.clamp(0.0, maxWidth);
+    final clampedX = newDx.clamp(0.0, maxWidth);
     final newTime = _getTimeFromDx(
       clampedX,
       maxWidth,
@@ -380,6 +394,9 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       _isDraggingStart = false;
       _isDraggingEnd = false;
       _isDragging = false;
+      // 清除拖曳起始位置记录
+      _dragStartDx = null;
+      _dragStartTime = null;
     });
   }
 
