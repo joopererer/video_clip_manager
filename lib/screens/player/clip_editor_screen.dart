@@ -516,7 +516,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     return Column(
       children: [
         Expanded(
-          flex: 2,
+          flex: 4,
           child: Card(
             elevation: 4.0,
             margin: const EdgeInsets.all(8.0),
@@ -566,15 +566,19 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                 child: Center(child: CircularProgressIndicator()),
               );
             }
-            return CustomProgressBar(
-              player: player,
-              startTime: _formClip.startTime,
-              endTime: _formClip.endTime,
-              onSetStart: (time) => setState(
-                () => _formClip = _formClip.copyWith(startTime: time),
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+              child: CustomProgressBar(
+                player: player,
+                startTime: _formClip.startTime,
+                endTime: _formClip.endTime,
+                onSetStart: (time) => setState(
+                  () => _formClip = _formClip.copyWith(startTime: time),
+                ),
+                onSetEnd: (time) => setState(
+                  () => _formClip = _formClip.copyWith(endTime: time),
+                ),
               ),
-              onSetEnd: (time) =>
-                  setState(() => _formClip = _formClip.copyWith(endTime: time)),
             );
           },
         ),
@@ -617,7 +621,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                 const SizedBox(height: 16),
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    padding: const EdgeInsets.symmetric(vertical: 6.0),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [_buildRatingBar(), _buildFavoriteButton()],
@@ -654,8 +658,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                 theme.primaryColor,
               ),
               _buildTimeDisplay('End', _formClip.endTime, Colors.redAccent),
-              if (clipDuration > Duration.zero)
-                _buildTimeDisplay('Duration', clipDuration, null),
+              _buildTimeDisplay('Duration', clipDuration, null),
             ],
           ),
           const SizedBox(height: 8),
@@ -711,9 +714,8 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
 
   Widget _buildCoverControls() {
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
         child: Column(
           children: [
             Row(
@@ -934,7 +936,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Clips (${clipsForThisVideo.length})'),
-        backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
         centerTitle: true,
         toolbarHeight: 40,
       ),
@@ -977,88 +979,180 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                           borderRadius: BorderRadius.circular(12),
                         )
                       : null,
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: SizedBox(
-                          width: 100,
-                          height: 56,
-                          child: thumbFullPath != null
-                              ? Image.file(
-                                  File(thumbFullPath),
-                                  key: ValueKey(thumbFullPath),
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (c, e, s) =>
-                                      const Icon(Icons.error_outline),
-                                )
-                              : Container(
-                                  color: Colors.grey.shade300,
-                                  child: const Icon(
-                                    Icons.movie_creation_outlined,
-                                  ),
+                  child: InkWell(
+                    onTap: () => _startEditing(clip),
+                    child: Stack(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 缩略图
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: SizedBox(
+                                  width: 120,
+                                  height: 90,
+                                  child: thumbFullPath != null
+                                      ? Image.file(
+                                          File(thumbFullPath),
+                                          key: ValueKey(thumbFullPath),
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (c, e, s) =>
+                                              const Icon(Icons.error_outline),
+                                        )
+                                      : Container(
+                                          color: Colors.grey.shade300,
+                                          child: const Icon(
+                                            Icons.movie_creation_outlined,
+                                            size: 24,
+                                          ),
+                                        ),
                                 ),
-                        ),
-                        title: Text(
-                          clip.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                          '${formatDuration(clip.startTime)} - ${formatDuration(clip.endTime)} (${formatDuration(duration)})',
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                          ),
-                        ),
-                        onTap: () => _startEditing(clip),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            if (clip.isFavorite)
-                              const Icon(
-                                Icons.favorite,
-                                color: Colors.redAccent,
-                                size: 20,
                               ),
-                            if (clip.rating > 0) ...[
-                              const SizedBox(width: 4),
-                              Row(
-                                children: List.generate(
-                                  clip.rating,
-                                  (i) => const Icon(
-                                    Icons.star,
-                                    color: Colors.amber,
-                                    size: 20,
-                                  ),
+                              const SizedBox(width: 12),
+                              // 主要内容区域
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // 标题和时间信息
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            clip.name,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          formatDuration(duration),
+                                          style: TextStyle(
+                                            fontFamily: 'monospace',
+                                            fontSize: 14,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    // 时间范围
+                                    Text(
+                                      '${formatDuration(clip.startTime)} - ${formatDuration(clip.endTime)}',
+                                      style: TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                                                         // 标签显示
+                                     if (clip.tags.isNotEmpty)
+                                       Wrap(
+                                         spacing: 4,
+                                         runSpacing: 2,
+                                         children: clip.tags.take(3).map((tag) {
+                                           final color = generateTagColor(tag);
+                                           return Container(
+                                             padding: const EdgeInsets.symmetric(
+                                               horizontal: 6,
+                                               vertical: 2,
+                                             ),
+                                             decoration: BoxDecoration(
+                                               color: color.withValues(alpha: 0.2),
+                                               borderRadius:
+                                                   BorderRadius.circular(10),
+                                               border: Border.all(
+                                                 color: color.withValues(alpha: 0.6),
+                                                 width: 1,
+                                               ),
+                                             ),
+                                             child: Text(
+                                               tag,
+                                               style: TextStyle(
+                                                 fontSize: 12,
+                                                 color: color,
+                                                 fontWeight: FontWeight.w500,
+                                               ),
+                                             ),
+                                           );
+                                         }).toList(),
+                                       ),
+                                    if (clip.tags.length > 3)
+                                      Text(
+                                        '+${clip.tags.length - 3} more',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                      ),
+                                    const SizedBox(height: 4),
+                                    // 评分和收藏状态
+                                    Row(
+                                      children: [
+                                        if (clip.isFavorite)
+                                          const Icon(
+                                            Icons.favorite,
+                                            color: Colors.redAccent,
+                                            size: 16,
+                                          ),
+                                        if (clip.rating > 0) ...[
+                                          if (clip.isFavorite)
+                                            const SizedBox(width: 4),
+                                          Row(
+                                            children: List.generate(
+                                              clip.rating,
+                                              (i) => const Icon(
+                                                Icons.star,
+                                                color: Colors.amber,
+                                                size: 16,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
-                            const Spacer(),
-                            IconButton(
-                              icon: const Icon(Icons.play_circle_outline),
-                              color: Colors.green,
-                              tooltip: 'Play Clip',
-                              onPressed: () =>
-                                  _previewClip(clip.startTime, clip.endTime),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.edit_note),
-                              color: Colors.blue.shade700,
-                              tooltip: 'Edit Clip',
-                              onPressed: () => _startEditing(clip),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_forever_outlined),
-                              color: Colors.red.shade700,
-                              tooltip: 'Delete Clip',
-                              onPressed: () => _deleteClip(clip),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ],
+                        // 操作按钮 - 定位到整个Card的右下角
+                        Positioned(
+                          bottom: 4,
+                          right: 4,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.play_circle_outline),
+                                color: Colors.green,
+                                iconSize: 20,
+                                tooltip: 'Play Clip',
+                                onPressed: () =>
+                                    _previewClip(clip.startTime, clip.endTime),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_forever_outlined),
+                                color: Colors.red.shade700,
+                                iconSize: 20,
+                                tooltip: 'Delete Clip',
+                                onPressed: () => _deleteClip(clip),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
