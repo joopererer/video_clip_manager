@@ -283,7 +283,7 @@ class _TimelineItem extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
                 shadows: [
@@ -300,7 +300,7 @@ class _TimelineItem extends StatelessWidget {
             Text(
               _formatTimelineDuration(effectiveDuration),
               style: const TextStyle(
-                fontSize: 9,
+                fontSize: 8,
                 color: Colors.white70,
                 fontWeight: FontWeight.w500,
                 shadows: [

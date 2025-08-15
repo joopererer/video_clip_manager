@@ -163,14 +163,49 @@ class _VideosTabState extends State<VideosTab> {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-      child: ListTile(
-        leading: SizedBox(width: 80, child: VideoThumbnail(video: video)),
-        title: Text(video.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(
-          'Duration: ${video.duration != null ? _formatDuration(video.duration!) : "..."}  |  Clips: $clipCount',
-        ),
-        trailing: _buildVideoMenuButton(context, video),
+      clipBehavior: Clip.antiAlias, // 让 Card 内部的 InkWell 效果更好看
+      child: InkWell(
+        // 使用 InkWell 来替代 ListTile 的 onTap 和水波纹效果
         onTap: () => _navigateToClipEditor(context, video),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            children: [
+              // 预览图区域
+              SizedBox(
+                width: 100,
+                height: 75,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4.0),
+                  child: VideoThumbnail(video: video),
+                ),
+              ),
+              const SizedBox(width: 16),
+              // 中间文字区域 (自动填充剩余空间)
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      video.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Duration: ${video.duration != null ? _formatDuration(video.duration!) : "..."}  |  Clips: $clipCount',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+
+              // 右侧菜单按钮
+              _buildVideoMenuButton(context, video),
+            ],
+          ),
+        ),
       ),
     );
   }

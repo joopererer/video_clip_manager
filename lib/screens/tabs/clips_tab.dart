@@ -710,8 +710,8 @@ class _ClipListItemState extends State<ClipListItem> {
                 // 1. 略缩图 - 使用RepaintBoundary隔离
                 RepaintBoundary(
                   child: Container(
-                    width: 80, // 调整略缩图宽度
-                    height: 66, // 增加略缩图高度以匹配容器
+                    width: 90, // 调整略缩图宽度
+                    height: 68, // 增加略缩图高度以匹配容器
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(6),
                       color: Colors.grey.shade200,
@@ -747,14 +747,14 @@ class _ClipListItemState extends State<ClipListItem> {
                           '${formatDuration(widget.clip.startTime)} - ${formatDuration(widget.clip.endTime)} (${formatDuration(duration)})',
                           style: const TextStyle(
                             fontFamily: 'monospace',
-                            fontSize: 11,
+                            fontSize: 13,
                             color: Colors.grey,
                           ),
                         ),
                         if (widget.clip.tags.isNotEmpty) ...[
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 4),
                           Wrap(
-                            spacing: 4,
+                            spacing: 6,
                             runSpacing: 2,
                             children: widget.clip.tags
                                 .map((tag) => buildTagChip(tag))

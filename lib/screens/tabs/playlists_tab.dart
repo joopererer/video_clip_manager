@@ -363,7 +363,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     return GridView.builder(
       padding: const EdgeInsets.all(8.0),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 5,
+        crossAxisCount: 6,
         childAspectRatio: 0.85,
         crossAxisSpacing: 8.0,
         mainAxisSpacing: 8.0,
@@ -392,12 +392,12 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
         if (hovering) setState(() => _selectedPlaylistId = playlist.id);
       },
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         child: Row(
           children: [
             SizedBox(
-              width: 80,
-              height: 60,
+              width: 120,
+              height: 90,
               child: _buildPlaylistThumbnail(appState, playlist),
             ),
             const SizedBox(width: 16),
@@ -495,7 +495,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   if (playlist.description?.isNotEmpty ?? false) ...[
                     Text(
                       playlist.description!,
@@ -506,7 +506,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                   ],
                   Row(
                     children: [
@@ -529,7 +529,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   _buildPlaylistTimeline(context, playlist),
                 ],
               ),
@@ -563,175 +563,190 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
         children: [
           Expanded(
             flex: 4,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // 如果没有片段，显示占位符
-                if (itemsWithClips.isEmpty)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(8),
-                        topRight: Radius.circular(8),
-                      ),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        Icons.playlist_play,
-                        color: Colors.grey.shade400,
-                        size: 48,
-                      ),
-                    ),
-                  )
-                else
-                  // OPTIMIZED: 调用新的方法来构建复杂缩略图
-                  _buildMultiClipThumbnailStack(itemsWithClips),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // constraints 对象现在包含了父容器(Expanded)的可用宽高
+                // constraints.maxWidth 和 constraints.maxHeight
 
-                // 播放按钮覆盖
-                Center(
-                  child: Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.purple.shade600.withValues(alpha: 0.9),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.play_arrow,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                  ),
-                ),
-                // 操作按钮
-                Positioned(
-                  bottom: 8,
-                  right: 8,
-                  child: itemsWithClips.isNotEmpty
-                      ? Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(8),
+                // 将这个尺寸传递给你的函数
+                final parentSize = Size(
+                  constraints.maxWidth,
+                  constraints.maxHeight,
+                );
+
+                final play_icon_size = constraints.maxWidth / 4.5;
+
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // 如果没有片段，显示占位符
+                    if (itemsWithClips.isEmpty)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(8),
+                            topRight: Radius.circular(8),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildActionButton(
-                                icon: Icons.edit,
-                                color: Colors.blue.shade600,
-                                tooltip: "编辑",
-                                onPressed: () => _handlePlaylistAction(
-                                  context,
-                                  appState,
-                                  playlist,
-                                  'edit',
-                                ),
-                                isMini: true,
-                              ),
-                              const SizedBox(width: 4),
-                              _buildActionButton(
-                                icon: Icons.list,
-                                color: Colors.orange.shade600,
-                                tooltip: "管理片段",
-                                onPressed: () => _handlePlaylistAction(
-                                  context,
-                                  appState,
-                                  playlist,
-                                  'manage',
-                                ),
-                                isMini: true,
-                              ),
-                              const SizedBox(width: 4),
-                              _buildActionButton(
-                                icon: Icons.file_download,
-                                color: Colors.blue.shade600,
-                                tooltip: "导出",
-                                onPressed: () => _handlePlaylistAction(
-                                  context,
-                                  appState,
-                                  playlist,
-                                  'export',
-                                ),
-                                isMini: true,
-                                isLoading: _isExporting,
-                              ),
-                              const SizedBox(width: 4),
-                              _buildActionButton(
-                                icon: Icons.delete,
-                                color: Colors.red.shade600,
-                                tooltip: "删除",
-                                onPressed: () => _handlePlaylistAction(
-                                  context,
-                                  appState,
-                                  playlist,
-                                  'delete',
-                                ),
-                                isMini: true,
-                              ),
-                            ],
-                          ),
-                        )
-                      : Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildActionButton(
-                              icon: Icons.edit,
-                              color: Colors.blue.shade600,
-                              tooltip: "编辑",
-                              onPressed: () => _handlePlaylistAction(
-                                context,
-                                appState,
-                                playlist,
-                                'edit',
-                              ),
-                              isMini: true,
-                            ),
-                            const SizedBox(width: 4),
-                            _buildActionButton(
-                              icon: Icons.list,
-                              color: Colors.orange.shade600,
-                              tooltip: "管理片段",
-                              onPressed: () => _handlePlaylistAction(
-                                context,
-                                appState,
-                                playlist,
-                                'manage',
-                              ),
-                              isMini: true,
-                            ),
-                            const SizedBox(width: 4),
-                            _buildActionButton(
-                              icon: Icons.file_download,
-                              color: Colors.blue.shade600,
-                              tooltip: "导出",
-                              onPressed: () => _handlePlaylistAction(
-                                context,
-                                appState,
-                                playlist,
-                                'export',
-                              ),
-                              isMini: true,
-                              isLoading: _isExporting,
-                            ),
-                            const SizedBox(width: 4),
-                            _buildActionButton(
-                              icon: Icons.delete,
-                              color: Colors.red.shade600,
-                              tooltip: "删除",
-                              onPressed: () => _handlePlaylistAction(
-                                context,
-                                appState,
-                                playlist,
-                                'delete',
-                              ),
-                              isMini: true,
-                            ),
-                          ],
                         ),
-                ),
-              ],
+                        child: Center(
+                          child: Icon(
+                            Icons.playlist_play,
+                            color: Colors.grey.shade400,
+                            size: 48,
+                          ),
+                        ),
+                      )
+                    else
+                      // OPTIMIZED: 调用新的方法来构建复杂缩略图
+                      _buildMultiClipThumbnailStack(itemsWithClips, parentSize),
+
+                    // 播放按钮覆盖
+                    Center(
+                      child: Container(
+                        width: play_icon_size,
+                        height: play_icon_size,
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade600.withValues(alpha: 0.9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.play_arrow,
+                          color: Colors.white,
+                          size: play_icon_size / 1.8,
+                        ),
+                      ),
+                    ),
+                    // 操作按钮
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: itemsWithClips.isNotEmpty
+                          ? Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildActionButton(
+                                    icon: Icons.edit,
+                                    color: Colors.blue.shade600,
+                                    tooltip: "编辑",
+                                    onPressed: () => _handlePlaylistAction(
+                                      context,
+                                      appState,
+                                      playlist,
+                                      'edit',
+                                    ),
+                                    isMini: true,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  _buildActionButton(
+                                    icon: Icons.list,
+                                    color: Colors.orange.shade600,
+                                    tooltip: "管理片段",
+                                    onPressed: () => _handlePlaylistAction(
+                                      context,
+                                      appState,
+                                      playlist,
+                                      'manage',
+                                    ),
+                                    isMini: true,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  _buildActionButton(
+                                    icon: Icons.file_download,
+                                    color: Colors.blue.shade600,
+                                    tooltip: "导出",
+                                    onPressed: () => _handlePlaylistAction(
+                                      context,
+                                      appState,
+                                      playlist,
+                                      'export',
+                                    ),
+                                    isMini: true,
+                                    isLoading: _isExporting,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  _buildActionButton(
+                                    icon: Icons.delete,
+                                    color: Colors.red.shade600,
+                                    tooltip: "删除",
+                                    onPressed: () => _handlePlaylistAction(
+                                      context,
+                                      appState,
+                                      playlist,
+                                      'delete',
+                                    ),
+                                    isMini: true,
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildActionButton(
+                                  icon: Icons.edit,
+                                  color: Colors.blue.shade600,
+                                  tooltip: "编辑",
+                                  onPressed: () => _handlePlaylistAction(
+                                    context,
+                                    appState,
+                                    playlist,
+                                    'edit',
+                                  ),
+                                  isMini: true,
+                                ),
+                                const SizedBox(width: 4),
+                                _buildActionButton(
+                                  icon: Icons.list,
+                                  color: Colors.orange.shade600,
+                                  tooltip: "管理片段",
+                                  onPressed: () => _handlePlaylistAction(
+                                    context,
+                                    appState,
+                                    playlist,
+                                    'manage',
+                                  ),
+                                  isMini: true,
+                                ),
+                                const SizedBox(width: 4),
+                                _buildActionButton(
+                                  icon: Icons.file_download,
+                                  color: Colors.blue.shade600,
+                                  tooltip: "导出",
+                                  onPressed: () => _handlePlaylistAction(
+                                    context,
+                                    appState,
+                                    playlist,
+                                    'export',
+                                  ),
+                                  isMini: true,
+                                  isLoading: _isExporting,
+                                ),
+                                const SizedBox(width: 4),
+                                _buildActionButton(
+                                  icon: Icons.delete,
+                                  color: Colors.red.shade600,
+                                  tooltip: "删除",
+                                  onPressed: () => _handlePlaylistAction(
+                                    context,
+                                    appState,
+                                    playlist,
+                                    'delete',
+                                  ),
+                                  isMini: true,
+                                ),
+                              ],
+                            ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
           // 信息区域
@@ -828,9 +843,16 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
   // OPTIMIZED: 新增方法，构建完整的多缩略图Stack视图
   Widget _buildMultiClipThumbnailStack(
     List<PlaylistItemWithClip> itemsWithClips,
+    Size parentSize, // 接收父容器尺寸
   ) {
+    final double baseWidth = parentSize.width;
+    final double baseHeight = parentSize.height;
+
     // 定义堆叠缩略图的尺寸
-    final stackedSizes = [const Size(100, 70), const Size(80, 64)];
+    final stackedSizes = [
+      Size(baseWidth * 0.38, baseHeight * 0.28),
+      Size(baseWidth * 0.32, baseHeight * 0.24),
+    ];
 
     return Stack(
       fit: StackFit.expand,
@@ -915,8 +937,9 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
 
   Widget _buildPlaylistThumbnail(AppState appState, Playlist playlist) {
     final itemsWithClips = appState.getPlaylistItemsWithClips(playlist.id);
+    Widget content;
     if (itemsWithClips.isEmpty) {
-      return Container(
+      content = Container(
         color: Colors.grey.shade100,
         child: Center(
           child: Icon(
@@ -926,8 +949,10 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
           ),
         ),
       );
+    } else {
+      content = ClipThumbnail(clip: itemsWithClips.first.clip);
     }
-    return ClipThumbnail(clip: itemsWithClips.first.clip);
+    return ClipRRect(borderRadius: BorderRadius.circular(8.0), child: content);
   }
 
   Widget _buildActionButton({
@@ -978,7 +1003,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
         Text(
           text,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 13,
             color: color,
             fontWeight: FontWeight.w500,
           ),
@@ -990,7 +1015,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
   Widget _buildPlaylistTimeline(BuildContext context, Playlist playlist) {
     if (playlist.items.isEmpty) {
       return Container(
-        height: 30,
+        height: 28,
         decoration: BoxDecoration(
           color: Colors.grey.shade100,
           borderRadius: BorderRadius.circular(4),
@@ -1016,7 +1041,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
       ),
       child: PlaylistTimelineView(
         items: itemsWithClips,
-        height: 30,
+        height: 28,
         showDuration: false,
         showNames: true,
         enableReorder: false,
