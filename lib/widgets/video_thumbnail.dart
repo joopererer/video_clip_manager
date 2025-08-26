@@ -8,7 +8,7 @@ import '../data/models.dart';
 import '../services/thumbnail_service.dart';
 
 class VideoThumbnail extends StatelessWidget {
-  final OriginalVideo video;
+  final dynamic video; // OriginalVideo 或 OnlineVideo
   final double? width;
   final double? height;
   final BoxFit fit;
@@ -25,6 +25,16 @@ class VideoThumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (video is OriginalVideo) {
+      return _buildLocalVideoThumbnail(context, video as OriginalVideo);
+    } else if (video is OnlineVideo) {
+      return _buildOnlineVideoThumbnail(context, video as OnlineVideo);
+    } else {
+      return _buildPlaceholder();
+    }
+  }
+
+  Widget _buildLocalVideoThumbnail(BuildContext context, OriginalVideo video) {
     final thumbnailService = context.read<ThumbnailService>();
     final dbPath = context.read<AppState>().currentDbFullPath;
 
@@ -52,6 +62,21 @@ class VideoThumbnail extends StatelessWidget {
     );
   }
 
+  Widget _buildOnlineVideoThumbnail(BuildContext context, OnlineVideo video) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: borderRadius ?? BorderRadius.circular(8),
+        color: Colors.grey.shade300,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: video.thumbnailUrl != null
+          ? _buildNetworkImage(video.thumbnailUrl!)
+          : _buildPlaceholder(),
+    );
+  }
+
   Widget _buildImage(String path) {
     final imageFile = File(path);
 
@@ -69,6 +94,22 @@ class VideoThumbnail extends StatelessWidget {
       errorBuilder: (context, error, stackTrace) {
         // This catches errors like file corruption or read permissions
         debugPrint('Error loading thumbnail for $path: $error');
+        return _buildPlaceholder();
+      },
+    );
+  }
+
+  Widget _buildNetworkImage(String url) {
+    return Image.network(
+      url,
+      fit: fit,
+      key: ValueKey(url),
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('Error loading online thumbnail for $url: $error');
+        return _buildPlaceholder();
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
         return _buildPlaceholder();
       },
     );

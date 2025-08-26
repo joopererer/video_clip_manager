@@ -52,6 +52,12 @@ dependencies:
   desktop_drop: ^0.6.1
   cross_file: ^0.3.3+8
   crypto: ^3.0.3
+  
+  # 在线视频功能依赖
+  http: ^1.1.0
+  html: ^0.15.0
+  webview_flutter: ^4.0.0
+  process_run: ^0.13.0
 
 dev_dependencies:
   flutter_test:

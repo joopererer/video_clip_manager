@@ -30,6 +30,10 @@ class AppState extends ChangeNotifier {
   List<VideoClip> _clips = [];
   List<OriginalVideo> _originalVideos = [];
   List<Playlist> _playlists = [];
+  
+  // 新增：在线视频相关状态
+  List<OnlineVideo> _onlineVideos = [];
+  List<OnlineVideoClip> _onlineVideoClips = [];
 
   String? _currentDbPath;
   bool _isLoading = false;
@@ -53,6 +57,12 @@ class AppState extends ChangeNotifier {
       UnmodifiableListView(_originalVideos);
   UnmodifiableListView<Playlist> get playlists =>
       UnmodifiableListView(_playlists);
+  
+  // 新增：在线视频相关的getter
+  UnmodifiableListView<OnlineVideo> get onlineVideos => 
+      UnmodifiableListView(_onlineVideos);
+  UnmodifiableListView<OnlineVideoClip> get onlineVideoClips => 
+      UnmodifiableListView(_onlineVideoClips);
 
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
@@ -183,6 +193,8 @@ class AppState extends ChangeNotifier {
       _clips = result.clips ?? [];
       _originalVideos = result.videos ?? [];
       _playlists = result.playlists ?? [];
+      _onlineVideos = result.onlineVideos ?? [];
+      _onlineVideoClips = result.onlineVideoClips ?? [];
 
       _generateOriginalVideosIfNeeded();
       notifyListeners();
@@ -469,6 +481,8 @@ class AppState extends ChangeNotifier {
         _clips,
         _originalVideos,
         _playlists,
+        _onlineVideos,
+        _onlineVideoClips,
         _currentDbPath!,
       );
       _hasUnsavedChanges = false;
@@ -503,6 +517,14 @@ class AppState extends ChangeNotifier {
       _scheduleSave();
       updateVideoMetadata(video.id);
     }
+  }
+
+  void deleteOriginalVideo(String videoId) {
+    _originalVideos.removeWhere((v) => v.id == videoId);
+    // 同时删除相关的片段
+    _clips.removeWhere((c) => c.videoPath == _originalVideos.firstWhereOrNull((v) => v.id == videoId)?.path);
+    notifyListeners();
+    _scheduleSave();
   }
 
   Future<void> updateVideoMetadata(String videoId) async {
@@ -674,13 +696,7 @@ class AppState extends ChangeNotifier {
     await _save();
   }
 
-  UnmodifiableListView<String> get allTags {
-    final allTagsSet = <String>{};
-    for (var clip in _clips) {
-      allTagsSet.addAll(clip.tags);
-    }
-    return UnmodifiableListView(allTagsSet.toList()..sort());
-  }
+
 
   // --- Getters with Filtering ---
   List<VideoClip> getFilteredClips({
@@ -826,6 +842,155 @@ class AppState extends ChangeNotifier {
     _playlists.add(playlist);
     notifyListeners();
     _scheduleSave();
+  }
+
+  // --- 在线视频管理方法 ---
+  
+  /// 添加在线视频
+  Future<void> addOnlineVideo(OnlineVideo video) async {
+    if (_onlineVideos.any((v) => v.id == video.id)) {
+      throw Exception('Online video with ID ${video.id} already exists');
+    }
+    
+    _onlineVideos.add(video);
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// 更新在线视频
+  Future<void> updateOnlineVideo(OnlineVideo video) async {
+    final index = _onlineVideos.indexWhere((v) => v.id == video.id);
+    if (index != -1) {
+      _onlineVideos[index] = video;
+      notifyListeners();
+      _scheduleSave();
+    }
+  }
+
+  /// 删除在线视频
+  Future<void> deleteOnlineVideo(String videoId) async {
+    _onlineVideos.removeWhere((v) => v.id == videoId);
+    // 同时删除相关的在线片段
+    _onlineVideoClips.removeWhere((c) => c.onlineVideoId == videoId);
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// 获取在线视频
+  OnlineVideo? getOnlineVideo(String videoId) {
+    return _onlineVideos.firstWhereOrNull((v) => v.id == videoId);
+  }
+
+  /// 添加在线视频片段
+  Future<void> addOnlineVideoClip(OnlineVideoClip clip) async {
+    if (_onlineVideoClips.any((c) => c.id == clip.id)) {
+      throw Exception('Online video clip with ID ${clip.id} already exists');
+    }
+    
+    _onlineVideoClips.add(clip);
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// 更新在线视频片段
+  Future<void> updateOnlineVideoClip(OnlineVideoClip clip) async {
+    final index = _onlineVideoClips.indexWhere((c) => c.id == clip.id);
+    if (index != -1) {
+      _onlineVideoClips[index] = clip;
+      notifyListeners();
+      _scheduleSave();
+    }
+  }
+
+  /// 删除在线视频片段
+  Future<void> deleteOnlineVideoClip(String clipId) async {
+    _onlineVideoClips.removeWhere((c) => c.id == clipId);
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// 获取在线视频片段
+  OnlineVideoClip? getOnlineVideoClip(String clipId) {
+    return _onlineVideoClips.firstWhereOrNull((c) => c.id == clipId);
+  }
+
+  /// 获取指定在线视频的所有片段
+  List<OnlineVideoClip> getOnlineVideoClips(String onlineVideoId) {
+    return _onlineVideoClips
+        .where((c) => c.onlineVideoId == onlineVideoId)
+        .toList();
+  }
+
+  /// 获取所有标签（包括在线片段的标签）
+  UnmodifiableListView<String> get allTags {
+    final allTagsSet = <String>{};
+    
+    // 添加本地片段标签
+    for (final clip in _clips) {
+      allTagsSet.addAll(clip.tags);
+    }
+    
+    // 添加在线片段标签
+    for (final clip in _onlineVideoClips) {
+      allTagsSet.addAll(clip.tags);
+    }
+    
+    return UnmodifiableListView(allTagsSet.toList()..sort());
+  }
+
+  /// 获取混合片段列表（本地片段 + 在线片段）
+  List<dynamic> getMixedClips() {
+    final List<dynamic> mixedClips = [];
+    
+    // 添加本地片段
+    for (final clip in _clips) {
+      mixedClips.add({
+        'type': 'local',
+        'clip': clip,
+        'video': _originalVideos.firstWhereOrNull((v) => v.path == clip.videoPath),
+      });
+    }
+    
+    // 添加在线片段
+    for (final clip in _onlineVideoClips) {
+      mixedClips.add({
+        'type': 'online',
+        'clip': clip,
+        'video': _onlineVideos.firstWhereOrNull((v) => v.id == clip.onlineVideoId),
+      });
+    }
+    
+    return mixedClips;
+  }
+
+  /// 获取混合视频列表（本地视频 + 在线视频）
+  List<dynamic> getMixedVideos({String? searchQuery}) {
+    final List<dynamic> mixedVideos = [];
+    
+    // 添加本地视频
+    for (final video in _originalVideos) {
+      if (searchQuery == null || searchQuery.isEmpty || 
+          video.name.toLowerCase().contains(searchQuery.toLowerCase())) {
+        mixedVideos.add({
+          'type': 'local',
+          'video': video,
+        });
+      }
+    }
+    
+    // 添加在线视频
+    for (final video in _onlineVideos) {
+      if (searchQuery == null || searchQuery.isEmpty || 
+          video.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
+          (video.description?.toLowerCase().contains(searchQuery.toLowerCase()) ?? false)) {
+        mixedVideos.add({
+          'type': 'online',
+          'video': video,
+        });
+      }
+    }
+    
+    return mixedVideos;
   }
 
   @override

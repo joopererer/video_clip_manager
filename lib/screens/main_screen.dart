@@ -498,7 +498,7 @@ class _MainScreenState extends State<MainScreen>
                 controller: _tabController,
                 tabs: const [
                   Tab(icon: Icon(Icons.cut), text: 'Clips'),
-                  Tab(icon: Icon(Icons.movie), text: 'Original Videos'),
+                  Tab(icon: Icon(Icons.movie), text: 'Videos'),
                   Tab(icon: Icon(Icons.playlist_play), text: 'Playlists'),
                 ],
               ),

@@ -11,8 +11,17 @@ class LoadResult {
   final List<VideoClip>? clips;
   final List<OriginalVideo>? videos;
   final List<Playlist>? playlists;
+  final List<OnlineVideo>? onlineVideos;
+  final List<OnlineVideoClip>? onlineVideoClips;
   final String? path;
-  LoadResult({this.clips, this.videos, this.playlists, this.path});
+  LoadResult({
+    this.clips, 
+    this.videos, 
+    this.playlists, 
+    this.onlineVideos,
+    this.onlineVideoClips,
+    this.path
+  });
 }
 
 class DataService {
@@ -77,6 +86,8 @@ class DataService {
     List<VideoClip> clips,
     List<OriginalVideo> videos,
     List<Playlist> playlists,
+    List<OnlineVideo> onlineVideos,
+    List<OnlineVideoClip> onlineVideoClips,
     String path,
   ) async {
     try {
@@ -87,6 +98,8 @@ class DataService {
         'clips': clips.map((clip) => clip.toJson()).toList(),
         'videos': videos.map((video) => video.toJson()).toList(),
         'playlists': playlists.map((playlist) => playlist.toJson()).toList(),
+        'onlineVideos': onlineVideos.map((video) => video.toJson()).toList(),
+        'onlineVideoClips': onlineVideoClips.map((clip) => clip.toJson()).toList(),
       };
 
       final jsonString = const JsonEncoder.withIndent('  ').convert(data);
@@ -110,7 +123,7 @@ class DataService {
       final jsonString = await file.readAsString();
       if (jsonString.isEmpty) return LoadResult(clips: [], path: path);
 
-      // 尝试解析为新格式（包含clips、videos和playlists的对象）
+      // 尝试解析为新格式（包含所有数据类型的对象）
       try {
         final Map<String, dynamic> data = json.decode(jsonString);
         if (data.containsKey('clips') && data.containsKey('videos')) {
@@ -125,10 +138,23 @@ class DataService {
                     .map((json) => Playlist.fromJson(json))
                     .toList()
               : <Playlist>[];
+          final onlineVideos = data.containsKey('onlineVideos')
+              ? (data['onlineVideos'] as List)
+                    .map((json) => OnlineVideo.fromJson(json))
+                    .toList()
+              : <OnlineVideo>[];
+          final onlineVideoClips = data.containsKey('onlineVideoClips')
+              ? (data['onlineVideoClips'] as List)
+                    .map((json) => OnlineVideoClip.fromJson(json))
+                    .toList()
+              : <OnlineVideoClip>[];
+          
           return LoadResult(
             clips: clips,
             videos: videos,
             playlists: playlists,
+            onlineVideos: onlineVideos,
+            onlineVideoClips: onlineVideoClips,
             path: path,
           );
         }
