@@ -634,51 +634,215 @@ class MissAVSupport implements PlatformSupport {
 
   @override
   Future<String?> getThumbnail(String videoId, Duration time) async {
-    // 尝试获取视频缩略图
+    print('MissAV: Getting thumbnail for videoId: $videoId');
+    
+    // 方案1: 尝试从 MissAV 获取缩略图
+    String? thumbnailUrl = await _getMissAVThumbnail(videoId);
+    if (thumbnailUrl != null) {
+      return thumbnailUrl;
+    }
+    
+    // 方案2: 尝试从 JavBus 获取缩略图
+    thumbnailUrl = await _getJavBusThumbnail(videoId);
+    if (thumbnailUrl != null) {
+      return thumbnailUrl;
+    }
+    
+    // 方案3: 尝试从 JavLibrary 获取缩略图
+    thumbnailUrl = await _getJavLibraryThumbnail(videoId);
+    if (thumbnailUrl != null) {
+      return thumbnailUrl;
+    }
+    
+    print('MissAV: All thumbnail sources failed');
+    return null;
+  }
+  
+  // 从 MissAV 获取缩略图
+  Future<String?> _getMissAVThumbnail(String videoId) async {
     try {
+      // 使用更真实的浏览器请求头，添加随机延迟
+      await Future.delayed(Duration(milliseconds: 500 + (DateTime.now().millisecond % 1000)));
+      
       final response = await http.get(
         Uri.parse('https://missav.ws/en/$videoId'),
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
           'Connection': 'keep-alive',
           'Upgrade-Insecure-Requests': '1',
           'Sec-Fetch-Dest': 'document',
           'Sec-Fetch-Mode': 'navigate',
           'Sec-Fetch-Site': 'none',
           'Sec-Fetch-User': '?1',
+          'Cache-Control': 'max-age=0',
+          'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+          'Sec-Ch-Ua-Mobile': '?0',
+          'Sec-Ch-Ua-Platform': '"Windows"',
+          'DNT': '1',
+          'Referer': 'https://missav.ws/',
         },
       );
       
+      print('MissAV: Response status: ${response.statusCode}');
+      
       if (response.statusCode == 200) {
-        // 解析HTML获取缩略图URL
         final html = response.body;
+        print('MissAV: HTML content length: ${html.length}');
         
-        // 尝试多种缩略图提取方式
         final patterns = [
           RegExp(r'<meta property="og:image" content="([^"]+)"'),
           RegExp(r'<meta name="twitter:image" content="([^"]+)"'),
           RegExp(r'<img[^>]*class="[^"]*thumbnail[^"]*"[^>]*src="([^"]+)"'),
           RegExp(r'<img[^>]*class="[^"]*preview[^"]*"[^>]*src="([^"]+)"'),
+          RegExp(r'<img[^>]*class="[^"]*poster[^"]*"[^>]*src="([^"]+)"'),
+          RegExp(r'<img[^>]*class="[^"]*cover[^"]*"[^>]*src="([^"]+)"'),
+          RegExp(r'<img[^>]*data-src="([^"]+)"'),
+          RegExp(r'<img[^>]*src="([^"]*\.jpg[^"]*)"'),
+          RegExp(r'<img[^>]*src="([^"]*\.png[^"]*)"'),
+        ];
+        
+        for (int i = 0; i < patterns.length; i++) {
+          final pattern = patterns[i];
+          final match = pattern.firstMatch(html);
+          if (match != null && match.group(1) != null) {
+            final thumbnailUrl = match.group(1)!;
+            print('MissAV: Found thumbnail with pattern $i: $thumbnailUrl');
+            
+            String fullUrl;
+            if (thumbnailUrl.startsWith('http')) {
+              fullUrl = thumbnailUrl;
+            } else if (thumbnailUrl.startsWith('//')) {
+              fullUrl = 'https:${thumbnailUrl}';
+            } else if (thumbnailUrl.startsWith('/')) {
+              fullUrl = 'https://missav.ws${thumbnailUrl}';
+            } else {
+              fullUrl = 'https://missav.ws/${thumbnailUrl}';
+            }
+            
+            print('MissAV: Full thumbnail URL: $fullUrl');
+            return fullUrl;
+          }
+        }
+      }
+    } catch (e) {
+      print('MissAV: Error fetching thumbnail: $e');
+    }
+    return null;
+  }
+  
+  // 从 JavBus 获取缩略图
+  Future<String?> _getJavBusThumbnail(String videoId) async {
+    try {
+      // 尝试从 JavBus 搜索视频
+      final searchUrl = 'https://www.javbus.com/search/$videoId';
+      print('MissAV: Trying JavBus search: $searchUrl');
+      
+      final response = await http.get(
+        Uri.parse(searchUrl),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+          'Referer': 'https://www.javbus.com/',
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        final html = response.body;
+        print('MissAV: JavBus HTML content length: ${html.length}');
+        
+        // 尝试提取 JavBus 的缩略图
+        final patterns = [
+          RegExp(r'<img[^>]*class="[^"]*movie-box[^"]*"[^>]*src="([^"]+)"'),
+          RegExp(r'<img[^>]*class="[^"]*cover[^"]*"[^>]*src="([^"]+)"'),
+          RegExp(r'<img[^>]*src="([^"]*\.jpg[^"]*)"'),
         ];
         
         for (final pattern in patterns) {
           final match = pattern.firstMatch(html);
           if (match != null && match.group(1) != null) {
             final thumbnailUrl = match.group(1)!;
-            // 确保URL是完整的
+            print('MissAV: Found JavBus thumbnail: $thumbnailUrl');
+            
             if (thumbnailUrl.startsWith('http')) {
               return thumbnailUrl;
+            } else if (thumbnailUrl.startsWith('//')) {
+              return 'https:${thumbnailUrl}';
             } else if (thumbnailUrl.startsWith('/')) {
-              return 'https://missav.ws$thumbnailUrl';
+              return 'https://www.javbus.com${thumbnailUrl}';
             }
           }
         }
       }
     } catch (e) {
-      // 忽略错误
+      print('MissAV: Error fetching JavBus thumbnail: $e');
+    }
+    return null;
+  }
+  
+  // 从 JavLibrary 获取缩略图
+  Future<String?> _getJavLibraryThumbnail(String videoId) async {
+    try {
+      // 尝试从 JavLibrary 搜索视频
+      final searchUrl = 'https://www.javlibrary.com/cn/vl_searchbyid.php?keyword=$videoId';
+      print('MissAV: Trying JavLibrary search: $searchUrl');
+      
+      final response = await http.get(
+        Uri.parse(searchUrl),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+          'Referer': 'https://www.javlibrary.com/',
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        final html = response.body;
+        print('MissAV: JavLibrary HTML content length: ${html.length}');
+        
+        // 尝试提取 JavLibrary 的缩略图
+        final patterns = [
+          RegExp(r'<img[^>]*class="[^"]*video[^"]*"[^>]*src="([^"]+)"'),
+          RegExp(r'<img[^>]*class="[^"]*cover[^"]*"[^>]*src="([^"]+)"'),
+          RegExp(r'<img[^>]*src="([^"]*\.jpg[^"]*)"'),
+        ];
+        
+        for (final pattern in patterns) {
+          final match = pattern.firstMatch(html);
+          if (match != null && match.group(1) != null) {
+            final thumbnailUrl = match.group(1)!;
+            print('MissAV: Found JavLibrary thumbnail: $thumbnailUrl');
+            
+            if (thumbnailUrl.startsWith('http')) {
+              return thumbnailUrl;
+            } else if (thumbnailUrl.startsWith('//')) {
+              return 'https:${thumbnailUrl}';
+            } else if (thumbnailUrl.startsWith('/')) {
+              return 'https://www.javlibrary.com${thumbnailUrl}';
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('MissAV: Error fetching JavLibrary thumbnail: $e');
     }
     return null;
   }
