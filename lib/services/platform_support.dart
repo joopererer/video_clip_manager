@@ -174,8 +174,15 @@ class YouTubeSupport implements PlatformSupport {
 
   @override
   Future<String?> getThumbnail(String videoId, Duration time) async {
+    // YouTube 缩略图格式：https://img.youtube.com/vi/{videoId}/maxresdefault.jpg
+    // 或者使用时间戳：https://img.youtube.com/vi/{videoId}/{timeInSeconds}.jpg
     final timeInSeconds = time.inSeconds;
-    return 'https://img.youtube.com/vi/$videoId/$timeInSeconds.jpg';
+    if (timeInSeconds > 0) {
+      return 'https://img.youtube.com/vi/$videoId/$timeInSeconds.jpg';
+    } else {
+      // 默认使用高质量缩略图
+      return 'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
+    }
   }
 
   @override
@@ -311,8 +318,33 @@ class BilibiliSupport implements PlatformSupport {
 
   @override
   Future<String?> getThumbnail(String bvid, Duration time) async {
-    // B站缩略图通常使用视频ID
-    return 'https://i0.hdslb.com/bfs/archive/$bvid.jpg';
+    // B站缩略图格式：https://i0.hdslb.com/bfs/archive/{bvid}.jpg
+    // 或者使用：https://i1.hdslb.com/bfs/archive/{bvid}.jpg
+    try {
+      // 尝试多个可能的缩略图URL
+      final urls = [
+        'https://i0.hdslb.com/bfs/archive/$bvid.jpg',
+        'https://i1.hdslb.com/bfs/archive/$bvid.jpg',
+        'https://i2.hdslb.com/bfs/archive/$bvid.jpg',
+      ];
+      
+      // 检查哪个URL可以访问
+      for (final url in urls) {
+        try {
+          final response = await http.head(Uri.parse(url));
+          if (response.statusCode == 200) {
+            return url;
+          }
+        } catch (e) {
+          // 继续尝试下一个URL
+        }
+      }
+      
+      // 如果都失败，返回默认URL
+      return 'https://i0.hdslb.com/bfs/archive/$bvid.jpg';
+    } catch (e) {
+      return 'https://i0.hdslb.com/bfs/archive/$bvid.jpg';
+    }
   }
 
   @override
@@ -382,11 +414,20 @@ class MissAVSupport implements PlatformSupport {
         // 如果yt-dlp失败，继续尝试网页解析
       }
 
-      // 备用方案：使用网页解析
+      // 备用方案：使用网页解析，添加更多绕过策略
       final response = await http.get(
         Uri.parse(url),
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Cache-Control': 'max-age=0',
         },
       );
 
@@ -418,10 +459,42 @@ class MissAVSupport implements PlatformSupport {
           },
         );
       } else {
-        throw Exception('Failed to fetch webpage: ${response.statusCode}');
+        // 如果网页请求失败，提供基于URL的基本信息
+        final videoIdMatch = RegExp(r'missav\.ws/[^/]+/([^/?]+)').firstMatch(url);
+        final videoId = videoIdMatch?.group(1) ?? 'unknown';
+        
+        return VideoInfo(
+          id: videoId,
+          title: 'MissAV Video - $videoId',
+          description: 'MissAV video (limited info due to access restrictions)',
+          duration: null,
+          thumbnailUrl: null,
+          platform: 'missav',
+          metadata: {
+            'url': url,
+            'extracted_from': 'url_only',
+            'note': 'Limited information due to website restrictions',
+          },
+        );
       }
     } catch (e) {
-      throw Exception('Failed to extract MissAV info: $e');
+      // 最后的备用方案：基于URL提供基本信息
+      final videoIdMatch = RegExp(r'missav\.ws/[^/]+/([^/?]+)').firstMatch(url);
+      final videoId = videoIdMatch?.group(1) ?? 'unknown';
+      
+      return VideoInfo(
+        id: videoId,
+        title: 'MissAV Video - $videoId',
+        description: 'MissAV video (limited info due to access restrictions)',
+        duration: null,
+        thumbnailUrl: null,
+        platform: 'missav',
+        metadata: {
+          'url': url,
+          'extracted_from': 'url_only',
+          'note': 'Limited information due to website restrictions',
+        },
+      );
     }
   }
 
@@ -566,11 +639,20 @@ class XVideosSupport implements PlatformSupport {
         // 如果yt-dlp失败，继续尝试网页解析
       }
 
-      // 备用方案：使用网页解析
+      // 备用方案：使用网页解析，添加更多绕过策略
       final response = await http.get(
         Uri.parse(url),
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Cache-Control': 'max-age=0',
         },
       );
 

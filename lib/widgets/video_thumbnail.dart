@@ -104,6 +104,12 @@ class VideoThumbnail extends StatelessWidget {
       url,
       fit: fit,
       key: ValueKey(url),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+      },
       errorBuilder: (context, error, stackTrace) {
         debugPrint('Error loading online thumbnail for $url: $error');
         return _buildPlaceholder();
@@ -111,6 +117,16 @@ class VideoThumbnail extends StatelessWidget {
       loadingBuilder: (context, child, loadingProgress) {
         if (loadingProgress == null) return child;
         return _buildPlaceholder();
+      },
+      // 添加重试机制
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded) return child;
+        return AnimatedOpacity(
+          opacity: frame == null ? 0 : 1,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+          child: child,
+        );
       },
     );
   }

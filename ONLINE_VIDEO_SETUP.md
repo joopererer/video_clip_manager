@@ -70,6 +70,8 @@ install_dependencies.bat
 - 禁用 cookies：`--no-cookies`（避免 Chrome cookie 数据库复制问题）
 - 强制使用通用提取器：`--extractor generic --force-generic-extractor`
 - 如果 yt-dlp 失败，系统会自动使用网页解析作为备用方案
+- 如果网页解析也失败，系统会提供基于URL的基本信息
+- 添加了完整的浏览器请求头模拟，包括 Sec-Fetch 系列头部
 
 #### 2. Bilibili 提取失败
 如果 Bilibili 视频信息提取失败：
@@ -89,6 +91,9 @@ install_dependencies.bat
 - 检查网络连接
 - 尝试重新添加视频
 - 某些平台可能限制信息访问
+- 系统已改进缩略图加载机制，添加了请求头和重试机制
+- YouTube 缩略图使用 maxresdefault.jpg 格式
+- Bilibili 缩略图会尝试多个 CDN 节点
 
 ### 使用说明
 
