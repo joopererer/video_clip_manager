@@ -109,6 +109,7 @@ class VideoThumbnail extends StatelessWidget {
         'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
         'Cache-Control': 'no-cache',
+        'Referer': _getRefererForUrl(url),
       },
       errorBuilder: (context, error, stackTrace) {
         debugPrint('Error loading online thumbnail for $url: $error');
@@ -129,6 +130,19 @@ class VideoThumbnail extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _getRefererForUrl(String url) {
+    if (url.contains('bilibili.com')) {
+      return 'https://www.bilibili.com/';
+    } else if (url.contains('youtube.com')) {
+      return 'https://www.youtube.com/';
+    } else if (url.contains('missav.ws')) {
+      return 'https://missav.ws/';
+    } else if (url.contains('xvideos.com')) {
+      return 'https://www.xvideos.com/';
+    }
+    return '';
   }
 
   Widget _buildPlaceholder() {

@@ -92,8 +92,10 @@ install_dependencies.bat
 - 尝试重新添加视频
 - 某些平台可能限制信息访问
 - 系统已改进缩略图加载机制，添加了请求头和重试机制
-- YouTube 缩略图使用 maxresdefault.jpg 格式
-- Bilibili 缩略图会尝试多个 CDN 节点
+- YouTube 缩略图使用多种格式：maxresdefault.jpg, hqdefault.jpg, mqdefault.jpg
+- Bilibili 缩略图会尝试多个 CDN 节点并添加 Referer 头部
+- MissAV 和 XVideos 使用网页解析提取缩略图
+- 所有平台都添加了完整的浏览器请求头模拟
 
 ### 使用说明
 

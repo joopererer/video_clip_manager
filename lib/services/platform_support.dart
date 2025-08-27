@@ -113,9 +113,18 @@ class YouTubeSupport implements PlatformSupport {
 
       if (result.exitCode == 0) {
         final json = jsonDecode(result.stdout);
+        final videoId = json['id'] ?? '';
+        
+        // 获取缩略图URL
+        String? thumbnailUrl;
+        if (videoId.isNotEmpty) {
+          thumbnailUrl = await getThumbnail(videoId, Duration.zero);
+        }
+        
         return VideoInfo.fromJson({
           ...json,
           'platform': 'youtube',
+          'thumbnail_url': thumbnailUrl,
         });
       } else {
         throw Exception('Failed to extract YouTube info: ${result.stderr}');
@@ -174,15 +183,47 @@ class YouTubeSupport implements PlatformSupport {
 
   @override
   Future<String?> getThumbnail(String videoId, Duration time) async {
-    // YouTube 缩略图格式：https://img.youtube.com/vi/{videoId}/maxresdefault.jpg
-    // 或者使用时间戳：https://img.youtube.com/vi/{videoId}/{timeInSeconds}.jpg
+    print('YouTube: Getting thumbnail for videoId: $videoId');
+    
+    // YouTube 缩略图格式优先级：
+    // 1. maxresdefault.jpg (最高质量，但只有高清视频才有)
+    // 2. hqdefault.jpg (高质量，大部分视频都有)
+    // 3. mqdefault.jpg (中等质量)
+    // 4. sddefault.jpg (标准质量)
+    // 5. 时间戳缩略图 (特定时间点)
+    
     final timeInSeconds = time.inSeconds;
+    final urls = [
+      'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
+      'https://img.youtube.com/vi/$videoId/hqdefault.jpg',
+      'https://img.youtube.com/vi/$videoId/mqdefault.jpg',
+      'https://img.youtube.com/vi/$videoId/sddefault.jpg',
+    ];
+    
+    // 如果有时间戳，添加时间戳缩略图
     if (timeInSeconds > 0) {
-      return 'https://img.youtube.com/vi/$videoId/$timeInSeconds.jpg';
-    } else {
-      // 默认使用高质量缩略图
-      return 'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
+      urls.insert(0, 'https://img.youtube.com/vi/$videoId/$timeInSeconds.jpg');
     }
+    
+    // 检查哪个URL可以访问
+    for (final url in urls) {
+      try {
+        print('YouTube: Trying URL: $url');
+        final response = await http.head(Uri.parse(url));
+        print('YouTube: Response status: ${response.statusCode}');
+        if (response.statusCode == 200) {
+          print('YouTube: Found working thumbnail: $url');
+          return url;
+        }
+      } catch (e) {
+        print('YouTube: Error trying URL $url: $e');
+        // 继续尝试下一个URL
+      }
+    }
+    
+    // 如果都失败，返回默认URL
+    print('YouTube: Using default thumbnail: https://img.youtube.com/vi/$videoId/hqdefault.jpg');
+    return 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
   }
 
   @override
@@ -237,9 +278,18 @@ class BilibiliSupport implements PlatformSupport {
 
         if (result.exitCode == 0) {
           final json = jsonDecode(result.stdout);
+          final bvid = json['id'] ?? '';
+          
+          // 获取缩略图URL
+          String? thumbnailUrl;
+          if (bvid.isNotEmpty) {
+            thumbnailUrl = await getThumbnail(bvid, Duration.zero);
+          }
+          
           return VideoInfo.fromJson({
             ...json,
             'platform': 'bilibili',
+            'thumbnail_url': thumbnailUrl,
           });
         }
       } catch (e) {
@@ -256,9 +306,18 @@ class BilibiliSupport implements PlatformSupport {
 
       if (result.exitCode == 0) {
         final json = jsonDecode(result.stdout);
+        final bvid = json['id'] ?? '';
+        
+        // 获取缩略图URL
+        String? thumbnailUrl;
+        if (bvid.isNotEmpty) {
+          thumbnailUrl = await getThumbnail(bvid, Duration.zero);
+        }
+        
         return VideoInfo.fromJson({
           ...json,
           'platform': 'bilibili',
+          'thumbnail_url': thumbnailUrl,
         });
       } else {
         throw Exception('Failed to extract Bilibili info: ${result.stderr}');
@@ -318,20 +377,32 @@ class BilibiliSupport implements PlatformSupport {
 
   @override
   Future<String?> getThumbnail(String bvid, Duration time) async {
-    // B站缩略图格式：https://i0.hdslb.com/bfs/archive/{bvid}.jpg
-    // 或者使用：https://i1.hdslb.com/bfs/archive/{bvid}.jpg
+    // B站缩略图格式：
+    // 1. 标准格式：https://i0.hdslb.com/bfs/archive/{bvid}.jpg
+    // 2. 多个CDN节点：i0, i1, i2
+    // 3. 需要添加 Referer 头部避免访问限制
+    
     try {
       // 尝试多个可能的缩略图URL
       final urls = [
         'https://i0.hdslb.com/bfs/archive/$bvid.jpg',
         'https://i1.hdslb.com/bfs/archive/$bvid.jpg',
         'https://i2.hdslb.com/bfs/archive/$bvid.jpg',
+        'https://i3.hdslb.com/bfs/archive/$bvid.jpg',
       ];
       
       // 检查哪个URL可以访问
       for (final url in urls) {
         try {
-          final response = await http.head(Uri.parse(url));
+          final response = await http.head(
+            Uri.parse(url),
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Referer': 'https://www.bilibili.com/',
+              'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+              'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            },
+          );
           if (response.statusCode == 200) {
             return url;
           }
@@ -405,9 +476,18 @@ class MissAVSupport implements PlatformSupport {
 
         if (result.exitCode == 0) {
           final json = jsonDecode(result.stdout);
+          final videoId = json['id'] ?? '';
+          
+          // 获取缩略图URL
+          String? thumbnailUrl;
+          if (videoId.isNotEmpty) {
+            thumbnailUrl = await getThumbnail(videoId, Duration.zero);
+          }
+          
           return VideoInfo.fromJson({
             ...json,
             'platform': 'missav',
+            'thumbnail_url': thumbnailUrl,
           });
         }
       } catch (e) {
@@ -556,13 +636,46 @@ class MissAVSupport implements PlatformSupport {
   Future<String?> getThumbnail(String videoId, Duration time) async {
     // 尝试获取视频缩略图
     try {
-      final response = await http.get(Uri.parse('https://missav.ws/en/$videoId'));
+      final response = await http.get(
+        Uri.parse('https://missav.ws/en/$videoId'),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+        },
+      );
+      
       if (response.statusCode == 200) {
         // 解析HTML获取缩略图URL
         final html = response.body;
-        final regex = RegExp(r'<meta property="og:image" content="([^"]+)"');
-        final match = regex.firstMatch(html);
-        return match?.group(1);
+        
+        // 尝试多种缩略图提取方式
+        final patterns = [
+          RegExp(r'<meta property="og:image" content="([^"]+)"'),
+          RegExp(r'<meta name="twitter:image" content="([^"]+)"'),
+          RegExp(r'<img[^>]*class="[^"]*thumbnail[^"]*"[^>]*src="([^"]+)"'),
+          RegExp(r'<img[^>]*class="[^"]*preview[^"]*"[^>]*src="([^"]+)"'),
+        ];
+        
+        for (final pattern in patterns) {
+          final match = pattern.firstMatch(html);
+          if (match != null && match.group(1) != null) {
+            final thumbnailUrl = match.group(1)!;
+            // 确保URL是完整的
+            if (thumbnailUrl.startsWith('http')) {
+              return thumbnailUrl;
+            } else if (thumbnailUrl.startsWith('/')) {
+              return 'https://missav.ws$thumbnailUrl';
+            }
+          }
+        }
       }
     } catch (e) {
       // 忽略错误
@@ -630,9 +743,18 @@ class XVideosSupport implements PlatformSupport {
 
         if (result.exitCode == 0) {
           final json = jsonDecode(result.stdout);
+          final videoId = json['id'] ?? '';
+          
+          // 获取缩略图URL
+          String? thumbnailUrl;
+          if (videoId.isNotEmpty) {
+            thumbnailUrl = await getThumbnail(videoId, Duration.zero);
+          }
+          
           return VideoInfo.fromJson({
             ...json,
             'platform': 'xvideos',
+            'thumbnail_url': thumbnailUrl,
           });
         }
       } catch (e) {
@@ -748,13 +870,47 @@ class XVideosSupport implements PlatformSupport {
   Future<String?> getThumbnail(String videoId, Duration time) async {
     // 尝试获取视频缩略图
     try {
-      final response = await http.get(Uri.parse('https://www.xvideos.com/video.$videoId'));
+      final response = await http.get(
+        Uri.parse('https://www.xvideos.com/video.$videoId'),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none',
+          'Sec-Fetch-User': '?1',
+        },
+      );
+      
       if (response.statusCode == 200) {
         // 解析HTML获取缩略图URL
         final html = response.body;
-        final regex = RegExp(r'<meta property="og:image" content="([^"]+)"');
-        final match = regex.firstMatch(html);
-        return match?.group(1);
+        
+        // 尝试多种缩略图提取方式
+        final patterns = [
+          RegExp(r'<meta property="og:image" content="([^"]+)"'),
+          RegExp(r'<meta name="twitter:image" content="([^"]+)"'),
+          RegExp(r'<img[^>]*class="[^"]*thumbnail[^"]*"[^>]*src="([^"]+)"'),
+          RegExp(r'<img[^>]*class="[^"]*preview[^"]*"[^>]*src="([^"]+)"'),
+          RegExp(r'<img[^>]*id="[^"]*player[^"]*"[^>]*src="([^"]+)"'),
+        ];
+        
+        for (final pattern in patterns) {
+          final match = pattern.firstMatch(html);
+          if (match != null && match.group(1) != null) {
+            final thumbnailUrl = match.group(1)!;
+            // 确保URL是完整的
+            if (thumbnailUrl.startsWith('http')) {
+              return thumbnailUrl;
+            } else if (thumbnailUrl.startsWith('/')) {
+              return 'https://www.xvideos.com$thumbnailUrl';
+            }
+          }
+        }
       }
     } catch (e) {
       // 忽略错误
