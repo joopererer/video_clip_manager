@@ -24,13 +24,26 @@ class VideoInfo {
   });
 
   factory VideoInfo.fromJson(Map<String, dynamic> json) {
+    // 处理duration字段，确保转换为int类型
+    Duration? duration;
+    if (json['duration'] != null) {
+      final durationValue = json['duration'];
+      int milliseconds;
+      if (durationValue is double) {
+        milliseconds = durationValue.round();
+      } else if (durationValue is int) {
+        milliseconds = durationValue;
+      } else {
+        milliseconds = int.tryParse(durationValue.toString()) ?? 0;
+      }
+      duration = Duration(milliseconds: milliseconds);
+    }
+
     return VideoInfo(
       id: json['id'] ?? '',
       title: json['title'] ?? '',
       description: json['description'],
-      duration: json['duration'] != null
-          ? Duration(milliseconds: json['duration'])
-          : null,
+      duration: duration,
       thumbnailUrl: json['thumbnail_url'] ?? json['thumbnailUrl'],
       platform: json['platform'] ?? 'unknown',
       metadata: Map<String, dynamic>.from(json['metadata'] ?? {}),
@@ -183,6 +196,7 @@ class YouTubeSupport implements PlatformSupport {
         '--get-url',
         '--format', 'best',
         '--no-playlist',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         url,
       ]);
 
@@ -207,9 +221,29 @@ class BilibiliSupport implements PlatformSupport {
   @override
   Future<VideoInfo> extractVideoInfo(String url) async {
     try {
-      // 使用bilibili-api提取信息
-      final result = await Process.run('python', [
-        'bilibili_extractor.py',
+      // 首先尝试使用bilibili-api提取信息
+      try {
+        final result = await Process.run('python', [
+          'bilibili_extractor.py',
+          url,
+        ], environment: {'PYTHONIOENCODING': 'utf-8'});
+
+        if (result.exitCode == 0) {
+          final json = jsonDecode(result.stdout);
+          return VideoInfo.fromJson({
+            ...json,
+            'platform': 'bilibili',
+          });
+        }
+      } catch (e) {
+        // 如果Python脚本失败，继续尝试yt-dlp
+      }
+
+      // 备用方案：使用yt-dlp提取信息
+      final result = await Process.run('yt-dlp', [
+        '--dump-json',
+        '--no-playlist',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         url,
       ]);
 
@@ -299,6 +333,7 @@ class BilibiliSupport implements PlatformSupport {
         '--get-url',
         '--format', 'best',
         '--no-playlist',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         url,
       ]);
 
@@ -323,22 +358,67 @@ class MissAVSupport implements PlatformSupport {
   @override
   Future<VideoInfo> extractVideoInfo(String url) async {
     try {
-      // 使用yt-dlp提取信息
-      final result = await Process.run('yt-dlp', [
-        '--dump-json',
-        '--no-playlist',
-        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        url,
-      ]);
+      // 首先尝试使用yt-dlp提取信息
+      try {
+        final result = await Process.run('yt-dlp', [
+          '--dump-json',
+          '--no-playlist',
+          '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          '--extractor-args', 'generic:impersonate',
+          '--no-cookies',
+          '--extractor', 'generic',
+          '--force-generic-extractor',
+          url,
+        ]);
 
-      if (result.exitCode == 0) {
-        final json = jsonDecode(result.stdout);
-        return VideoInfo.fromJson({
-          ...json,
-          'platform': 'missav',
-        });
+        if (result.exitCode == 0) {
+          final json = jsonDecode(result.stdout);
+          return VideoInfo.fromJson({
+            ...json,
+            'platform': 'missav',
+          });
+        }
+      } catch (e) {
+        // 如果yt-dlp失败，继续尝试网页解析
+      }
+
+      // 备用方案：使用网页解析
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final html = response.body;
+        
+        // 提取视频ID
+        final videoIdMatch = RegExp(r'missav\.ws/[^/]+/([^/?]+)').firstMatch(url);
+        final videoId = videoIdMatch?.group(1) ?? 'unknown';
+        
+        // 提取标题
+        final titleMatch = RegExp(r'<title[^>]*>([^<]+)</title>').firstMatch(html);
+        final title = titleMatch?.group(1)?.trim() ?? 'MissAV Video';
+        
+        // 提取缩略图
+        final thumbnailMatch = RegExp(r'<meta property="og:image" content="([^"]+)"').firstMatch(html);
+        final thumbnailUrl = thumbnailMatch?.group(1);
+        
+        return VideoInfo(
+          id: videoId,
+          title: title,
+          description: 'MissAV video',
+          duration: null, // 无法从网页直接获取时长
+          thumbnailUrl: thumbnailUrl,
+          platform: 'missav',
+          metadata: {
+            'url': url,
+            'extracted_from': 'webpage',
+          },
+        );
       } else {
-        throw Exception('Failed to extract MissAV info: ${result.stderr}');
+        throw Exception('Failed to fetch webpage: ${response.statusCode}');
       }
     } catch (e) {
       throw Exception('Failed to extract MissAV info: $e');
@@ -435,6 +515,9 @@ class MissAVSupport implements PlatformSupport {
         '--get-url',
         '--format', 'best',
         '--no-playlist',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        '--extractor-args', 'generic:impersonate',
+        '--no-cookies',
         url,
       ]);
 
@@ -459,22 +542,67 @@ class XVideosSupport implements PlatformSupport {
   @override
   Future<VideoInfo> extractVideoInfo(String url) async {
     try {
-      // 使用yt-dlp提取信息
-      final result = await Process.run('yt-dlp', [
-        '--dump-json',
-        '--no-playlist',
-        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        url,
-      ]);
+      // 首先尝试使用yt-dlp提取信息
+      try {
+        final result = await Process.run('yt-dlp', [
+          '--dump-json',
+          '--no-playlist',
+          '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          '--extractor-args', 'generic:impersonate',
+          '--no-cookies',
+          '--extractor', 'generic',
+          '--force-generic-extractor',
+          url,
+        ]);
 
-      if (result.exitCode == 0) {
-        final json = jsonDecode(result.stdout);
-        return VideoInfo.fromJson({
-          ...json,
-          'platform': 'xvideos',
-        });
+        if (result.exitCode == 0) {
+          final json = jsonDecode(result.stdout);
+          return VideoInfo.fromJson({
+            ...json,
+            'platform': 'xvideos',
+          });
+        }
+      } catch (e) {
+        // 如果yt-dlp失败，继续尝试网页解析
+      }
+
+      // 备用方案：使用网页解析
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final html = response.body;
+        
+        // 提取视频ID
+        final videoIdMatch = RegExp(r'xvideos\.com/video\.([^/?]+)').firstMatch(url);
+        final videoId = videoIdMatch?.group(1) ?? 'unknown';
+        
+        // 提取标题
+        final titleMatch = RegExp(r'<title[^>]*>([^<]+)</title>').firstMatch(html);
+        final title = titleMatch?.group(1)?.trim() ?? 'XVideos Video';
+        
+        // 提取缩略图
+        final thumbnailMatch = RegExp(r'<meta property="og:image" content="([^"]+)"').firstMatch(html);
+        final thumbnailUrl = thumbnailMatch?.group(1);
+        
+        return VideoInfo(
+          id: videoId,
+          title: title,
+          description: 'XVideos video',
+          duration: null, // 无法从网页直接获取时长
+          thumbnailUrl: thumbnailUrl,
+          platform: 'xvideos',
+          metadata: {
+            'url': url,
+            'extracted_from': 'webpage',
+          },
+        );
       } else {
-        throw Exception('Failed to extract XVideos info: ${result.stderr}');
+        throw Exception('Failed to fetch webpage: ${response.statusCode}');
       }
     } catch (e) {
       throw Exception('Failed to extract XVideos info: $e');
@@ -570,6 +698,9 @@ class XVideosSupport implements PlatformSupport {
         '--get-url',
         '--format', 'best',
         '--no-playlist',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        '--extractor-args', 'generic:impersonate',
+        '--no-cookies',
         url,
       ]);
 

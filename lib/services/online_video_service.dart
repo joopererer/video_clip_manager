@@ -14,6 +14,11 @@ class OnlineVideoService {
       final platformSupport = PlatformFactory.getPlatformByUrl(url);
       final videoInfo = await platformSupport.extractVideoInfo(url);
       
+      // 验证必要信息
+      if (videoInfo.title.isEmpty) {
+        throw Exception('Failed to extract video title');
+      }
+      
       return OnlineVideo(
         id: videoInfo.id,
         url: url,
