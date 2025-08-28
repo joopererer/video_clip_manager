@@ -492,7 +492,7 @@ class MissAVSupport implements PlatformSupport {
       
       // 尝试使用 JAV Scraper
       final javInfo = await ExternalScraperService.getJavInfoWithScraper(code);
-      if (javInfo != null) {
+      if (javInfo != null && javInfo['title'] != null && javInfo['title'] != 'Unknown Title') {
         print('MissAV: External scraper success for code: $code');
         return VideoInfo(
           id: code,
@@ -503,6 +503,23 @@ class MissAVSupport implements PlatformSupport {
           platform: 'missav',
           metadata: javInfo,
         );
+      } else {
+        print('MissAV: External scraper failed or returned invalid data, trying third-party databases');
+        
+        // 尝试使用第三方数据库服务
+        final dbInfo = await ThirdPartyDatabaseService.getThumbnailFromDatabase(code);
+        if (dbInfo != null && dbInfo['thumbnail'] != null) {
+          print('MissAV: Third-party database success for code: $code');
+          return VideoInfo(
+            id: code,
+            title: dbInfo['title'] ?? 'Unknown Title',
+            description: dbInfo['description'] ?? '',
+            duration: null,
+            thumbnailUrl: dbInfo['thumbnail'],
+            platform: 'missav',
+            metadata: dbInfo,
+          );
+        }
       }
     }
     

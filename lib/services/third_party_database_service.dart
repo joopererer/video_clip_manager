@@ -1,4 +1,6 @@
 import 'package:http/http.dart' as http;
+import 'dart:io';
+import 'dart:convert';
 
 /// 第三方数据库服务
 /// 用于从多个数据库网站获取视频信息和缩略图
@@ -120,18 +122,22 @@ class ThirdPartyDatabaseService {
   static Future<String?> getThumbnailFromAllDatabases(String code) async {
     print('ThirdPartyDB: Searching for code: $code');
     
-    for (final entry in _databases.entries) {
-      final databaseName = entry.key;
-      final config = entry.value;
-      
-      try {
-        final thumbnailUrl = await _getThumbnailFromDatabase(code, databaseName, config);
-        if (thumbnailUrl != null) {
-          print('ThirdPartyDB: Found thumbnail from $databaseName: $thumbnailUrl');
-          return thumbnailUrl;
+    // 基于测试结果，调整数据库优先级：JavDB > JavMost > JavLibrary
+    final priorityOrder = ['javdb', 'javmost', 'javlibrary'];
+    
+    for (final databaseName in priorityOrder) {
+      if (_databases.containsKey(databaseName)) {
+        final config = _databases[databaseName]!;
+        
+        try {
+          final thumbnailUrl = await _getThumbnailFromDatabase(code, databaseName, config);
+          if (thumbnailUrl != null) {
+            print('ThirdPartyDB: Found thumbnail from $databaseName: $thumbnailUrl');
+            return thumbnailUrl;
+          }
+        } catch (e) {
+          print('ThirdPartyDB: Error searching $databaseName: $e');
         }
-      } catch (e) {
-        print('ThirdPartyDB: Error searching $databaseName: $e');
       }
     }
     
@@ -139,7 +145,119 @@ class ThirdPartyDatabaseService {
     return null;
   }
 
-  /// 从指定数据库获取缩略图
+    /// 从数据库获取完整信息（包括缩略图和标题）
+  static Future<Map<String, dynamic>?> getThumbnailFromDatabase(String code) async {
+    print('ThirdPartyDB: Getting full info for code: $code');
+    
+    // 基于测试结果，调整数据库优先级：JavDB > JavMost > JavLibrary
+    final priorityOrder = ['javdb', 'javmost', 'javlibrary'];
+    
+    for (final databaseName in priorityOrder) {
+      if (_databases.containsKey(databaseName)) {
+        final config = _databases[databaseName]!;
+        
+        try {
+          final result = await _getFullInfoFromDatabase(code, databaseName, config);
+          if (result != null && result['thumbnail'] != null) {
+            print('ThirdPartyDB: Found info from $databaseName');
+            return result;
+          }
+        } catch (e) {
+          print('ThirdPartyDB: Error searching $databaseName: $e');
+        }
+      }
+    }
+    
+    print('ThirdPartyDB: No info found from any database');
+    return null;
+  }
+
+  /// 从指定数据库获取完整信息
+  static Future<Map<String, dynamic>?> _getFullInfoFromDatabase(
+    String code,
+    String databaseName,
+    DatabaseConfig config,
+  ) async {
+    try {
+      final searchUrl = config.searchUrl.replaceAll('{code}', code);
+      print('ThirdPartyDB: Searching $databaseName: $searchUrl');
+      
+      // 添加随机延迟避免被反爬虫
+      await Future.delayed(Duration(milliseconds: 500 + (DateTime.now().millisecond % 1000)));
+      
+      // 使用简化的HTTP客户端
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 10);
+      
+      final request = await client.getUrl(Uri.parse(searchUrl));
+      
+      // 设置基本的headers
+      request.headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      request.headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8');
+      request.headers.set('Accept-Language', 'en-US,en;q=0.9');
+      request.headers.set('Accept-Encoding', 'gzip, deflate');
+      request.headers.set('Connection', 'keep-alive');
+      request.headers.set('Upgrade-Insecure-Requests', '1');
+      
+             final response = await request.close();
+      
+      if (response.statusCode == 200) {
+        final html = await response.transform(utf8.decoder).join();
+        print('ThirdPartyDB: $databaseName response success, content length: ${html.length}');
+        
+        // 尝试所有缩略图模式
+        for (int i = 0; i < config.thumbnailPatterns.length; i++) {
+          final pattern = config.thumbnailPatterns[i];
+          final matches = pattern.allMatches(html);
+          
+          for (final match in matches) {
+            if (match.group(1) != null) {
+              final thumbnailUrl = match.group(1)!;
+              print('ThirdPartyDB: Found $databaseName thumbnail with pattern $i: $thumbnailUrl');
+              
+              // 过滤掉用户头像等无关图片
+              if (_isValidThumbnailUrl(thumbnailUrl, databaseName)) {
+                final normalizedUrl = _normalizeUrl(thumbnailUrl, config.baseUrl);
+                
+                // 尝试提取标题
+                String? title;
+                final titlePatterns = [
+                  RegExp(r'<title[^>]*>([^<]+)</title>'),
+                  RegExp(r'<h1[^>]*>([^<]+)</h1>'),
+                  RegExp(r'<h2[^>]*>([^<]+)</h2>'),
+                ];
+                
+                for (final titlePattern in titlePatterns) {
+                  final titleMatch = titlePattern.firstMatch(html);
+                  if (titleMatch != null) {
+                    title = titleMatch.group(1)?.trim();
+                    if (title != null && title.isNotEmpty) {
+                      break;
+                    }
+                  }
+                }
+                
+                return {
+                  'thumbnail': normalizedUrl,
+                  'title': title ?? 'Unknown Title',
+                  'source': databaseName,
+                  'code': code,
+                };
+              }
+            }
+          }
+        }
+      } else {
+        print('ThirdPartyDB: $databaseName HTTP error: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('ThirdPartyDB: Error with $databaseName: $e');
+    }
+    
+    return null;
+  }
+
+  /// 从指定数据库获取缩略图 - 完全重写，使用不同的HTTP客户端策略
   static Future<String?> _getThumbnailFromDatabase(
     String code,
     String databaseName,
@@ -152,145 +270,168 @@ class ThirdPartyDatabaseService {
       // 添加随机延迟避免被反爬虫
       await Future.delayed(Duration(milliseconds: 500 + (DateTime.now().millisecond % 1000)));
       
-      // 使用更安全的HTTP客户端配置，避免HTTP头部解析错误
-      final client = http.Client();
-      try {
-                 // 简化headers，避免malformed HTTP headers问题
-         final simplifiedHeaders = {
-           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-           'Accept-Language': 'en-US,en;q=0.5',
-           'Connection': 'keep-alive',
-         };
+      // 使用不同的HTTP客户端策略
+      final response = await _makeHttpRequest(searchUrl, databaseName);
+      
+      if (response == null) {
+        print('ThirdPartyDB: $databaseName request failed');
+        return null;
+      }
+      
+      print('ThirdPartyDB: $databaseName response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        final html = response.body;
+        print('ThirdPartyDB: $databaseName HTML content length: ${html.length}');
         
-        final response = await client.get(
-          Uri.parse(searchUrl),
-          headers: simplifiedHeaders,
-        );
-        
-        print('ThirdPartyDB: $databaseName response status: ${response.statusCode}');
-        
-        if (response.statusCode == 200) {
-          final html = response.body;
-          print('ThirdPartyDB: $databaseName HTML content length: ${html.length}');
-          
-          // 检查是否被重定向到验证页面
-          if (html.contains('captcha') || html.contains('verify') || html.contains('robot')) {
-            print('ThirdPartyDB: $databaseName requires verification, skipping');
-            return null;
-          }
-          
-          // 对于某些数据库，需要先获取搜索结果链接，然后访问详情页面
-          if (databaseName == 'javmost' || databaseName == 'javbus') {
-            print('ThirdPartyDB: Attempting to extract detail URL from $databaseName');
-            final detailUrl = await _extractDetailUrl(html, config.baseUrl, databaseName);
-            if (detailUrl != null) {
-              print('ThirdPartyDB: Found detail URL for $databaseName: $detailUrl');
-              final thumbnailUrl = await _getThumbnailFromDetailPage(detailUrl, config, databaseName);
-              if (thumbnailUrl != null) {
-                return thumbnailUrl;
-              }
-            } else {
-              print('ThirdPartyDB: No detail URL found for $databaseName');
-            }
-          }
-          
-          // 尝试所有缩略图模式
-          for (int i = 0; i < config.thumbnailPatterns.length; i++) {
-            final pattern = config.thumbnailPatterns[i];
-            final matches = pattern.allMatches(html);
-            
-            for (final match in matches) {
-              if (match.group(1) != null) {
-                final thumbnailUrl = match.group(1)!;
-                print('ThirdPartyDB: Found $databaseName thumbnail with pattern $i: $thumbnailUrl');
-                
-                // 过滤掉用户头像等无关图片
-                if (_isValidThumbnailUrl(thumbnailUrl, databaseName)) {
-                  // 验证缩略图URL是否有效
-                  final normalizedUrl = _normalizeUrl(thumbnailUrl, config.baseUrl);
-                  if (await _validateThumbnailUrl(normalizedUrl)) {
-                    print('ThirdPartyDB: Validated $databaseName thumbnail: $normalizedUrl');
-                    return normalizedUrl;
-                  } else {
-                    print('ThirdPartyDB: Invalid thumbnail URL: $normalizedUrl');
-                  }
-                } else {
-                  print('ThirdPartyDB: Skipping invalid thumbnail URL: $thumbnailUrl');
-                }
-              }
-            }
-          }
-          
-          print('ThirdPartyDB: No valid thumbnails found in $databaseName');
-        } else if (response.statusCode == 403) {
-          print('ThirdPartyDB: $databaseName access forbidden (403)');
-        } else if (response.statusCode == 404) {
-          print('ThirdPartyDB: $databaseName not found (404)');
-        } else {
-          print('ThirdPartyDB: $databaseName HTTP error: ${response.statusCode}');
+        // 检查是否被重定向到验证页面
+        if (html.contains('captcha') || html.contains('verify') || html.contains('robot')) {
+          print('ThirdPartyDB: $databaseName requires verification, skipping');
+          return null;
         }
+        
+        // 对于某些数据库，需要先获取搜索结果链接，然后访问详情页面
+        if (databaseName == 'javmost' || databaseName == 'javbus') {
+          print('ThirdPartyDB: Attempting to extract detail URL from $databaseName');
+          final detailUrl = await _extractDetailUrl(html, config.baseUrl, databaseName);
+          if (detailUrl != null) {
+            print('ThirdPartyDB: Found detail URL for $databaseName: $detailUrl');
+            final thumbnailUrl = await _getThumbnailFromDetailPage(detailUrl, config, databaseName);
+            if (thumbnailUrl != null) {
+              return thumbnailUrl;
+            }
+          } else {
+            print('ThirdPartyDB: No detail URL found for $databaseName');
+          }
+        }
+        
+        // 尝试所有缩略图模式
+        for (int i = 0; i < config.thumbnailPatterns.length; i++) {
+          final pattern = config.thumbnailPatterns[i];
+          final matches = pattern.allMatches(html);
+          
+          for (final match in matches) {
+            if (match.group(1) != null) {
+              final thumbnailUrl = match.group(1)!;
+              print('ThirdPartyDB: Found $databaseName thumbnail with pattern $i: $thumbnailUrl');
+              
+              // 过滤掉用户头像等无关图片
+              if (_isValidThumbnailUrl(thumbnailUrl, databaseName)) {
+                // 验证缩略图URL是否有效
+                final normalizedUrl = _normalizeUrl(thumbnailUrl, config.baseUrl);
+                if (await _validateThumbnailUrl(normalizedUrl)) {
+                  print('ThirdPartyDB: Validated $databaseName thumbnail: $normalizedUrl');
+                  return normalizedUrl;
+                } else {
+                  print('ThirdPartyDB: Invalid thumbnail URL: $normalizedUrl');
+                }
+              } else {
+                print('ThirdPartyDB: Skipping invalid thumbnail URL: $thumbnailUrl');
+              }
+            }
+          }
+        }
+        
+        print('ThirdPartyDB: No valid thumbnails found in $databaseName');
+      } else if (response.statusCode == 403) {
+        print('ThirdPartyDB: $databaseName access forbidden (403)');
+      } else if (response.statusCode == 404) {
+        print('ThirdPartyDB: $databaseName not found (404)');
+      } else {
+        print('ThirdPartyDB: $databaseName HTTP error: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('ThirdPartyDB: Error fetching $databaseName thumbnail: $e');
+    }
+    return null;
+  }
+
+  /// 使用不同的HTTP客户端策略进行请求 - 优化版本
+  static Future<http.Response?> _makeHttpRequest(String url, String databaseName) async {
+    print('ThirdPartyDB: Using HttpClient for $databaseName');
+    
+    // 策略1: 优先使用 dart:io HttpClient (更底层，避免http包的头部解析问题)
+    try {
+      final client = HttpClient();
+      try {
+        final request = await client.getUrl(Uri.parse(url));
+        
+        // 根据数据库设置不同的headers
+        switch (databaseName) {
+          case 'javbus':
+            // JavBus: 完全不设置headers，避免malformed headers问题
+            print('ThirdPartyDB: JavBus - 不设置任何headers');
+            break;
+          case 'javlibrary':
+            // JavLibrary: 使用完整的浏览器headers
+            print('ThirdPartyDB: JavLibrary - 设置完整浏览器headers');
+            request.headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36');
+            request.headers.set('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7');
+            request.headers.set('Accept-Language', 'en-US,en;q=0.9');
+            request.headers.set('Accept-Encoding', 'gzip, deflate, br');
+            request.headers.set('Connection', 'keep-alive');
+            request.headers.set('Upgrade-Insecure-Requests', '1');
+            request.headers.set('Sec-Fetch-Dest', 'document');
+            request.headers.set('Sec-Fetch-Mode', 'navigate');
+            request.headers.set('Sec-Fetch-Site', 'cross-site');
+            request.headers.set('Sec-Fetch-User', '?1');
+            request.headers.set('Cache-Control', 'max-age=0');
+            request.headers.set('Sec-Ch-Ua', '"Google Chrome";v="119", "Chromium";v="119", "Not?A_Brand";v="24"');
+            request.headers.set('Sec-Ch-Ua-Mobile', '?0');
+            request.headers.set('Sec-Ch-Ua-Platform', '"Windows"');
+            request.headers.set('DNT', '1');
+            request.headers.set('Referer', 'https://www.google.com/search?q=javlibrary');
+            request.headers.set('Origin', 'https://www.google.com');
+            break;
+          default:
+            // 其他数据库: 使用基本headers
+            print('ThirdPartyDB: $databaseName - 设置基本headers');
+            request.headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+            break;
+        }
+        
+        final response = await request.close();
+        final responseBody = await response.transform(utf8.decoder).join();
+        
+        print('ThirdPartyDB: HttpClient 成功 - 状态码: ${response.statusCode}, 长度: ${responseBody.length}');
+        
+        // 创建http.Response对象
+        return http.Response(responseBody, response.statusCode);
       } finally {
         client.close();
       }
     } catch (e) {
-      // 更详细的错误处理
-      if (e.toString().contains('Invalid media type')) {
-        print('ThirdPartyDB: $databaseName has malformed HTTP headers, trying alternative approach');
-        // 尝试使用更简单的请求方式
-        try {
-          final alternativeClient = http.Client();
-          try {
-            final simpleResponse = await alternativeClient.get(
-              Uri.parse(config.searchUrl.replaceAll('{code}', code)),
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-              },
-            );
-            
-            if (simpleResponse.statusCode == 200) {
-              final html = simpleResponse.body;
-              print('ThirdPartyDB: $databaseName simple request successful, HTML length: ${html.length}');
-              
-              // 检查是否包含搜索结果
-              if (html.contains(code)) {
-                print('ThirdPartyDB: Found code $code in $databaseName response');
-                
-                // 尝试所有缩略图模式
-                for (int i = 0; i < config.thumbnailPatterns.length; i++) {
-                  final pattern = config.thumbnailPatterns[i];
-                  final matches = pattern.allMatches(html);
-                  
-                  for (final match in matches) {
-                    if (match.group(1) != null) {
-                      final thumbnailUrl = match.group(1)!;
-                      print('ThirdPartyDB: Found $databaseName thumbnail with pattern $i: $thumbnailUrl');
-                      
-                      if (_isValidThumbnailUrl(thumbnailUrl, databaseName)) {
-                        final normalizedUrl = _normalizeUrl(thumbnailUrl, config.baseUrl);
-                        if (await _validateThumbnailUrl(normalizedUrl)) {
-                          print('ThirdPartyDB: Validated $databaseName thumbnail: $normalizedUrl');
-                          return normalizedUrl;
-                        }
-                      }
-                    }
-                  }
+      print('ThirdPartyDB: HttpClient failed for $databaseName: $e');
+      
+                      // 策略2: 如果HttpClient失败，回退到http包（但避免JavBus的malformed headers问题）
+                if (databaseName == 'javbus') {
+                  print('ThirdPartyDB: JavBus HttpClient失败，跳过http.Client回退（避免malformed headers）');
+                  return null;
                 }
-              }
-            }
-          } finally {
-            alternativeClient.close();
-          }
-        } catch (simpleError) {
-          print('ThirdPartyDB: Simple request also failed for $databaseName: $simpleError');
+                
+                // 对于其他数据库，也优先使用HttpClient，避免头部问题
+                print('ThirdPartyDB: HttpClient失败，但继续尝试其他方法');
+                return null;
+      
+      print('ThirdPartyDB: 回退到http.Client for $databaseName');
+      try {
+        final client = http.Client();
+        try {
+          Map<String, String> headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          };
+          
+          final response = await client.get(Uri.parse(url), headers: headers);
+          print('ThirdPartyDB: http.Client 成功 - 状态码: ${response.statusCode}');
+          return response;
+        } finally {
+          client.close();
         }
-        } else if (e.toString().contains('SocketException')) {
-          print('ThirdPartyDB: $databaseName network error, skipping');
-        } else {
-          print('ThirdPartyDB: Error fetching $databaseName thumbnail: $e');
-        }
+      } catch (e2) {
+        print('ThirdPartyDB: http.Client also failed for $databaseName: $e2');
+        return null;
       }
-    return null;
+    }
   }
 
   /// 验证缩略图URL是否有效

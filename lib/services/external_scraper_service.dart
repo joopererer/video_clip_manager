@@ -32,7 +32,7 @@ class ExternalScraperService {
     return null;
   }
   
-  /// 使用 JAV Scraper (Python) 获取 JAV 信息
+  /// 使用 JAV Scraper (Python) 获取 JAV 信息 - 修复版本
   static Future<Map<String, dynamic>?> getJavInfoWithScraper(String code) async {
     try {
       print('ExternalScraper: Using JAV Scraper for code: $code');
@@ -44,35 +44,144 @@ class ExternalScraperService {
         return null;
       }
       
-             // 使用 javscraper 获取信息
-       final result = await Process.run('python', [
-         '-c',
-         '''
-import sys
-import json
-try:
-    from javscraper import JavScraper
-    scraper = JavScraper()
-    info = scraper.search('$code')
-    if info:
-        print(json.dumps(info, ensure_ascii=False))
-    else:
-        print("{}")
-except ImportError as e:
-    print(f'{{"error": "Import error: {e}"}}')
-except Exception as e:
-    print(f'{{"error": str(e)}}')
-''',
-       ]);
+      // 使用正确的 javscraper API - 修复所有问题
+      final scriptLines = [
+        'import sys',
+        'import json',
+        'import os',
+        '',
+        '# 设置UTF-8编码',
+        'os.environ["PYTHONIOENCODING"] = "utf-8"',
+        '',
+        'def main():',
+        '    try:',
+        '        # 尝试导入不同的 scraper',
+        '        scrapers = []',
+        '        ',
+        '        try:',
+        '            from javscraper import JAVLibrary',
+        '            scrapers.append(("JAVLibrary", JAVLibrary()))',
+        '        except ImportError:',
+        '            pass',
+        '        ',
+        '        try:',
+        '            from javscraper import DMM',
+        '            scrapers.append(("DMM", DMM()))',
+        '        except ImportError:',
+        '            pass',
+        '        ',
+        '        try:',
+        '            from javscraper import MGStage',
+        '            scrapers.append(("MGStage", MGStage()))',
+        '        except ImportError:',
+        '            pass',
+        '        ',
+        '        if not scrapers:',
+        '            print(\'{"error": "No scrapers available"}\')',
+        '            return',
+        '        ',
+        '        if len(sys.argv) > 1:',
+        '            code = sys.argv[1]',
+        '            ',
+        '            # 尝试所有可用的 scraper',
+        '            for name, scraper in scrapers:',
+        '                try:',
+        '                    info = scraper.search(code)',
+        '                    if info:',
+        '                        # 检查返回的数据是否有效',
+        '                        if isinstance(info, list):',
+        '                            if len(info) == 0:',
+        '                                continue  # 空列表，跳过',
+        '                            first_item = info[0]',
+        '                            if isinstance(first_item, str):',
+        '                                # 如果是字符串（如地区限制页面），跳过',
+        '                                if "not-available" in first_item or "region" in first_item:',
+        '                                    continue',
+        '                                # 如果是URL字符串，也跳过（可能是重定向页面）',
+        '                                if first_item.startswith("http"):',
+        '                                    continue',
+        '                        ',
+        '                        # 解析数据并返回标准格式',
+        '                        if isinstance(info, list) and len(info) > 0:',
+        '                            first_item = info[0]',
+        '                            if isinstance(first_item, dict):',
+        '                                # 提取有用信息',
+        '                                title = first_item.get("title", "")',
+        '                                poster = first_item.get("poster", "")',
+        '                                thumbnail = first_item.get("thumbnail", "")',
+        '                                cover = first_item.get("cover", "")',
+        '                                image = first_item.get("image", "")',
+        '                                ',
+        '                                result = {',
+        '                                    "source": name,',
+        '                                    "title": title,',
+        '                                    "poster": poster or thumbnail or cover or image,',
+        '                                    "thumbnail": poster or thumbnail or cover or image,',
+        '                                    "data": info',
+        '                                }',
+        '                            else:',
+        '                                result = {',
+        '                                    "source": name,',
+        '                                    "data": info',
+        '                                }',
+        '                        else:',
+        '                            result = {',
+        '                                "source": name,',
+        '                                "data": info',
+        '                            }',
+        '                        ',
+        '                        print(json.dumps(result, ensure_ascii=False))',
+        '                        return',
+        '                except Exception:',
+        '                    continue',
+        '            ',
+        '            # 如果所有 scraper 都失败',
+        '            print(\'{"error": "All scrapers failed"}\')',
+        '        else:',
+        '            print(\'{"error": "No code provided"}\')',
+        '            ',
+        '    except Exception as e:',
+        '        error_msg = "General error: " + str(e)',
+        '        print(\'{"error": "\' + error_msg + \'"}\')',
+        '',
+        'if __name__ == "__main__":',
+        '    main()',
+      ];
       
-      if (result.exitCode == 0 && result.stdout.toString().isNotEmpty) {
-        final jsonData = json.decode(result.stdout.toString());
-        if (jsonData.containsKey('error')) {
-          print('ExternalScraper: JAV Scraper error: ${jsonData['error']}');
-          return null;
+      final pythonScript = scriptLines.join('\n');
+      
+      // 创建临时Python脚本文件
+      final tempDir = await Directory.systemTemp.createTemp('javscraper_');
+      final scriptFile = File('${tempDir.path}/javscraper_script.py');
+      await scriptFile.writeAsString(pythonScript);
+      
+      try {
+        final result = await Process.run('python', [scriptFile.path, code], 
+          environment: {'PYTHONIOENCODING': 'utf-8'});
+        
+        if (result.exitCode == 0 && result.stdout.toString().isNotEmpty) {
+          final stdout = result.stdout.toString().trim();
+          print('ExternalScraper: Raw output: $stdout');
+          
+          try {
+            final jsonData = json.decode(stdout);
+            if (jsonData.containsKey('error')) {
+              print('ExternalScraper: JAV Scraper error: ${jsonData['error']}');
+              return null;
+            }
+            print('ExternalScraper: JAV Scraper success for $code from ${jsonData['source']}');
+            return jsonData;
+          } catch (e) {
+            print('ExternalScraper: JSON parse error: $e');
+            print('ExternalScraper: Raw output was: $stdout');
+            return null;
+          }
+        } else {
+          print('ExternalScraper: JAV Scraper failed: ${result.stderr}');
         }
-        print('ExternalScraper: JAV Scraper success for $code');
-        return jsonData;
+      } finally {
+        // 清理临时文件
+        await tempDir.delete(recursive: true);
       }
     } catch (e) {
       print('ExternalScraper: JAV Scraper error for $code: $e');
