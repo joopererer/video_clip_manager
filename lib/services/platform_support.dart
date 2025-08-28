@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../data/models.dart';
+import 'external_scraper_service.dart';
+import 'third_party_database_service.dart';
 
 /// 视频信息类
 class VideoInfo {
@@ -103,8 +105,29 @@ abstract class PlatformSupport {
 class YouTubeSupport implements PlatformSupport {
   @override
   Future<VideoInfo> extractVideoInfo(String url) async {
+    print('YouTube: Extracting video info from URL: $url');
+    
+    // 首先尝试使用外部 scraper (yt-dlp)
+    final ytInfo = await ExternalScraperService.getVideoInfoWithYtDlp(url);
+    if (ytInfo != null) {
+      print('YouTube: External scraper success');
+      final videoId = ytInfo['id'] ?? '';
+      
+      // 获取缩略图URL
+      String? thumbnailUrl;
+      if (videoId.isNotEmpty) {
+        thumbnailUrl = await getThumbnail(videoId, Duration.zero);
+      }
+      
+      return VideoInfo.fromJson({
+        ...ytInfo,
+        'platform': 'youtube',
+        'thumbnail_url': thumbnailUrl,
+      });
+    }
+    
+    // 如果外部 scraper 失败，使用原有的 yt-dlp 方法
     try {
-      // 使用yt-dlp提取信息
       final result = await Process.run('yt-dlp', [
         '--dump-json',
         '--no-playlist',
@@ -460,41 +483,64 @@ class BilibiliSupport implements PlatformSupport {
 class MissAVSupport implements PlatformSupport {
   @override
   Future<VideoInfo> extractVideoInfo(String url) async {
-    try {
-      // 首先尝试使用yt-dlp提取信息
-      try {
-        final result = await Process.run('yt-dlp', [
-          '--dump-json',
-          '--no-playlist',
-          '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          '--extractor-args', 'generic:impersonate',
-          '--no-cookies',
-          '--extractor', 'generic',
-          '--force-generic-extractor',
-          url,
-        ]);
-
-        if (result.exitCode == 0) {
-          final json = jsonDecode(result.stdout);
-          final videoId = json['id'] ?? '';
-          
-          // 获取缩略图URL
-          String? thumbnailUrl;
-          if (videoId.isNotEmpty) {
-            thumbnailUrl = await getThumbnail(videoId, Duration.zero);
-          }
-          
-          return VideoInfo.fromJson({
-            ...json,
-            'platform': 'missav',
-            'thumbnail_url': thumbnailUrl,
-          });
-        }
-      } catch (e) {
-        // 如果yt-dlp失败，继续尝试网页解析
+    print('MissAV: Extracting video info from URL: $url');
+    
+    // 首先尝试使用外部 scraper
+    final code = ThirdPartyDatabaseService.extractCodeFromUrl(url);
+    if (code != null) {
+      print('MissAV: Extracted code: $code, trying external scraper');
+      
+      // 尝试使用 JAV Scraper
+      final javInfo = await ExternalScraperService.getJavInfoWithScraper(code);
+      if (javInfo != null) {
+        print('MissAV: External scraper success for code: $code');
+        return VideoInfo(
+          id: code,
+          title: javInfo['title'] ?? 'Unknown Title',
+          description: javInfo['overview'] ?? javInfo['description'] ?? '',
+          duration: null,
+          thumbnailUrl: javInfo['poster'] ?? javInfo['thumbnail'],
+          platform: 'missav',
+          metadata: javInfo,
+        );
       }
+    }
+    
+    // 如果外部 scraper 失败，尝试使用 yt-dlp
+    try {
+      final result = await Process.run('yt-dlp', [
+        '--dump-json',
+        '--no-playlist',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        '--extractor-args', 'generic:impersonate',
+        '--no-cookies',
+        '--extractor', 'generic',
+        '--force-generic-extractor',
+        url,
+      ]);
 
-      // 备用方案：使用网页解析，添加更多绕过策略
+      if (result.exitCode == 0) {
+        final json = jsonDecode(result.stdout);
+        final videoId = json['id'] ?? '';
+        
+        // 获取缩略图URL
+        String? thumbnailUrl;
+        if (videoId.isNotEmpty) {
+          thumbnailUrl = await getThumbnail(videoId, Duration.zero);
+        }
+        
+        return VideoInfo.fromJson({
+          ...json,
+          'platform': 'missav',
+          'thumbnail_url': thumbnailUrl,
+        });
+      }
+    } catch (e) {
+      print('MissAV: yt-dlp failed: $e');
+    }
+
+    // 备用方案：使用网页解析，添加更多绕过策略
+    try {
       final response = await http.get(
         Uri.parse(url),
         headers: {
@@ -514,17 +560,26 @@ class MissAVSupport implements PlatformSupport {
       if (response.statusCode == 200) {
         final html = response.body;
         
-        // 提取视频ID
+        // 提取视频ID - 尝试提取番号
         final videoIdMatch = RegExp(r'missav\.ws/[^/]+/([^/?]+)').firstMatch(url);
-        final videoId = videoIdMatch?.group(1) ?? 'unknown';
+        String videoId = videoIdMatch?.group(1) ?? 'unknown';
+        
+        // 尝试从URL中提取番号（如 ABW-182）
+        final codeMatch = RegExp(r'([A-Z]{2,4}-\d{2,4})', caseSensitive: false).firstMatch(url);
+        if (codeMatch != null) {
+          videoId = codeMatch.group(1)!.toUpperCase();
+        }
         
         // 提取标题
         final titleMatch = RegExp(r'<title[^>]*>([^<]+)</title>').firstMatch(html);
         final title = titleMatch?.group(1)?.trim() ?? 'MissAV Video';
         
-        // 提取缩略图
-        final thumbnailMatch = RegExp(r'<meta property="og:image" content="([^"]+)"').firstMatch(html);
-        final thumbnailUrl = thumbnailMatch?.group(1);
+        // 获取缩略图URL - 使用我们的多源获取方法
+        String? thumbnailUrl;
+        if (videoId.isNotEmpty) {
+          print('MissAV: Calling getThumbnail with videoId: $videoId');
+          thumbnailUrl = await getThumbnail(videoId, Duration.zero);
+        }
         
         return VideoInfo(
           id: videoId,
@@ -541,14 +596,27 @@ class MissAVSupport implements PlatformSupport {
       } else {
         // 如果网页请求失败，提供基于URL的基本信息
         final videoIdMatch = RegExp(r'missav\.ws/[^/]+/([^/?]+)').firstMatch(url);
-        final videoId = videoIdMatch?.group(1) ?? 'unknown';
+        String videoId = videoIdMatch?.group(1) ?? 'unknown';
+        
+        // 尝试从URL中提取番号（如 ABW-182）
+        final codeMatch = RegExp(r'([A-Z]{2,4}-\d{2,4})', caseSensitive: false).firstMatch(url);
+        if (codeMatch != null) {
+          videoId = codeMatch.group(1)!.toUpperCase();
+        }
+        
+        // 即使网页请求失败，也尝试获取缩略图
+        String? thumbnailUrl;
+        if (videoId.isNotEmpty) {
+          print('MissAV: Calling getThumbnail with videoId: $videoId (webpage failed)');
+          thumbnailUrl = await getThumbnail(videoId, Duration.zero);
+        }
         
         return VideoInfo(
           id: videoId,
           title: 'MissAV Video - $videoId',
           description: 'MissAV video (limited info due to access restrictions)',
           duration: null,
-          thumbnailUrl: null,
+          thumbnailUrl: thumbnailUrl,
           platform: 'missav',
           metadata: {
             'url': url,
@@ -560,14 +628,27 @@ class MissAVSupport implements PlatformSupport {
     } catch (e) {
       // 最后的备用方案：基于URL提供基本信息
       final videoIdMatch = RegExp(r'missav\.ws/[^/]+/([^/?]+)').firstMatch(url);
-      final videoId = videoIdMatch?.group(1) ?? 'unknown';
+      String videoId = videoIdMatch?.group(1) ?? 'unknown';
+      
+      // 尝试从URL中提取番号（如 ABW-182）
+      final codeMatch = RegExp(r'([A-Z]{2,4}-\d{2,4})', caseSensitive: false).firstMatch(url);
+      if (codeMatch != null) {
+        videoId = codeMatch.group(1)!.toUpperCase();
+      }
+      
+      // 最后的备用方案也尝试获取缩略图
+      String? thumbnailUrl;
+      if (videoId.isNotEmpty) {
+        print('MissAV: Calling getThumbnail with videoId: $videoId (fallback)');
+        thumbnailUrl = await getThumbnail(videoId, Duration.zero);
+      }
       
       return VideoInfo(
         id: videoId,
         title: 'MissAV Video - $videoId',
         description: 'MissAV video (limited info due to access restrictions)',
         duration: null,
-        thumbnailUrl: null,
+        thumbnailUrl: thumbnailUrl,
         platform: 'missav',
         metadata: {
           'url': url,
@@ -633,25 +714,67 @@ class MissAVSupport implements PlatformSupport {
   }
 
   @override
+  String getPlatformName() => 'MissAV';
+
+  @override
+  String getPlatformIcon() => '🎬';
+
+  @override
+  bool isValidUrl(String url) {
+    return url.contains('missav.ws');
+  }
+
+  @override
+  Future<String?> getVideoStreamUrl(String url) async {
+    try {
+      final result = await Process.run('yt-dlp', [
+        '--get-url',
+        '--format', 'best',
+        '--no-playlist',
+        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        url,
+      ]);
+
+      if (result.exitCode == 0) {
+        return result.stdout.trim();
+      }
+    } catch (e) {
+      // 忽略错误
+    }
+    return null;
+  }
+
+  @override
+  List<String> getAvailableQualities() => ['144p', '240p', '360p', '480p', '720p', '1080p'];
+
+  @override
+  bool supportsPreciseTimeControl() => false;
+
+  @override
   Future<String?> getThumbnail(String videoId, Duration time) async {
     print('MissAV: Getting thumbnail for videoId: $videoId');
     
     // 方案1: 尝试从 MissAV 获取缩略图
     String? thumbnailUrl = await _getMissAVThumbnail(videoId);
     if (thumbnailUrl != null) {
+      print('MissAV: Successfully got thumbnail from MissAV: $thumbnailUrl');
       return thumbnailUrl;
     }
     
-    // 方案2: 尝试从 JavBus 获取缩略图
-    thumbnailUrl = await _getJavBusThumbnail(videoId);
-    if (thumbnailUrl != null) {
-      return thumbnailUrl;
-    }
-    
-    // 方案3: 尝试从 JavLibrary 获取缩略图
-    thumbnailUrl = await _getJavLibraryThumbnail(videoId);
-    if (thumbnailUrl != null) {
-      return thumbnailUrl;
+    // 方案2: 尝试从第三方数据库获取缩略图
+    print('MissAV: Trying to extract code from videoId: $videoId');
+    final code = ThirdPartyDatabaseService.extractCodeFromUrl(videoId);
+    if (code != null) {
+      print('MissAV: Successfully extracted code: $code, searching third-party databases');
+      thumbnailUrl = await ThirdPartyDatabaseService.getThumbnailFromAllDatabases(code);
+      if (thumbnailUrl != null) {
+        print('MissAV: Successfully got thumbnail from third-party database: $thumbnailUrl');
+        return thumbnailUrl;
+      } else {
+        print('MissAV: No thumbnail found from third-party databases');
+      }
+    } else {
+      print('MissAV: Failed to extract code from videoId: $videoId');
     }
     
     print('MissAV: All thumbnail sources failed');
@@ -732,159 +855,6 @@ class MissAVSupport implements PlatformSupport {
     }
     return null;
   }
-  
-  // 从 JavBus 获取缩略图
-  Future<String?> _getJavBusThumbnail(String videoId) async {
-    try {
-      // 尝试从 JavBus 搜索视频
-      final searchUrl = 'https://www.javbus.com/search/$videoId';
-      print('MissAV: Trying JavBus search: $searchUrl');
-      
-      final response = await http.get(
-        Uri.parse(searchUrl),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'none',
-          'Sec-Fetch-User': '?1',
-          'Referer': 'https://www.javbus.com/',
-        },
-      );
-      
-      if (response.statusCode == 200) {
-        final html = response.body;
-        print('MissAV: JavBus HTML content length: ${html.length}');
-        
-        // 尝试提取 JavBus 的缩略图
-        final patterns = [
-          RegExp(r'<img[^>]*class="[^"]*movie-box[^"]*"[^>]*src="([^"]+)"'),
-          RegExp(r'<img[^>]*class="[^"]*cover[^"]*"[^>]*src="([^"]+)"'),
-          RegExp(r'<img[^>]*src="([^"]*\.jpg[^"]*)"'),
-        ];
-        
-        for (final pattern in patterns) {
-          final match = pattern.firstMatch(html);
-          if (match != null && match.group(1) != null) {
-            final thumbnailUrl = match.group(1)!;
-            print('MissAV: Found JavBus thumbnail: $thumbnailUrl');
-            
-            if (thumbnailUrl.startsWith('http')) {
-              return thumbnailUrl;
-            } else if (thumbnailUrl.startsWith('//')) {
-              return 'https:${thumbnailUrl}';
-            } else if (thumbnailUrl.startsWith('/')) {
-              return 'https://www.javbus.com${thumbnailUrl}';
-            }
-          }
-        }
-      }
-    } catch (e) {
-      print('MissAV: Error fetching JavBus thumbnail: $e');
-    }
-    return null;
-  }
-  
-  // 从 JavLibrary 获取缩略图
-  Future<String?> _getJavLibraryThumbnail(String videoId) async {
-    try {
-      // 尝试从 JavLibrary 搜索视频
-      final searchUrl = 'https://www.javlibrary.com/cn/vl_searchbyid.php?keyword=$videoId';
-      print('MissAV: Trying JavLibrary search: $searchUrl');
-      
-      final response = await http.get(
-        Uri.parse(searchUrl),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'none',
-          'Sec-Fetch-User': '?1',
-          'Referer': 'https://www.javlibrary.com/',
-        },
-      );
-      
-      if (response.statusCode == 200) {
-        final html = response.body;
-        print('MissAV: JavLibrary HTML content length: ${html.length}');
-        
-        // 尝试提取 JavLibrary 的缩略图
-        final patterns = [
-          RegExp(r'<img[^>]*class="[^"]*video[^"]*"[^>]*src="([^"]+)"'),
-          RegExp(r'<img[^>]*class="[^"]*cover[^"]*"[^>]*src="([^"]+)"'),
-          RegExp(r'<img[^>]*src="([^"]*\.jpg[^"]*)"'),
-        ];
-        
-        for (final pattern in patterns) {
-          final match = pattern.firstMatch(html);
-          if (match != null && match.group(1) != null) {
-            final thumbnailUrl = match.group(1)!;
-            print('MissAV: Found JavLibrary thumbnail: $thumbnailUrl');
-            
-            if (thumbnailUrl.startsWith('http')) {
-              return thumbnailUrl;
-            } else if (thumbnailUrl.startsWith('//')) {
-              return 'https:${thumbnailUrl}';
-            } else if (thumbnailUrl.startsWith('/')) {
-              return 'https://www.javlibrary.com${thumbnailUrl}';
-            }
-          }
-        }
-      }
-    } catch (e) {
-      print('MissAV: Error fetching JavLibrary thumbnail: $e');
-    }
-    return null;
-  }
-
-  @override
-  String getPlatformName() => 'MissAV';
-
-  @override
-  String getPlatformIcon() => '🎬';
-
-  @override
-  bool isValidUrl(String url) {
-    return url.contains('missav.ws') || url.contains('missav.com');
-  }
-
-  @override
-  Future<String?> getVideoStreamUrl(String url) async {
-    try {
-      final result = await Process.run('yt-dlp', [
-        '--get-url',
-        '--format', 'best',
-        '--no-playlist',
-        '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        '--extractor-args', 'generic:impersonate',
-        '--no-cookies',
-        url,
-      ]);
-
-      if (result.exitCode == 0) {
-        return result.stdout.trim();
-      }
-    } catch (e) {
-      // 忽略错误
-    }
-    return null;
-  }
-
-  @override
-  List<String> getAvailableQualities() => ['480p', '720p', '1080p'];
-
-  @override
-  bool supportsPreciseTimeControl() => false; // WebView控制可能不够精确
 }
 
 /// XVideos平台支持

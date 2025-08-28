@@ -15,6 +15,7 @@ import '../services/thumbnail_service.dart'; // 添加缩略图服务导入
 import 'tabs/videos_tab.dart';
 import 'tabs/clips_tab.dart';
 import 'tabs/playlists_tab.dart';
+import 'settings/external_scrapers_settings_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -486,6 +487,19 @@ class _MainScreenState extends State<MainScreen>
                       child: Text('Switch Database'),
                     ),
                   ],
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  tooltip: 'External Scrapers Settings',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ExternalScrapersSettingsScreen(),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(width: 8),
                 IconButton(
