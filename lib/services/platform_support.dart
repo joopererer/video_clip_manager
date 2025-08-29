@@ -503,7 +503,7 @@ class MissAVSupport implements PlatformSupport {
       final bestTitle = result.bestTitle;
       final bestThumbnail = result.bestThumbnail;
       
-      if (bestTitle != null) {
+      if (bestTitle != null && bestTitle.isNotEmpty) {
         print('MissAV: Using best title: $bestTitle');
         print('MissAV: Best thumbnail: $bestThumbnail');
         
@@ -524,7 +524,6 @@ class MissAVSupport implements PlatformSupport {
             'source_confidence': result.sourceConfidence,
           },
         );
-      }
       } else {
         print('MissAV: No results from multi-source search, falling back to original method');
         
@@ -534,7 +533,7 @@ class MissAVSupport implements PlatformSupport {
           print('MissAV: External scraper success for code: $code');
           return VideoInfo(
             id: code,
-            title: javInfo['title'] ?? 'Unknown Title',
+            title: javInfo['title'] as String? ?? 'Unknown Title',
             description: javInfo['overview'] ?? javInfo['description'] ?? '',
             duration: null,
             thumbnailUrl: javInfo['poster'] ?? javInfo['thumbnail'],
@@ -551,14 +550,14 @@ class MissAVSupport implements PlatformSupport {
             String? missavTitle = await _fetchMissavTitle(url);
             final finalTitle = (missavTitle != null && missavTitle.trim().isNotEmpty)
                 ? missavTitle.trim()
-                : (dbInfo['title'] ?? 'Unknown Title');
+                : (dbInfo['title'] as String? ?? 'Unknown Title');
 
             return VideoInfo(
               id: code,
               title: finalTitle,
-              description: dbInfo['description'] ?? '',
+              description: dbInfo['description'] as String? ?? '',
               duration: null,
-              thumbnailUrl: dbInfo['thumbnail'],
+              thumbnailUrl: dbInfo['thumbnail'] as String?,
               platform: 'missav',
               metadata: {
                 ...dbInfo,

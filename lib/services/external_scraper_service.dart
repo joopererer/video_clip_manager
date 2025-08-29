@@ -358,14 +358,11 @@ def get_missav_content(url):
             ]
             
             extracted_thumbnail = None
-            print(f"DEBUG: Content length: {len(content)}")
-            print(f"DEBUG: First 1000 chars: {content[:1000]}")
             
             for i, pattern in enumerate(thumbnail_patterns):
                 match = re.search(pattern, content, re.IGNORECASE)
                 if match:
                     thumbnail = match.group(1).strip()
-                    print(f"DEBUG: Pattern {i} matched: {thumbnail}")
                     if thumbnail and not thumbnail.startswith('data:'):
                         # 确保是完整的URL
                         if thumbnail.startswith('//'):
@@ -373,13 +370,7 @@ def get_missav_content(url):
                         elif thumbnail.startswith('/'):
                             thumbnail = 'https://missav.ws' + thumbnail
                         extracted_thumbnail = thumbnail
-                        print(f"DEBUG: Final thumbnail URL: {extracted_thumbnail}")
                         break
-                else:
-                    print(f"DEBUG: Pattern {i} did not match")
-            
-            if not extracted_thumbnail:
-                print("DEBUG: No thumbnail found with any pattern")
             
             # 字符修复将在 Dart 端处理
             fixed_title = extracted_title
@@ -429,8 +420,25 @@ if __name__ == "__main__":
           return null;
         }
         
+        // 查找最后一行 JSON 输出（可能前面有调试信息）
+        final lines = output.split('\n');
+        String jsonOutput = '';
+        for (int i = lines.length - 1; i >= 0; i--) {
+          final line = lines[i].trim();
+          if (line.startsWith('{') && line.endsWith('}')) {
+            jsonOutput = line;
+            break;
+          }
+        }
+        
+        if (jsonOutput.isEmpty) {
+          print('ExternalScraper: No valid JSON found in output');
+          print('ExternalScraper: Raw output: $output');
+          return null;
+        }
+        
         try {
-          final data = json.decode(output) as Map<String, dynamic>;
+          final data = json.decode(jsonOutput) as Map<String, dynamic>;
           
           print('ExternalScraper: Parsed data: $data');
           
