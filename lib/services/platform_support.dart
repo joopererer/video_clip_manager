@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../data/models.dart';
 import 'external_scraper_service.dart';
 import 'third_party_database_service.dart';
+import 'config_service.dart';
 
 /// 视频信息类
 class VideoInfo {
@@ -510,14 +511,25 @@ class MissAVSupport implements PlatformSupport {
         final dbInfo = await ThirdPartyDatabaseService.getThumbnailFromDatabase(code);
         if (dbInfo != null && dbInfo['thumbnail'] != null) {
           print('MissAV: Third-party database success for code: $code');
+
+          // 优先从 MissAV 页面获取更准确的标题（先尝试日文 /ja/ 页面，失败再用原链接）
+          String? missavTitle = await _fetchMissavTitle(url);
+          final finalTitle = (missavTitle != null && missavTitle.trim().isNotEmpty)
+              ? missavTitle.trim()
+              : (dbInfo['title'] ?? 'Unknown Title');
+
           return VideoInfo(
             id: code,
-            title: dbInfo['title'] ?? 'Unknown Title',
+            title: finalTitle,
             description: dbInfo['description'] ?? '',
             duration: null,
             thumbnailUrl: dbInfo['thumbnail'],
             platform: 'missav',
-            metadata: dbInfo,
+            metadata: {
+              ...dbInfo,
+              'missav_title': missavTitle,
+              'source_priority': 'missav>db',
+            },
           );
         }
       }
@@ -673,6 +685,166 @@ class MissAVSupport implements PlatformSupport {
           'note': 'Limited information due to website restrictions',
         },
       );
+    }
+  }
+
+  // 优先从 MissAV 的日文页面获取更准确的标题，失败时回退到原URL
+  Future<String?> _fetchMissavTitle(String url) async {
+    try {
+      print('MissAV: Using cloudscraper for title fetch: $url');
+      
+      // 优先尝试日文页面
+      String jaUrl = url.replaceFirst(RegExp(r'/[a-z]{2}/'), '/ja/');
+      String? title = await _fetchTitleWithCloudscraper(jaUrl);
+      if (title != null && title.trim().isNotEmpty) {
+        print('MissAV: Found title from Japanese page: $title');
+        return title.trim();
+      }
+      
+      // 回退到原URL
+      title = await _fetchTitleWithCloudscraper(url);
+      if (title != null && title.trim().isNotEmpty) {
+        print('MissAV: Found title from original page: $title');
+        return title.trim();
+      }
+      
+      print('MissAV: No title found with cloudscraper');
+      return null;
+    } catch (e) {
+      print('MissAV: Title fetch error: $e');
+      return null;
+    }
+  }
+
+  /// 使用 cloudscraper 获取页面标题
+  Future<String?> _fetchTitleWithCloudscraper(String url) async {
+    try {
+      // 使用 ExternalScraperService 的 cloudscraper 方法
+      final result = await ExternalScraperService.getMissavPageContent(url);
+      
+      if (result != null && (result['success'] == true || result['success'] == 'true')) {
+        final title = result['title'] as String?;
+        print('MissAV: Extracted title from result: $title');
+        print('MissAV: Title length: ${title?.length ?? 0}');
+        if (title != null && title.isNotEmpty) {
+          print('MissAV: Found title with cloudscraper: $title');
+          return title;
+        } else {
+          print('MissAV: No title found in cloudscraper response');
+        }
+      } else {
+        print('MissAV: Cloudscraper failed: ${result?['error'] ?? 'Unknown error'}');
+      }
+      
+      return null;
+    } catch (e) {
+      print('MissAV: Cloudscraper title fetch error: $e');
+      return null;
+    }
+  }
+
+  Future<String?> _fetchTitleFromPage(String pageUrl) async {
+    try {
+      // 获取配置的 Cookie 和代理
+      final cookie = await ConfigService.getMissavCookie();
+      final proxy = await ConfigService.getMissavProxy();
+      
+      // 构建请求头（与真实浏览器完全一致）
+      final headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'zh-MO,zh;q=0.9,fr-FR;q=0.8,fr;q=0.7,zh-TW;q=0.6,en-US;q=0.5,en;q=0.4,zh-CN;q=0.3',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0',
+        'Sec-Ch-Ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'DNT': '1',
+        'Referer': 'https://missav.ws/dm14/fr',
+      };
+      
+      // 如果配置了 Cookie，添加到请求头
+      if (cookie != null && cookie.isNotEmpty) {
+        headers['Cookie'] = cookie;
+        print('MissAV: Using configured cookie for title fetch');
+      }
+      
+      // 如果配置了代理，使用 HttpClient 而不是 http 包
+      if (proxy != null && proxy.isNotEmpty) {
+        print('MissAV: Using configured proxy: $proxy for title fetch');
+        return await _fetchWithProxy(pageUrl, headers, proxy);
+      }
+      
+      // 使用标准的 http 包
+      final response = await http.get(
+        Uri.parse(pageUrl),
+        headers: headers,
+      );
+      print('MissAV: Title fetch response status: ${response.statusCode}');
+      if (response.statusCode != 200) {
+        print('MissAV: Title fetch failed with status ${response.statusCode}');
+        return null;
+      }
+      final html = response.body;
+      print('MissAV: Title fetch HTML length: ${html.length}');
+
+      // 先尝试 meta og/twitter，再退回到标题标签
+      final patterns = [
+        RegExp(r'<meta[^>]*property="og:title"[^>]*content="([^"]+)"', caseSensitive: false),
+        RegExp(r'<meta[^>]*name="twitter:title"[^>]*content="([^"]+)"', caseSensitive: false),
+        RegExp(r'<h1[^>]*class="[^"]*title[^"]*"[^>]*>([^<]+)</h1>', caseSensitive: false),
+        RegExp(r'<h1[^>]*>([^<]+)</h1>', caseSensitive: false),
+        RegExp(r'<title[^>]*>([^<]+)</title>', caseSensitive: false),
+      ];
+
+      for (int i = 0; i < patterns.length; i++) {
+        final p = patterns[i];
+        final m = p.firstMatch(html);
+        if (m != null && m.group(1) != null) {
+          final t = m.group(1)!.trim();
+          if (t.isNotEmpty) {
+            print('MissAV: Title extracted with pattern $i: $t');
+            return t;
+          }
+        }
+      }
+      print('MissAV: No title found with any pattern');
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 使用代理获取页面内容
+  Future<String?> _fetchWithProxy(String pageUrl, Map<String, String> headers, String proxy) async {
+    try {
+      final uri = Uri.parse(pageUrl);
+      final proxyUri = Uri.parse(proxy);
+      
+      final client = HttpClient();
+      client.findProxy = (uri) {
+        return 'PROXY ${proxyUri.host}:${proxyUri.port}';
+      };
+      
+      final request = await client.getUrl(uri);
+      headers.forEach((key, value) {
+        request.headers.set(key, value);
+      });
+      
+      final response = await request.close();
+      if (response.statusCode != 200) return null;
+      
+      final content = await response.transform(utf8.decoder).join();
+      return content;
+    } catch (e) {
+      print('MissAV: Proxy fetch failed: $e');
+      return null;
     }
   }
 

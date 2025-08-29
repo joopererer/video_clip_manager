@@ -291,4 +291,131 @@ class ExternalScraperService {
       return false;
     }
   }
+
+  /// 使用 cloudscraper 获取 MissAV 页面内容
+  static Future<Map<String, dynamic>?> getMissavPageContent(String url) async {
+    try {
+      print('ExternalScraper: Getting MissAV page content with cloudscraper: $url');
+      
+      // 创建临时 Python 脚本
+      final scriptContent = '''
+import sys
+import json
+import cloudscraper
+
+def get_missav_content(url):
+    try:
+        scraper = cloudscraper.create_scraper(
+            browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'desktop': True
+            }
+        )
+        
+        response = scraper.get(url)
+        
+        if response.status_code == 200:
+            content = response.text
+            
+            # 尝试提取标题
+            import re
+            title_patterns = [
+                r'<meta[^>]*property="og:title"[^>]*content="([^"]+)"',
+                r'<meta[^>]*name="twitter:title"[^>]*content="([^"]+)"',
+                r'<h1[^>]*class="[^"]*title[^"]*"[^>]*>([^<]+)</h1>',
+                r'<h1[^>]*>([^<]+)</h1>',
+                r'<title[^>]*>([^<]+)</title>',
+            ]
+            
+            extracted_title = None
+            for pattern in title_patterns:
+                match = re.search(pattern, content, re.IGNORECASE)
+                if match:
+                    title = match.group(1).strip()
+                    if title:
+                        extracted_title = title
+                        break
+            
+            return {
+                'success': True,
+                'status_code': response.status_code,
+                'content_length': len(content),
+                'title': extracted_title
+            }
+        else:
+            return {
+                'success': False,
+                'status_code': response.status_code,
+                'error': response.text[:500]
+            }
+            
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+if __name__ == "__main__":
+    url = sys.argv[1] if len(sys.argv) > 1 else ""
+    result = get_missav_content(url)
+    print(json.dumps(result, ensure_ascii=False))
+''';
+
+      final scriptFile = await _createTempScript(scriptContent);
+      
+      try {
+        // 执行 Python 脚本
+        final result = await Process.run('python', [scriptFile.path, url], 
+          environment: {'PYTHONIOENCODING': 'utf-8'});
+        
+        if (result.exitCode != 0) {
+          print('ExternalScraper: MissAV cloudscraper failed with exit code: ${result.exitCode}');
+          print('ExternalScraper: Error: ${result.stderr}');
+          return null;
+        }
+        
+        final output = result.stdout.toString().trim();
+        if (output.isEmpty) {
+          print('ExternalScraper: MissAV cloudscraper returned empty output');
+          return null;
+        }
+        
+        try {
+          final data = json.decode(output) as Map<String, dynamic>;
+          
+          print('ExternalScraper: Parsed data: $data');
+          
+          if (data['success'] == true || data['success'] == 'true') {
+                    print('ExternalScraper: MissAV cloudscraper success, content length: ${data['content_length']}');
+        print('ExternalScraper: Extracted title: ${data['title']}');
+        print('ExternalScraper: Title length: ${data['title']?.length ?? 0}');
+            return data;
+          } else {
+            print('ExternalScraper: MissAV cloudscraper failed: ${data['error']}');
+            return null;
+          }
+        } catch (e) {
+          print('ExternalScraper: Failed to parse MissAV cloudscraper output: $e');
+          print('ExternalScraper: Raw output: $output');
+          return null;
+        }
+      } finally {
+        // 清理临时文件
+        await scriptFile.delete();
+      }
+      
+    } catch (e) {
+      print('ExternalScraper: MissAV cloudscraper error: $e');
+      return null;
+    }
+  }
+
+  /// 创建临时 Python 脚本文件
+  static Future<File> _createTempScript(String content) async {
+    final tempDir = await Directory.systemTemp.createTemp('external_scraper_');
+    final scriptFile = File('${tempDir.path}/temp_script.py');
+    await scriptFile.writeAsString(content);
+    return scriptFile;
+  }
 }

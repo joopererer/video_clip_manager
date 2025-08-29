@@ -217,25 +217,10 @@ class ThirdPartyDatabaseService {
               
               // 过滤掉用户头像等无关图片
               if (_isValidThumbnailUrl(thumbnailUrl, databaseName)) {
-                final normalizedUrl = _normalizeUrl(thumbnailUrl, config.baseUrl);
-                
-                // 尝试提取标题
+                // 不从数据库页面提取标题（特别是 JavDB 搜索页），标题交由站点本身或上层逻辑决定
                 String? title;
-                final titlePatterns = [
-                  RegExp(r'<title[^>]*>([^<]+)</title>'),
-                  RegExp(r'<h1[^>]*>([^<]+)</h1>'),
-                  RegExp(r'<h2[^>]*>([^<]+)</h2>'),
-                ];
-                
-                for (final titlePattern in titlePatterns) {
-                  final titleMatch = titlePattern.firstMatch(html);
-                  if (titleMatch != null) {
-                    title = titleMatch.group(1)?.trim();
-                    if (title != null && title.isNotEmpty) {
-                      break;
-                    }
-                  }
-                }
+                // Restore normalized URL
+                final normalizedUrl = _normalizeUrl(thumbnailUrl, config.baseUrl);
                 
                 return {
                   'thumbnail': normalizedUrl,
@@ -291,7 +276,7 @@ class ThirdPartyDatabaseService {
         }
         
         // 对于某些数据库，需要先获取搜索结果链接，然后访问详情页面
-        if (databaseName == 'javmost' || databaseName == 'javbus') {
+        if (databaseName == 'javmost' || databaseName == 'javbus' || databaseName == 'javdb') {
           print('ThirdPartyDB: Attempting to extract detail URL from $databaseName');
           final detailUrl = await _extractDetailUrl(html, config.baseUrl, databaseName);
           if (detailUrl != null) {
@@ -566,6 +551,22 @@ class ThirdPartyDatabaseService {
           
           print('ThirdPartyDB: No JavMost detail links found with any pattern');
           return null;
+        case 'javdb':
+          // JavDB: 搜索结果通常链接到 /v/xxxx
+          final linkPatternsJavdb = [
+            RegExp(r'<a[^>]*class="[^"]*box[^"]*"[^>]*href="([^"]*?/v/[^"]+)"'),
+            RegExp(r'<a[^>]*href="([^"]*?/v/[^"]+)"[^>]*class="[^"]*box[^"]*"'),
+            RegExp(r'<a[^>]*href="([^"]*?/v/[^"]+)"[^>]*>'),
+          ];
+          for (int i = 0; i < linkPatternsJavdb.length; i++) {
+            final pm = linkPatternsJavdb[i].firstMatch(html);
+            if (pm != null && pm.group(1) != null) {
+              final detailUrl = pm.group(1)!;
+              print('ThirdPartyDB: Found JavDB link with pattern $i: $detailUrl');
+              return _normalizeUrl(detailUrl, baseUrl);
+            }
+          }
+          return null;
         default:
           return null;
       }
@@ -579,6 +580,48 @@ class ThirdPartyDatabaseService {
       }
     } catch (e) {
       print('ThirdPartyDB: Error extracting detail URL from $databaseName: $e');
+    }
+    return null;
+  }
+
+  // 获取详情页标题（用于提升准确度，尤其是 JavDB）
+  static Future<String?> _getTitleFromDetailPage(
+    String detailUrl,
+    DatabaseConfig config,
+    String databaseName,
+  ) async {
+    try {
+      final client = http.Client();
+      try {
+        final response = await client.get(
+          Uri.parse(detailUrl),
+          headers: {
+            ...config.headers,
+            'Referer': config.baseUrl,
+          },
+        );
+        if (response.statusCode != 200) return null;
+        final html = response.body;
+        // 常见标题位置：h1/h2.title 或 <title>
+        final titlePatterns = [
+          RegExp(r'<h1[^>]*class="[^"]*title[^"]*"[^>]*>([^<]+)</h1>'),
+          RegExp(r'<h2[^>]*class="[^"]*title[^"]*"[^>]*>([^<]+)</h2>'),
+          RegExp(r'<h1[^>]*>([^<]+)</h1>'),
+          RegExp(r'<h2[^>]*>([^<]+)</h2>'),
+          RegExp(r'<title[^>]*>([^<]+)</title>'),
+        ];
+        for (final p in titlePatterns) {
+          final m = p.firstMatch(html);
+          if (m != null && m.group(1) != null) {
+            final t = m.group(1)!.trim();
+            if (t.isNotEmpty) return t;
+          }
+        }
+      } finally {
+        client.close();
+      }
+    } catch (e) {
+      print('ThirdPartyDB: Error extracting title from $databaseName detail page: $e');
     }
     return null;
   }
@@ -615,15 +658,7 @@ class ThirdPartyDatabaseService {
           final lazyImages = RegExp(r'<img[^>]*data-src="([^"]*)"[^>]*>').allMatches(html);
           print('ThirdPartyDB: Found ${lazyImages.length} lazy-loaded images in detail page');
           
-          // 打印前几个图片URL，了解页面结构
-          int count = 0;
-          for (final img in allImages) {
-            final src = img.group(1);
-            if (src != null && count < 10) {
-              print('ThirdPartyDB: Image $count: $src');
-              count++;
-            }
-          }
+          // 简化日志，避免过多输出
           
           // 检查懒加载图片
           for (final img in lazyImages) {
@@ -777,6 +812,13 @@ class ThirdPartyDatabaseService {
   /// 获取详情页面的缩略图模式
   static List<RegExp> _getDetailPagePatterns(String databaseName) {
     switch (databaseName) {
+      case 'javdb':
+        return [
+          // JavDB 详情页封面
+          RegExp(r'<img[^>]*class="[^"]*cover[^"]*"[^>]*src="([^"]+)"'),
+          RegExp(r'<img[^>]*class="[^"]*box[^"]*"[^>]*src="([^"]+)"'),
+          RegExp(r'<img[^>]*src="([^"]*\\.jpg[^"]*)"'),
+        ];
       case 'javbus':
         return [
           RegExp(r'<img[^>]*class="[^"]*movie-box[^"]*"[^>]*src="([^"]+)"'),

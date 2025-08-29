@@ -11,6 +11,8 @@ class ExternalScrapersSettingsScreen extends StatefulWidget {
 
 class _ExternalScrapersSettingsScreenState extends State<ExternalScrapersSettingsScreen> {
   final _tmdbApiKeyController = TextEditingController();
+  final _missavCookieController = TextEditingController();
+  final _missavProxyController = TextEditingController();
   Map<String, bool> _scrapersAvailability = {};
   bool _isLoading = true;
 
@@ -23,6 +25,8 @@ class _ExternalScrapersSettingsScreenState extends State<ExternalScrapersSetting
   @override
   void dispose() {
     _tmdbApiKeyController.dispose();
+    _missavCookieController.dispose();
+    _missavProxyController.dispose();
     super.dispose();
   }
 
@@ -35,6 +39,13 @@ class _ExternalScrapersSettingsScreenState extends State<ExternalScrapersSetting
       // 加载 TMDB API Key
       final tmdbApiKey = await ConfigService.getTmdbApiKey();
       _tmdbApiKeyController.text = tmdbApiKey ?? '';
+
+      // 加载 MissAV 设置
+      final missavCookie = await ConfigService.getMissavCookie();
+      _missavCookieController.text = missavCookie ?? '';
+      
+      final missavProxy = await ConfigService.getMissavProxy();
+      _missavProxyController.text = missavProxy ?? '';
 
       // 检查 scraper 可用性
       _scrapersAvailability = await ExternalScraperService.getAvailableScrapers();
@@ -58,6 +69,20 @@ class _ExternalScrapersSettingsScreenState extends State<ExternalScrapersSetting
       
       // 重新检查可用性
       await _loadSettings();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('保存失败: $e')),
+      );
+    }
+  }
+
+  Future<void> _saveMissavSettings() async {
+    try {
+      await ConfigService.setMissavCookie(_missavCookieController.text);
+      await ConfigService.setMissavProxy(_missavProxyController.text);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('MissAV 设置已保存')),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('保存失败: $e')),
@@ -189,6 +214,68 @@ class _ExternalScrapersSettingsScreenState extends State<ExternalScrapersSetting
                               TextButton(
                                 onPressed: () {
                                   _tmdbApiKeyController.clear();
+                                },
+                                child: const Text('清除'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // MissAV 设置
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'MissAV 设置',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            '配置 Cookie 和代理以获取更准确的视频标题。Cookie 可从浏览器开发者工具中复制。',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _missavCookieController,
+                            decoration: const InputDecoration(
+                              labelText: 'MissAV Cookie',
+                              border: OutlineInputBorder(),
+                              hintText: '输入 MissAV Cookie（可选）',
+                            ),
+                            maxLines: 3,
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _missavProxyController,
+                            decoration: const InputDecoration(
+                              labelText: 'HTTP 代理（可选）',
+                              border: OutlineInputBorder(),
+                              hintText: 'http://proxy:port 或 socks5://proxy:port',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              ElevatedButton(
+                                onPressed: _saveMissavSettings,
+                                child: const Text('保存'),
+                              ),
+                              const SizedBox(width: 8),
+                              TextButton(
+                                onPressed: () {
+                                  _missavCookieController.clear();
+                                  _missavProxyController.clear();
                                 },
                                 child: const Text('清除'),
                               ),

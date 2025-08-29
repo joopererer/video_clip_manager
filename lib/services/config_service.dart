@@ -72,6 +72,38 @@ class ConfigService {
     await setConfigValue('tmdb_api_key', apiKey);
   }
   
+  /// 获取 MissAV Cookie
+  static Future<String?> getMissavCookie() async {
+    return await getConfigValue('missav_cookie');
+  }
+  
+  /// 设置 MissAV Cookie
+  static Future<void> setMissavCookie(String cookie) async {
+    await setConfigValue('missav_cookie', cookie);
+  }
+  
+  /// 获取 MissAV 代理设置
+  static Future<String?> getMissavProxy() async {
+    return await getConfigValue('missav_proxy');
+  }
+  
+  /// 设置 MissAV 代理设置
+  static Future<void> setMissavProxy(String proxy) async {
+    await setConfigValue('missav_proxy', proxy);
+  }
+  
+  /// 检查是否配置了 MissAV Cookie
+  static Future<bool> isMissavCookieConfigured() async {
+    final cookie = await getMissavCookie();
+    return cookie != null && cookie.isNotEmpty;
+  }
+  
+  /// 检查是否配置了 MissAV 代理
+  static Future<bool> isMissavProxyConfigured() async {
+    final proxy = await getMissavProxy();
+    return proxy != null && proxy.isNotEmpty;
+  }
+  
   /// 检查外部 scraper 是否可用
   static Future<Map<String, bool>> checkExternalScrapersAvailability() async {
     final scrapers = <String, bool>{};
@@ -110,6 +142,8 @@ class ConfigService {
   static Map<String, dynamic> _getDefaultConfig() {
     return {
       'tmdb_api_key': 'YOUR_TMDB_API_KEY',
+      'missav_cookie': '',
+      'missav_proxy': '',
       'enable_external_scrapers': true,
       'preferred_scrapers': ['yt-dlp', 'jav-scraper', 'tmdb'],
       'request_timeout': 30,
