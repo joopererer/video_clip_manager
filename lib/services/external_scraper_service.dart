@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'config_service.dart';
+import 'character_fix_service.dart';
 
 /// 外部 Scraper 服务
 /// 集成各种开源 scraper 来获取视频信息
@@ -130,6 +131,8 @@ class ExternalScraperService {
         '                                "data": info',
         '                            }',
         '                        ',
+                                '                        # 确保正确处理UTF-8编码',
+        '                        sys.stdout.reconfigure(encoding=\'utf-8\')',
         '                        print(json.dumps(result, ensure_ascii=False))',
         '                        return',
         '                except Exception:',
@@ -316,6 +319,8 @@ def get_missav_content(url):
         response = scraper.get(url)
         
         if response.status_code == 200:
+            # 确保正确处理编码
+            # 使用 response.text 让 requests 自动处理编码
             content = response.text
             
             # 尝试提取标题
@@ -337,11 +342,14 @@ def get_missav_content(url):
                         extracted_title = title
                         break
             
+            # 字符修复将在 Dart 端处理
+            fixed_title = extracted_title
+                
             return {
                 'success': True,
                 'status_code': response.status_code,
                 'content_length': len(content),
-                'title': extracted_title
+                'title': fixed_title
             }
         else:
             return {
@@ -387,9 +395,20 @@ if __name__ == "__main__":
           print('ExternalScraper: Parsed data: $data');
           
           if (data['success'] == true || data['success'] == 'true') {
-                    print('ExternalScraper: MissAV cloudscraper success, content length: ${data['content_length']}');
-        print('ExternalScraper: Extracted title: ${data['title']}');
-        print('ExternalScraper: Title length: ${data['title']?.length ?? 0}');
+            // 应用字符修复
+            if (data['title'] != null) {
+              final originalTitle = data['title'] as String;
+              final fixedTitle = CharacterFixService.fixCharacters(originalTitle);
+              
+              if (fixedTitle != originalTitle) {
+                print('ExternalScraper: Fixed title from "$originalTitle" to "$fixedTitle"');
+                data['title'] = fixedTitle;
+              }
+            }
+            
+            print('ExternalScraper: MissAV cloudscraper success, content length: ${data['content_length']}');
+            print('ExternalScraper: Extracted title: ${data['title']}');
+            print('ExternalScraper: Title length: ${data['title']?.length ?? 0}');
             return data;
           } else {
             print('ExternalScraper: MissAV cloudscraper failed: ${data['error']}');

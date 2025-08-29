@@ -202,6 +202,7 @@ class ThirdPartyDatabaseService {
              final response = await request.close();
       
       if (response.statusCode == 200) {
+        // 确保正确处理编码
         final html = await response.transform(utf8.decoder).join();
         print('ThirdPartyDB: $databaseName response success, content length: ${html.length}');
         
@@ -266,7 +267,8 @@ class ThirdPartyDatabaseService {
       print('ThirdPartyDB: $databaseName response status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
-        final html = response.body;
+        // 确保正确处理编码
+        final html = utf8.decode(response.bodyBytes, allowMalformed: true);
         print('ThirdPartyDB: $databaseName HTML content length: ${html.length}');
         
         // 检查是否被重定向到验证页面

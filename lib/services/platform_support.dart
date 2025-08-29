@@ -503,12 +503,19 @@ class MissAVSupport implements PlatformSupport {
           final result = results.first;
           print('MissAV: Using single result from ${result.source}: ${result.title}');
           
+          // 获取缩略图URL
+          String? thumbnailUrl = result.thumbnailUrl;
+          if (thumbnailUrl == null && code.isNotEmpty) {
+            print('MissAV: Getting thumbnail for code: $code (single result)');
+            thumbnailUrl = await getThumbnail(code, Duration.zero);
+          }
+          
           return VideoInfo(
             id: code,
             title: result.title,
             description: result.metadata['description'] ?? '',
             duration: null,
-            thumbnailUrl: result.thumbnailUrl,
+            thumbnailUrl: thumbnailUrl,
             platform: 'missav',
             metadata: {
               ...result.metadata,
@@ -523,12 +530,19 @@ class MissAVSupport implements PlatformSupport {
           // 获取推荐结果
           final recommendedResult = MultiSourceSearchService.getRecommendedResult(results);
           
+          // 获取缩略图URL
+          String? thumbnailUrl = recommendedResult?.thumbnailUrl;
+          if (thumbnailUrl == null && code.isNotEmpty) {
+            print('MissAV: Getting thumbnail for code: $code');
+            thumbnailUrl = await getThumbnail(code, Duration.zero);
+          }
+          
           return VideoInfo(
             id: code,
             title: recommendedResult?.title ?? 'Unknown Title',
             description: recommendedResult?.metadata['description'] ?? '',
             duration: null,
-            thumbnailUrl: recommendedResult?.thumbnailUrl,
+            thumbnailUrl: thumbnailUrl,
             platform: 'missav',
             metadata: {
               ...?recommendedResult?.metadata,
@@ -642,7 +656,8 @@ class MissAVSupport implements PlatformSupport {
       );
 
       if (response.statusCode == 200) {
-        final html = response.body;
+        // 确保正确处理编码
+        final html = utf8.decode(response.bodyBytes, allowMalformed: true);
         
         // 提取视频ID - 尝试提取番号
         final videoIdMatch = RegExp(r'missav\.ws/[^/]+/([^/?]+)').firstMatch(url);
@@ -846,7 +861,8 @@ class MissAVSupport implements PlatformSupport {
         print('MissAV: Title fetch failed with status ${response.statusCode}');
         return null;
       }
-      final html = response.body;
+      // 确保正确处理编码
+      final html = utf8.decode(response.bodyBytes, allowMalformed: true);
       print('MissAV: Title fetch HTML length: ${html.length}');
 
       // 先尝试 meta og/twitter，再退回到标题标签
@@ -1056,7 +1072,8 @@ class MissAVSupport implements PlatformSupport {
       print('MissAV: Response status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
-        final html = response.body;
+        // 确保正确处理编码
+        final html = utf8.decode(response.bodyBytes, allowMalformed: true);
         print('MissAV: HTML content length: ${html.length}');
         
         final patterns = [
@@ -1157,7 +1174,8 @@ class XVideosSupport implements PlatformSupport {
       );
 
       if (response.statusCode == 200) {
-        final html = response.body;
+        // 确保正确处理编码
+        final html = utf8.decode(response.bodyBytes, allowMalformed: true);
         
         // 提取视频ID
         final videoIdMatch = RegExp(r'xvideos\.com/video\.([^/?]+)').firstMatch(url);
@@ -1266,7 +1284,8 @@ class XVideosSupport implements PlatformSupport {
       
       if (response.statusCode == 200) {
         // 解析HTML获取缩略图URL
-        final html = response.body;
+        // 确保正确处理编码
+        final html = utf8.decode(response.bodyBytes, allowMalformed: true);
         
         // 尝试多种缩略图提取方式
         final patterns = [
