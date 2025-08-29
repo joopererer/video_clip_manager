@@ -13,8 +13,7 @@ import 'package:http/http.dart' as http;
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../services/thumbnail_service.dart';
-import '../../services/online_video_service.dart';
-import '../../utils/tag_utils.dart';
+
 import '../../widgets/custom_progress_bar.dart';
 
 String formatDuration(Duration d) {
@@ -90,13 +89,40 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     }
 
     // 对于在线视频，使用URL而不是本地路径
-    player.open(Media(widget.video.url), play: false);
+    _initializeVideo();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _focusNode.requestFocus();
       }
     });
+  }
+
+  Future<void> _initializeVideo() async {
+    try {
+      await player.open(Media(widget.video.url), play: false);
+      
+      // 监听播放器状态变化
+      player.stream.error.listen((error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Video loading error: $error'),
+              backgroundColor: Colors.red[700],
+            ),
+          );
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load online video: $e'),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -328,7 +354,13 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     String dbPath,
   ) async {
     try {
-      final response = await http.get(Uri.parse(thumbnailUrl));
+      final response = await http.get(
+        Uri.parse(thumbnailUrl),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+      );
+      
       if (response.statusCode == 200) {
         final thumbnailService = context.read<ThumbnailService>();
         final fileName = thumbnailService.getThumbnailFileName(clipId);
@@ -338,6 +370,8 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         await file.writeAsBytes(response.bodyBytes);
         
         return fileName;
+      } else {
+        print('Failed to download thumbnail: HTTP ${response.statusCode}');
       }
     } catch (e) {
       print('Failed to download thumbnail: $e');
@@ -384,8 +418,8 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         _updateTextFieldsAndPreview();
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Changes discarded'),
+        SnackBar(
+          content: const Text('Changes discarded'),
           backgroundColor: Colors.orange[700],
         ),
       );
@@ -424,44 +458,20 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     setState(() => _isSettingCover = true);
 
     try {
-      final appState = context.read<AppState>();
-      final dbPath = appState.currentDbPath;
+      // 对于在线视频，暂时只设置封面时间，不生成缩略图
+      setState(() {
+        _formClip = _formClip.copyWith(coverFrameTime: time);
+      });
 
-      if (dbPath != null) {
-        final thumbnailService = context.read<ThumbnailService>();
-        final newThumbFileName = await thumbnailService.generateThumbnail(
-          widget.video.url, // 使用在线视频URL
-          time,
-          _formClip.id,
-          dbPath: dbPath,
-        );
-
-        if (newThumbFileName != null) {
-          final newFullPath = thumbnailService.buildThumbnailPath(
-            dbPath,
-            newThumbFileName,
-          );
-
-          if (mounted) {
-            setState(() {
-              _formClip = _formClip.copyWith(coverFrameTime: time);
-              _tempThumbnailPath = newThumbFileName;
-              _coverPreviewFullPath = newFullPath;
-              _coverPreviewTimestamp = DateTime.now().millisecondsSinceEpoch;
-            });
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Cover set at ${formatDuration(time)} (will be saved when you update the clip)',
-                ),
-                backgroundColor: Colors.green[700],
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
-        }
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Cover time set to ${formatDuration(time)} (thumbnail will be downloaded when saved)',
+          ),
+          backgroundColor: Colors.green[700],
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isSettingCover = false);
     }
@@ -667,13 +677,25 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                 tooltip: 'Mute/Unmute (S)',
               ),
               const SizedBox(width: 16),
-              Expanded(
-                child: CustomProgressBar(
-                  player: player,
-                  showThumbnailPreview: true,
-                  videoPath: widget.video.url, // 使用在线视频URL
-                ),
-              ),
+                             Expanded(
+                 child: CustomProgressBar(
+                   player: player,
+                   startTime: _formClip.startTime,
+                   endTime: _formClip.endTime,
+                   onSetStart: (time) {
+                     setState(() {
+                       _formClip = _formClip.copyWith(startTime: time);
+                     });
+                   },
+                   onSetEnd: (time) {
+                     setState(() {
+                       _formClip = _formClip.copyWith(endTime: time);
+                     });
+                   },
+                   showThumbnailPreview: false, // 在线视频暂时禁用缩略图预览
+                   videoPath: widget.video.url, // 使用在线视频URL
+                 ),
+               ),
             ],
           ),
         ),
@@ -736,47 +758,50 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
   Widget _buildFormPanel(AppState appState) {
     return Container(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 标题
-          TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Clip Name',
-              border: OutlineInputBorder(),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 标题
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Clip Name',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _formClip = _formClip.copyWith(name: value);
+                });
+              },
             ),
-            onChanged: (value) {
-              setState(() {
-                _formClip = _formClip.copyWith(name: value);
-              });
-            },
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // 备注
-          TextField(
-            controller: _notesController,
-            decoration: const InputDecoration(
-              labelText: 'Notes',
-              border: OutlineInputBorder(),
+            // 备注
+            TextField(
+              controller: _notesController,
+              decoration: const InputDecoration(
+                labelText: 'Notes',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+              onChanged: (value) {
+                setState(() {
+                  _formClip = _formClip.copyWith(notes: value);
+                });
+              },
             ),
-            maxLines: 3,
-            onChanged: (value) {
-              setState(() {
-                _formClip = _formClip.copyWith(notes: value);
-              });
-            },
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // 标签
-          _buildTagsSection(appState),
-          const SizedBox(height: 16),
+            // 标签
+            _buildTagsSection(appState),
+            const SizedBox(height: 16),
 
-          // 封面预览
-          _buildCoverPreview(),
-        ],
+            // 封面预览
+            _buildCoverPreview(),
+          ],
+        ),
       ),
     );
   }
@@ -886,21 +911,36 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                     File(_coverPreviewFullPath!),
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: Colors.grey[300],
-                        child: const Icon(Icons.image_not_supported, size: 40),
-                      );
+                      return _buildCoverPlaceholder();
                     },
                   ),
                 )
-              : Container(
-                  color: Colors.grey[300],
-                  child: const Center(
-                    child: Icon(Icons.image_not_supported, size: 40),
-                  ),
-                ),
+              : _buildCoverPlaceholder(),
         ),
       ],
+    );
+  }
+
+  Widget _buildCoverPlaceholder() {
+    return Container(
+      color: Colors.grey[300],
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.image_not_supported, size: 40),
+            const SizedBox(height: 8),
+            Text(
+              'Online Video\nCover will be downloaded when saved',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
