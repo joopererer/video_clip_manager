@@ -202,7 +202,7 @@ class _TitleSelectionDialogState extends State<TitleSelectionDialog> {
       case 'MissAV (French)':
         return Icons.video_library;
       case 'JavDB':
-        return Icons.database;
+        return Icons.storage;
       case 'JavMost':
         return Icons.star;
       case 'JavLibrary':

@@ -6,6 +6,7 @@ import 'external_scraper_service.dart';
 import 'third_party_database_service.dart';
 import 'config_service.dart';
 import 'multi_source_search_service.dart';
+import 'character_fix_service.dart';
 
 /// 视频信息类
 class VideoInfo {
@@ -1183,7 +1184,8 @@ class XVideosSupport implements PlatformSupport {
         
         // 提取标题
         final titleMatch = RegExp(r'<title[^>]*>([^<]+)</title>').firstMatch(html);
-        final title = titleMatch?.group(1)?.trim() ?? 'XVideos Video';
+        final rawTitle = titleMatch?.group(1)?.trim() ?? 'XVideos Video';
+        final title = CharacterFixService.fixCharacters(rawTitle);
         
         // 提取缩略图
         final thumbnailMatch = RegExp(r'<meta property="og:image" content="([^"]+)"').firstMatch(html);

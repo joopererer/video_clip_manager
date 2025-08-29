@@ -147,7 +147,7 @@ class ThirdPartyDatabaseService {
 
     /// 从数据库获取完整信息（包括缩略图和标题）
   static Future<Map<String, dynamic>?> getThumbnailFromDatabase(String code) async {
-    print('ThirdPartyDB: Getting full info for code: $code');
+    print('ThirdPartyDB: ===== getThumbnailFromDatabase called for code: $code =====');
     
     // 基于测试结果，调整数据库优先级：JavDB > JavMost > JavLibrary
     final priorityOrder = ['javdb', 'javmost', 'javlibrary'];
@@ -217,12 +217,15 @@ class ThirdPartyDatabaseService {
               print('ThirdPartyDB: Found $databaseName thumbnail with pattern $i: $thumbnailUrl');
               
               // 过滤掉用户头像等无关图片
-              if (_isValidThumbnailUrl(thumbnailUrl, databaseName)) {
+              final isValid = _isValidThumbnailUrl(thumbnailUrl, databaseName);
+              print('ThirdPartyDB: $databaseName thumbnail validation: $thumbnailUrl -> $isValid');
+              if (isValid) {
                 // 不从数据库页面提取标题（特别是 JavDB 搜索页），标题交由站点本身或上层逻辑决定
                 String? title;
                 // Restore normalized URL
                 final normalizedUrl = _normalizeUrl(thumbnailUrl, config.baseUrl);
                 
+                print('ThirdPartyDB: $databaseName returning result with thumbnail: $normalizedUrl');
                 return {
                   'thumbnail': normalizedUrl,
                   'title': title ?? 'Unknown Title',
@@ -303,9 +306,12 @@ class ThirdPartyDatabaseService {
               print('ThirdPartyDB: Found $databaseName thumbnail with pattern $i: $thumbnailUrl');
               
               // 过滤掉用户头像等无关图片
-              if (_isValidThumbnailUrl(thumbnailUrl, databaseName)) {
+              final isValid = _isValidThumbnailUrl(thumbnailUrl, databaseName);
+              print('ThirdPartyDB: $databaseName thumbnail validation: $thumbnailUrl -> $isValid');
+              if (isValid) {
                 // 验证缩略图URL是否有效
                 final normalizedUrl = _normalizeUrl(thumbnailUrl, config.baseUrl);
+                print('ThirdPartyDB: $databaseName attempting to validate thumbnail: $normalizedUrl');
                 if (await _validateThumbnailUrl(normalizedUrl)) {
                   print('ThirdPartyDB: Validated $databaseName thumbnail: $normalizedUrl');
                   return normalizedUrl;

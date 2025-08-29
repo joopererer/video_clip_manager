@@ -135,9 +135,9 @@ class MultiSourceSearchService {
   static Future<MultiSourceResult?> _searchJavdb(String code) async {
     try {
       final info = await ThirdPartyDatabaseService.getThumbnailFromDatabase(code);
-      if (info != null && info['title'] != null) {
+      if (info != null && info['thumbnail'] != null) {
         return MultiSourceResult(
-          title: info['title'] as String,
+          title: info['title'] as String? ?? 'Unknown Title',
           source: 'JavDB',
           thumbnailUrl: info['thumbnail'] as String?,
           metadata: info,
@@ -155,9 +155,9 @@ class MultiSourceSearchService {
   static Future<MultiSourceResult?> _searchJavmost(String code) async {
     try {
       final info = await ThirdPartyDatabaseService.getThumbnailFromDatabase(code);
-      if (info != null && info['title'] != null) {
+      if (info != null && info['thumbnail'] != null) {
         return MultiSourceResult(
-          title: info['title'] as String,
+          title: info['title'] as String? ?? 'Unknown Title',
           source: 'JavMost',
           thumbnailUrl: info['thumbnail'] as String?,
           metadata: info,
@@ -175,9 +175,9 @@ class MultiSourceSearchService {
   static Future<MultiSourceResult?> _searchJavlibrary(String code) async {
     try {
       final info = await ThirdPartyDatabaseService.getThumbnailFromDatabase(code);
-      if (info != null && info['title'] != null) {
+      if (info != null && info['thumbnail'] != null) {
         return MultiSourceResult(
-          title: info['title'] as String,
+          title: info['title'] as String? ?? 'Unknown Title',
           source: 'JavLibrary',
           thumbnailUrl: info['thumbnail'] as String?,
           metadata: info,
