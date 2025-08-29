@@ -342,6 +342,45 @@ def get_missav_content(url):
                         extracted_title = title
                         break
             
+            # 尝试提取封面图
+            thumbnail_patterns = [
+                r'<meta[^>]*property="og:image"[^>]*content="([^"]+)"',
+                r'<meta[^>]*name="twitter:image"[^>]*content="([^"]+)"',
+                r'<img[^>]*class="[^"]*poster[^"]*"[^>]*src="([^"]+)"',
+                r'<img[^>]*class="[^"]*cover[^"]*"[^>]*src="([^"]+)"',
+                r'<img[^>]*class="[^"]*thumbnail[^"]*"[^>]*src="([^"]+)"',
+                r'<img[^>]*id="[^"]*poster[^"]*"[^>]*src="([^"]+)"',
+                r'<img[^>]*id="[^"]*cover[^"]*"[^>]*src="([^"]+)"',
+                r'<img[^>]*id="[^"]*thumbnail[^"]*"[^>]*src="([^"]+)"',
+                r'<img[^>]*data-src="([^"]+)"[^>]*class="[^"]*poster[^"]*"',
+                r'<img[^>]*data-src="([^"]+)"[^>]*class="[^"]*cover[^"]*"',
+                r'<img[^>]*data-src="([^"]+)"[^>]*class="[^"]*thumbnail[^"]*"',
+            ]
+            
+            extracted_thumbnail = None
+            print(f"DEBUG: Content length: {len(content)}")
+            print(f"DEBUG: First 1000 chars: {content[:1000]}")
+            
+            for i, pattern in enumerate(thumbnail_patterns):
+                match = re.search(pattern, content, re.IGNORECASE)
+                if match:
+                    thumbnail = match.group(1).strip()
+                    print(f"DEBUG: Pattern {i} matched: {thumbnail}")
+                    if thumbnail and not thumbnail.startswith('data:'):
+                        # 确保是完整的URL
+                        if thumbnail.startswith('//'):
+                            thumbnail = 'https:' + thumbnail
+                        elif thumbnail.startswith('/'):
+                            thumbnail = 'https://missav.ws' + thumbnail
+                        extracted_thumbnail = thumbnail
+                        print(f"DEBUG: Final thumbnail URL: {extracted_thumbnail}")
+                        break
+                else:
+                    print(f"DEBUG: Pattern {i} did not match")
+            
+            if not extracted_thumbnail:
+                print("DEBUG: No thumbnail found with any pattern")
+            
             # 字符修复将在 Dart 端处理
             fixed_title = extracted_title
                 
@@ -349,7 +388,8 @@ def get_missav_content(url):
                 'success': True,
                 'status_code': response.status_code,
                 'content_length': len(content),
-                'title': fixed_title
+                'title': fixed_title,
+                'thumbnail': extracted_thumbnail
             }
         else:
             return {

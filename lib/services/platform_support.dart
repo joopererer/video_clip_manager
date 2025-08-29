@@ -5,7 +5,7 @@ import '../data/models.dart';
 import 'external_scraper_service.dart';
 import 'third_party_database_service.dart';
 import 'config_service.dart';
-import 'multi_source_search_service.dart';
+import 'enhanced_multi_source_service.dart';
 import 'character_fix_service.dart';
 
 /// 视频信息类
@@ -494,71 +494,37 @@ class MissAVSupport implements PlatformSupport {
       print('MissAV: Extracted code: $code, starting multi-source search');
       
       // 使用多源搜索服务
-      final results = await MultiSourceSearchService.searchVideoInfo(code);
+      final result = await EnhancedMultiSourceService.searchVideoInfo(code);
       
-      if (results.isNotEmpty) {
-        print('MissAV: Multi-source search found ${results.length} results');
+      print('MissAV: Enhanced multi-source search completed');
+      print('MissAV: Found ${result.titles.length} titles and ${result.thumbnailUrls.length} thumbnails');
+      
+      // 获取最佳标题和封面图
+      final bestTitle = result.bestTitle;
+      final bestThumbnail = result.bestThumbnail;
+      
+      if (bestTitle != null) {
+        print('MissAV: Using best title: $bestTitle');
+        print('MissAV: Best thumbnail: $bestThumbnail');
         
-        // 如果只有一个结果，直接使用
-        if (results.length == 1) {
-          final result = results.first;
-          print('MissAV: Using single result from ${result.source}: ${result.title}');
-          
-          // 获取缩略图URL
-          String? thumbnailUrl = result.thumbnailUrl;
-          if (thumbnailUrl == null && code.isNotEmpty) {
-            print('MissAV: Getting thumbnail for code: $code (single result)');
-            thumbnailUrl = await getThumbnail(code, Duration.zero);
-          }
-          
-          return VideoInfo(
-            id: code,
-            title: result.title,
-            description: result.metadata['description'] ?? '',
-            duration: null,
-            thumbnailUrl: thumbnailUrl,
-            platform: 'missav',
-            metadata: {
-              ...result.metadata,
-              'selected_source': result.source,
-              'confidence': result.confidence,
-            },
-          );
-        } else {
-          // 多个结果，需要用户选择
-          print('MissAV: Multiple results found, need user selection');
-          
-          // 获取推荐结果
-          final recommendedResult = MultiSourceSearchService.getRecommendedResult(results);
-          
-          // 获取缩略图URL
-          String? thumbnailUrl = recommendedResult?.thumbnailUrl;
-          if (thumbnailUrl == null && code.isNotEmpty) {
-            print('MissAV: Getting thumbnail for code: $code');
-            thumbnailUrl = await getThumbnail(code, Duration.zero);
-          }
-          
-          return VideoInfo(
-            id: code,
-            title: recommendedResult?.title ?? 'Unknown Title',
-            description: recommendedResult?.metadata['description'] ?? '',
-            duration: null,
-            thumbnailUrl: thumbnailUrl,
-            platform: 'missav',
-            metadata: {
-              ...?recommendedResult?.metadata,
-              'selected_source': recommendedResult?.source ?? 'unknown',
-              'confidence': recommendedResult?.confidence ?? 0.0,
-              'multi_source_results': results.map((r) => {
-                'title': r.title,
-                'source': r.source,
-                'confidence': r.confidence,
-                'thumbnail_url': r.thumbnailUrl,
-              }).toList(),
-              'needs_user_selection': true,
-            },
-          );
-        }
+        return VideoInfo(
+          id: code,
+          title: bestTitle,
+          description: result.metadata['description'] ?? '',
+          duration: null,
+          thumbnailUrl: bestThumbnail,
+          platform: 'missav',
+          metadata: {
+            ...result.metadata,
+            'titles': result.titles,
+            'thumbnails': result.thumbnailUrls,
+            'title_sources': result.titleSources,
+            'thumbnail_sources': result.thumbnailSources,
+            'has_multiple_choices': result.hasMultipleChoices,
+            'source_confidence': result.sourceConfidence,
+          },
+        );
+      }
       } else {
         print('MissAV: No results from multi-source search, falling back to original method');
         

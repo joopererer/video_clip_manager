@@ -609,3 +609,134 @@ class OnlineVideoClip extends Equatable {
     isDownloaded,
   ];
 }
+
+/// 多源搜索结果 - 改进版本
+class EnhancedMultiSourceResult {
+  final String code;
+  final List<String> titles; // 多个标题来源
+  final List<String> thumbnailUrls; // 多个封面图来源
+  final Map<String, dynamic> metadata; // 其他元数据
+  final Map<String, double> sourceConfidence; // 每个来源的置信度
+
+  EnhancedMultiSourceResult({
+    required this.code,
+    required this.titles,
+    required this.thumbnailUrls,
+    required this.metadata,
+    required this.sourceConfidence,
+  });
+
+  /// 获取最佳标题（置信度最高的）
+  String? get bestTitle {
+    if (titles.isEmpty) return null;
+    if (titles.length == 1) return titles.first;
+    
+    // 如果有多个标题，返回第一个非空的
+    return titles.firstWhere((title) => title.isNotEmpty && title != 'Unknown Title', 
+                           orElse: () => titles.first);
+  }
+
+  /// 获取最佳封面图（置信度最高的）
+  String? get bestThumbnail {
+    if (thumbnailUrls.isEmpty) return null;
+    if (thumbnailUrls.length == 1) return thumbnailUrls.first;
+    
+    // 如果有多个封面图，返回第一个有效的
+    return thumbnailUrls.firstWhere((url) => url.isNotEmpty, 
+                                  orElse: () => thumbnailUrls.first);
+  }
+
+  /// 检查是否有多个选择
+  bool get hasMultipleChoices {
+    return titles.length > 1 || thumbnailUrls.length > 1;
+  }
+
+  /// 获取所有标题来源
+  List<String> get titleSources {
+    final sources = <String>[];
+    if (titles.isNotEmpty) {
+      sources.addAll(metadata['title_sources'] ?? []);
+    }
+    return sources;
+  }
+
+  /// 获取所有封面图来源
+  List<String> get thumbnailSources {
+    final sources = <String>[];
+    if (thumbnailUrls.isNotEmpty) {
+      sources.addAll(metadata['thumbnail_sources'] ?? []);
+    }
+    return sources;
+  }
+
+  @override
+  String toString() {
+    return 'EnhancedMultiSourceResult(code: $code, titles: $titles, thumbnails: ${thumbnailUrls.length})';
+  }
+}
+
+/// 搜索结果项
+class SearchResultItem {
+  final String value;
+  final String source;
+  final double confidence;
+  final Map<String, dynamic>? additionalData;
+
+  SearchResultItem({
+    required this.value,
+    required this.source,
+    required this.confidence,
+    this.additionalData,
+  });
+
+  @override
+  String toString() {
+    return 'SearchResultItem(value: $value, source: $source, confidence: $confidence)';
+  }
+}
+
+/// 聚合搜索结果
+class AggregatedSearchResult {
+  final String code;
+  final List<SearchResultItem> titles;
+  final List<SearchResultItem> thumbnails;
+  final Map<String, dynamic> metadata;
+
+  AggregatedSearchResult({
+    required this.code,
+    required this.titles,
+    required this.thumbnails,
+    required this.metadata,
+  });
+
+  /// 转换为增强的多源结果
+  EnhancedMultiSourceResult toEnhancedResult() {
+    final titleSources = titles.map((t) => t.source).toList();
+    final thumbnailSources = thumbnails.map((t) => t.source).toList();
+    
+    final sourceConfidence = <String, double>{};
+    for (final title in titles) {
+      sourceConfidence['${title.source}_title'] = title.confidence;
+    }
+    for (final thumbnail in thumbnails) {
+      sourceConfidence['${thumbnail.source}_thumbnail'] = thumbnail.confidence;
+    }
+
+    return EnhancedMultiSourceResult(
+      code: code,
+      titles: titles.map((t) => t.value).toList(),
+      thumbnailUrls: thumbnails.map((t) => t.value).toList(),
+      metadata: {
+        ...metadata,
+        'title_sources': titleSources,
+        'thumbnail_sources': thumbnailSources,
+      },
+      sourceConfidence: sourceConfidence,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'AggregatedSearchResult(code: $code, titles: ${titles.length}, thumbnails: ${thumbnails.length})';
+  }
+}

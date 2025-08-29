@@ -134,8 +134,11 @@ class MultiSourceSearchService {
   /// 搜索 JavDB
   static Future<MultiSourceResult?> _searchJavdb(String code) async {
     try {
+      print('MultiSource: ===== _searchJavdb called for code: $code =====');
       final info = await ThirdPartyDatabaseService.getThumbnailFromDatabase(code);
+      print('MultiSource: JavDB result: $info');
       if (info != null && info['thumbnail'] != null) {
+        print('MultiSource: JavDB returning result with thumbnail: ${info['thumbnail']}');
         return MultiSourceResult(
           title: info['title'] as String? ?? 'Unknown Title',
           source: 'JavDB',
@@ -144,6 +147,7 @@ class MultiSourceSearchService {
           confidence: 0.85,
         );
       }
+      print('MultiSource: JavDB no valid result found');
       return null;
     } catch (e) {
       print('MultiSource: JavDB search error: $e');

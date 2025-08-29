@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/multi_source_search_service.dart';
+import '../services/enhanced_multi_source_service.dart';
 
 /// 标题选择对话框
 class TitleSelectionDialog extends StatefulWidget {
@@ -24,7 +24,7 @@ class _TitleSelectionDialogState extends State<TitleSelectionDialog> {
   void initState() {
     super.initState();
     // 默认选择推荐结果
-    _selectedResult = MultiSourceSearchService.getRecommendedResult(widget.results);
+    _selectedResult = EnhancedMultiSourceService.getRecommendedResult(widget.results);
   }
 
   @override
@@ -54,7 +54,7 @@ class _TitleSelectionDialogState extends State<TitleSelectionDialog> {
                 itemCount: widget.results.length,
                 itemBuilder: (context, index) {
                   final result = widget.results[index];
-                  final isRecommended = result == MultiSourceSearchService.getRecommendedResult(widget.results);
+                  final isRecommended = result == EnhancedMultiSourceService.getRecommendedResult(widget.results);
                   final isSelected = _selectedResult == result;
                   
                   return Card(
@@ -165,7 +165,7 @@ class _TitleSelectionDialogState extends State<TitleSelectionDialog> {
                     setState(() {
                       _useRecommended = value ?? true;
                       if (_useRecommended) {
-                        _selectedResult = MultiSourceSearchService.getRecommendedResult(widget.results);
+                        _selectedResult = EnhancedMultiSourceService.getRecommendedResult(widget.results);
                       }
                     });
                   },
