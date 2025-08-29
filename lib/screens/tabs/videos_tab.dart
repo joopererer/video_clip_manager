@@ -10,6 +10,7 @@ import '../../utils/toast_utils.dart';
 import '../../widgets/video_thumbnail.dart';
 import '../../widgets/online_video_add_dialog.dart';
 import '../player/clip_editor_screen.dart';
+import '../player/online_clip_editor_screen.dart';
 
 class VideosTab extends StatefulWidget {
   final String searchQuery;
@@ -451,8 +452,11 @@ class _VideosTabState extends State<VideosTab> {
         MaterialPageRoute(builder: (context) => ClipEditorScreen(video: video)),
       );
     } else if (video is OnlineVideo) {
-      // TODO: 实现在线视频编辑界面
-      ToastUtils.showWarning(context, 'Online video editing is not yet implemented.');
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => OnlineClipEditorScreen(video: video),
+        ),
+      );
     }
   }
 
