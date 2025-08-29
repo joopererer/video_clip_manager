@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:collection/collection.dart';
@@ -100,7 +101,31 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
 
   Future<void> _initializeVideo() async {
     try {
-      await player.open(Media(widget.video.url), play: false);
+      // 优先使用本地下载的视频
+      String videoPath = widget.video.url;
+      
+      if (widget.video.isDownloaded && widget.video.localPath != null) {
+        final localFile = File(widget.video.localPath!);
+        if (await localFile.exists()) {
+          videoPath = widget.video.localPath!;
+        }
+      }
+      
+      // 如果是网页URL且没有本地文件，显示提示
+      if (videoPath == widget.video.url && !widget.video.isDownloaded) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Online video needs to be downloaded first. Please download the video to enable editing.'),
+              backgroundColor: Colors.orange[700],
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        return; // 不尝试播放网页URL
+      }
+      
+      await player.open(Media(videoPath), play: false);
       
       // 监听播放器状态变化
       player.stream.error.listen((error) {
@@ -117,7 +142,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to load online video: $e'),
+            content: Text('Failed to load video: $e'),
             backgroundColor: Colors.red[700],
           ),
         );
@@ -637,174 +662,250 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     );
   }
 
-  Widget _buildEditorPanel(AppState appState) {
+    Widget _buildEditorPanel(AppState appState) {
     return Column(
       children: [
         // 视频播放器
         Expanded(
-          flex: 3,
-          child: Container(
-            margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Video(
-                controller: controller,
-                controls: NoVideoControls,
-              ),
+          flex: 4,
+          child: Card(
+            elevation: 4.0,
+            margin: const EdgeInsets.all(8.0),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              children: [
+                // 检查视频是否已下载
+                if (widget.video.isDownloaded && widget.video.localPath != null)
+                  Focus(
+                    focusNode: _videoFocusNode,
+                    child: Shortcuts(
+                      shortcuts: <LogicalKeySet, Intent>{
+                        LogicalKeySet(LogicalKeyboardKey.space):
+                            const TogglePlayPauseIntent(),
+                      },
+                      child: Actions(
+                        actions: <Type, Action<Intent>>{
+                          TogglePlayPauseIntent:
+                              CallbackAction<TogglePlayPauseIntent>(
+                                onInvoke: (Intent intent) => player.playOrPause(),
+                              ),
+                        },
+                        child: GestureDetector(
+                          onTap: () {
+                            if (!_videoFocusNode.hasFocus) {
+                              FocusScope.of(context).requestFocus(_videoFocusNode);
+                            }
+                            player.playOrPause();
+                          },
+                          child: Video(controller: controller),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  // 显示下载提示界面
+                  Container(
+                    color: Colors.black87,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.download,
+                            size: 64,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Video Not Downloaded',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Please download the video first\nto enable editing',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[400],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              // TODO: 实现下载功能
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Download feature coming soon...'),
+                                  backgroundColor: Colors.blue[700],
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.download),
+                            label: const Text('Download Video'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue[600],
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                // 快捷键提示悬浮窗
+                if (_showHints)
+                  Positioned(
+                    top: 16,
+                    right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black87,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Keyboard Shortcuts',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildShortcutHint('Space', 'Play/Pause'),
+                          _buildShortcutHint('S', 'Toggle Mute'),
+                          _buildShortcutHint('1', 'Set Start Time'),
+                          _buildShortcutHint('2', 'Set End Time'),
+                          _buildShortcutHint('C', 'Set Cover'),
+                          _buildShortcutHint('F1', 'Toggle Hints'),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
 
-        // 播放控制
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              IconButton(
-                onPressed: _togglePlayPause,
-                icon: Icon(
-                  player.state.playing ? Icons.pause : Icons.play_arrow,
+        // 进度条 - 只在视频已下载时显示
+        if (widget.video.isDownloaded && widget.video.localPath != null)
+          StreamBuilder<Duration>(
+            stream: player.stream.duration,
+            initialData: player.state.duration,
+            builder: (context, snapshot) {
+              final isReady = (snapshot.data ?? Duration.zero) > Duration.zero;
+              if (!isReady) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20.0),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                child: CustomProgressBar(
+                  player: player,
+                  startTime: _formClip.startTime,
+                  endTime: _formClip.endTime,
+                  coverTime: _formClip.coverFrameTime,
+                  onSetStart: (time) => setState(
+                    () => _formClip = _formClip.copyWith(startTime: time),
+                  ),
+                  onSetEnd: (time) => setState(
+                    () => _formClip = _formClip.copyWith(endTime: time),
+                  ),
+                  onSetCover: (time) => _generateCoverAtTime(time),
+                  showThumbnailPreview: true, // 本地视频启用缩略图预览
+                  videoPath: widget.video.localPath!, // 使用本地视频路径
                 ),
-                tooltip: 'Play/Pause (Space)',
-              ),
-              IconButton(
-                onPressed: _toggleMute,
-                icon: Icon(_isMuted ? Icons.volume_off : Icons.volume_up),
-                tooltip: 'Mute/Unmute (S)',
-              ),
-              const SizedBox(width: 16),
-                             Expanded(
-                 child: CustomProgressBar(
-                   player: player,
-                   startTime: _formClip.startTime,
-                   endTime: _formClip.endTime,
-                   onSetStart: (time) {
-                     setState(() {
-                       _formClip = _formClip.copyWith(startTime: time);
-                     });
-                   },
-                   onSetEnd: (time) {
-                     setState(() {
-                       _formClip = _formClip.copyWith(endTime: time);
-                     });
-                   },
-                   showThumbnailPreview: false, // 在线视频暂时禁用缩略图预览
-                   videoPath: widget.video.url, // 使用在线视频URL
-                 ),
-               ),
-            ],
+              );
+            },
           ),
-        ),
 
-        // 编辑控制
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              ElevatedButton.icon(
-                onPressed: _setStartTimeFromPlayer,
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Set Start (1)'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[600],
-                  foregroundColor: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: _setEndTimeFromPlayer,
-                icon: const Icon(Icons.stop),
-                label: const Text('Set End (2)'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red[600],
-                  foregroundColor: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: () => _generateCoverAtTime(player.state.position),
-                icon: const Icon(Icons.image),
-                label: const Text('Set Cover (C)'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[600],
-                  foregroundColor: Colors.white,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${formatDuration(_formClip.startTime)} - ${formatDuration(_formClip.endTime)}',
-                style: const TextStyle(
+        // 剪辑控制 - 只在视频已下载时显示
+        if (widget.video.isDownloaded && widget.video.localPath != null)
+          _buildClippingControls()
+        else
+          // 显示提示信息
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+            child: Center(
+              child: Text(
+                'Video editing controls will be available after downloading',
+                style: TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
                 ),
+                textAlign: TextAlign.center,
               ),
-            ],
+            ),
           ),
-        ),
 
         // 表单
         Expanded(
-          flex: 2,
-          child: _buildFormPanel(appState),
+          flex: 3,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_originalEditingClip != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: Chip(
+                      label: Text('Editing: ${_originalEditingClip!.name}'),
+                      backgroundColor: Colors.orange.shade100,
+                      onDeleted: _resetFormToBlank,
+                      deleteIcon: const Icon(Icons.cancel),
+                    ),
+                  ),
+                TextField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Clip Name',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _formClip = _formClip.copyWith(name: value);
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildTagsSection(appState),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _notesController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _formClip = _formClip.copyWith(notes: value);
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildCoverControls(),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildFormPanel(AppState appState) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 标题
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Clip Name',
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (value) {
-                setState(() {
-                  _formClip = _formClip.copyWith(name: value);
-                });
-              },
-            ),
-            const SizedBox(height: 16),
 
-            // 备注
-            TextField(
-              controller: _notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notes',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-              onChanged: (value) {
-                setState(() {
-                  _formClip = _formClip.copyWith(notes: value);
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // 标签
-            _buildTagsSection(appState),
-            const SizedBox(height: 16),
-
-            // 封面预览
-            _buildCoverPreview(),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildTagsSection(AppState appState) {
     return Column(
@@ -888,38 +989,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     );
   }
 
-  Widget _buildCoverPreview() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Cover Preview',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 120,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: _coverPreviewFullPath != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    File(_coverPreviewFullPath!),
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return _buildCoverPlaceholder();
-                    },
-                  ),
-                )
-              : _buildCoverPlaceholder(),
-        ),
-      ],
-    );
-  }
+
 
   Widget _buildCoverPlaceholder() {
     return Container(
@@ -940,6 +1010,221 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildShortcutHint(String key, String action) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              key,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            action,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClippingControls() {
+    final theme = Theme.of(context);
+    final clipDuration = _formClip.endTime > _formClip.startTime
+        ? _formClip.endTime - _formClip.startTime
+        : Duration.zero;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildTimeDisplay(
+                'Start',
+                _formClip.startTime,
+                theme.primaryColor,
+              ),
+              _buildTimeDisplay('End', _formClip.endTime, Colors.redAccent),
+              _buildTimeDisplay('Duration', clipDuration, null),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                icon: const Icon(Icons.flag_circle_outlined),
+                onPressed: _setStartTimeFromPlayer,
+                label: const Text("Set Start"),
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.flag_circle),
+                onPressed: _setEndTimeFromPlayer,
+                label: const Text("Set End"),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.secondaryContainer,
+                ),
+                icon: const Icon(Icons.slideshow),
+                onPressed: () =>
+                    _previewClip(_formClip.startTime, _formClip.endTime),
+                label: const Text("Preview Clip"),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimeDisplay(String label, Duration time, Color? color) {
+    return Text.rich(
+      TextSpan(
+        text: '$label: ',
+        style: Theme.of(context).textTheme.bodyMedium,
+        children: <TextSpan>[
+          TextSpan(
+            text: formatDuration(time),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: color ?? Theme.of(context).colorScheme.onSurface,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoverControls() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _buildTimeDisplay(
+                  'Cover At',
+                  _formClip.coverFrameTime,
+                  Colors.teal,
+                ),
+                const Spacer(),
+                ElevatedButton(
+                  onPressed: _isSettingCover
+                      ? null
+                      : () => _generateCoverAtTime(player.state.position),
+                  child: _isSettingCover
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Set Cover'),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.settings_backup_restore),
+                  tooltip: 'Reset cover to start time',
+                  onPressed: _isSettingCover
+                      ? null
+                      : () {
+                          // 先更新 coverFrameTime 为 startTime
+                          setState(() {
+                            _formClip = _formClip.copyWith(
+                              coverFrameTime: _formClip.startTime,
+                            );
+                          });
+                          // 然后生成封面图
+                          _generateCoverAtTime(_formClip.startTime);
+                        },
+                ),
+              ],
+            ),
+            if (_coverPreviewFullPath != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12.0),
+                child: Column(
+                  children: [
+                    const Divider(),
+                    const Text(
+                      "Cover Preview",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Image.file(
+                      File(_coverPreviewFullPath!),
+                      key: ValueKey(
+                        '${_coverPreviewFullPath}_$_coverPreviewTimestamp',
+                      ),
+                      height: 120,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return _buildCoverPlaceholder();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _previewClip(Duration startTime, Duration endTime) {
+    if (startTime >= endTime) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid clip duration'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    player.seek(startTime);
+    player.play();
+
+    // 在结束时间停止播放
+    Timer(Duration(milliseconds: (endTime - startTime).inMilliseconds), () {
+      if (mounted) {
+        player.pause();
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Previewing clip: ${formatDuration(startTime)} - ${formatDuration(endTime)}'),
+        backgroundColor: Colors.blue[700],
+        duration: Duration(seconds: (endTime - startTime).inSeconds + 1),
       ),
     );
   }
