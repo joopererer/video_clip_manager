@@ -5,6 +5,7 @@ import '../data/models.dart';
 import 'external_scraper_service.dart';
 import 'third_party_database_service.dart';
 import 'config_service.dart';
+import 'multi_source_search_service.dart';
 
 /// 视频信息类
 class VideoInfo {
@@ -486,51 +487,105 @@ class MissAVSupport implements PlatformSupport {
   Future<VideoInfo> extractVideoInfo(String url) async {
     print('MissAV: Extracting video info from URL: $url');
     
-    // 首先尝试使用外部 scraper
+    // 提取视频代码
     final code = ThirdPartyDatabaseService.extractCodeFromUrl(url);
     if (code != null) {
-      print('MissAV: Extracted code: $code, trying external scraper');
+      print('MissAV: Extracted code: $code, starting multi-source search');
       
-      // 尝试使用 JAV Scraper
-      final javInfo = await ExternalScraperService.getJavInfoWithScraper(code);
-      if (javInfo != null && javInfo['title'] != null && javInfo['title'] != 'Unknown Title') {
-        print('MissAV: External scraper success for code: $code');
-        return VideoInfo(
-          id: code,
-          title: javInfo['title'] ?? 'Unknown Title',
-          description: javInfo['overview'] ?? javInfo['description'] ?? '',
-          duration: null,
-          thumbnailUrl: javInfo['poster'] ?? javInfo['thumbnail'],
-          platform: 'missav',
-          metadata: javInfo,
-        );
-      } else {
-        print('MissAV: External scraper failed or returned invalid data, trying third-party databases');
+      // 使用多源搜索服务
+      final results = await MultiSourceSearchService.searchVideoInfo(code);
+      
+      if (results.isNotEmpty) {
+        print('MissAV: Multi-source search found ${results.length} results');
         
-        // 尝试使用第三方数据库服务
-        final dbInfo = await ThirdPartyDatabaseService.getThumbnailFromDatabase(code);
-        if (dbInfo != null && dbInfo['thumbnail'] != null) {
-          print('MissAV: Third-party database success for code: $code');
-
-          // 优先从 MissAV 页面获取更准确的标题（先尝试日文 /ja/ 页面，失败再用原链接）
-          String? missavTitle = await _fetchMissavTitle(url);
-          final finalTitle = (missavTitle != null && missavTitle.trim().isNotEmpty)
-              ? missavTitle.trim()
-              : (dbInfo['title'] ?? 'Unknown Title');
-
+        // 如果只有一个结果，直接使用
+        if (results.length == 1) {
+          final result = results.first;
+          print('MissAV: Using single result from ${result.source}: ${result.title}');
+          
           return VideoInfo(
             id: code,
-            title: finalTitle,
-            description: dbInfo['description'] ?? '',
+            title: result.title,
+            description: result.metadata['description'] ?? '',
             duration: null,
-            thumbnailUrl: dbInfo['thumbnail'],
+            thumbnailUrl: result.thumbnailUrl,
             platform: 'missav',
             metadata: {
-              ...dbInfo,
-              'missav_title': missavTitle,
-              'source_priority': 'missav>db',
+              ...result.metadata,
+              'selected_source': result.source,
+              'confidence': result.confidence,
             },
           );
+        } else {
+          // 多个结果，需要用户选择
+          print('MissAV: Multiple results found, need user selection');
+          
+          // 获取推荐结果
+          final recommendedResult = MultiSourceSearchService.getRecommendedResult(results);
+          
+          return VideoInfo(
+            id: code,
+            title: recommendedResult?.title ?? 'Unknown Title',
+            description: recommendedResult?.metadata['description'] ?? '',
+            duration: null,
+            thumbnailUrl: recommendedResult?.thumbnailUrl,
+            platform: 'missav',
+            metadata: {
+              ...?recommendedResult?.metadata,
+              'selected_source': recommendedResult?.source ?? 'unknown',
+              'confidence': recommendedResult?.confidence ?? 0.0,
+              'multi_source_results': results.map((r) => {
+                'title': r.title,
+                'source': r.source,
+                'confidence': r.confidence,
+                'thumbnail_url': r.thumbnailUrl,
+              }).toList(),
+              'needs_user_selection': true,
+            },
+          );
+        }
+      } else {
+        print('MissAV: No results from multi-source search, falling back to original method');
+        
+        // 回退到原来的方法
+        final javInfo = await ExternalScraperService.getJavInfoWithScraper(code);
+        if (javInfo != null && javInfo['title'] != null && javInfo['title'] != 'Unknown Title') {
+          print('MissAV: External scraper success for code: $code');
+          return VideoInfo(
+            id: code,
+            title: javInfo['title'] ?? 'Unknown Title',
+            description: javInfo['overview'] ?? javInfo['description'] ?? '',
+            duration: null,
+            thumbnailUrl: javInfo['poster'] ?? javInfo['thumbnail'],
+            platform: 'missav',
+            metadata: javInfo,
+          );
+        } else {
+          print('MissAV: External scraper failed, trying third-party databases');
+          
+          final dbInfo = await ThirdPartyDatabaseService.getThumbnailFromDatabase(code);
+          if (dbInfo != null && dbInfo['thumbnail'] != null) {
+            print('MissAV: Third-party database success for code: $code');
+
+            String? missavTitle = await _fetchMissavTitle(url);
+            final finalTitle = (missavTitle != null && missavTitle.trim().isNotEmpty)
+                ? missavTitle.trim()
+                : (dbInfo['title'] ?? 'Unknown Title');
+
+            return VideoInfo(
+              id: code,
+              title: finalTitle,
+              description: dbInfo['description'] ?? '',
+              duration: null,
+              thumbnailUrl: dbInfo['thumbnail'],
+              platform: 'missav',
+              metadata: {
+                ...dbInfo,
+                'missav_title': missavTitle,
+                'source_priority': 'missav>db',
+              },
+            );
+          }
         }
       }
     }
