@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:collection/collection.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../services/thumbnail_service.dart';
+import '../../services/video_sniffer_service.dart';
 
 import '../../widgets/custom_progress_bar.dart';
 
@@ -108,23 +109,18 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         final localFile = File(widget.video.localPath!);
         if (await localFile.exists()) {
           videoPath = widget.video.localPath!;
+          await player.open(Media(videoPath), play: false);
+          return;
         }
       }
       
-      // 如果是网页URL且没有本地文件，显示提示
+      // 如果是网页URL，尝试嗅探视频链接
       if (videoPath == widget.video.url && !widget.video.isDownloaded) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Online video needs to be downloaded first. Please download the video to enable editing.'),
-              backgroundColor: Colors.orange[700],
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        }
-        return; // 不尝试播放网页URL
+        await _sniffAndPlayVideo();
+        return;
       }
       
+      // 尝试直接播放
       await player.open(Media(videoPath), play: false);
       
       // 监听播放器状态变化
@@ -148,6 +144,92 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         );
       }
     }
+  }
+
+  /// 嗅探并播放在线视频
+  Future<void> _sniffAndPlayVideo() async {
+    try {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('正在嗅探视频链接...'),
+            backgroundColor: Colors.blue[700],
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+
+      // 嗅探视频链接
+      final videos = await VideoSnifferService.sniffVideoUrls(widget.video.url);
+      
+      if (videos.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('未找到可播放的视频链接，请尝试下载视频'),
+              backgroundColor: Colors.orange[700],
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
+      }
+
+      // 选择最佳视频链接
+      final bestVideo = _selectBestVideo(videos);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('找到视频链接: ${bestVideo.title}'),
+            backgroundColor: Colors.green[700],
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // 播放视频
+      await player.open(Media(bestVideo.url), play: false);
+      
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('视频嗅探失败: $e'),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+      }
+    }
+  }
+
+  /// 选择最佳视频链接
+  VideoInfo _selectBestVideo(List<VideoInfo> videos) {
+    // 优先级：直接视频 > HLS > DASH > 其他
+    final priorityOrder = [
+      VideoType.direct,
+      VideoType.hls,
+      VideoType.dash,
+      VideoType.meta,
+      VideoType.jsonLd,
+      VideoType.special,
+      VideoType.link,
+    ];
+
+    for (final type in priorityOrder) {
+      final candidates = videos.where((v) => v.type == type).toList();
+      if (candidates.isNotEmpty) {
+        // 如果有多个同类型的视频，选择分辨率最高的
+        candidates.sort((a, b) {
+          final aRes = (a.width ?? 0) * (a.height ?? 0);
+          final bRes = (b.width ?? 0) * (b.height ?? 0);
+          return bRes.compareTo(aRes);
+        });
+        return candidates.first;
+      }
+    }
+
+    return videos.first;
   }
 
   @override
@@ -558,9 +640,9 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     final isEditing = _originalEditingClip != null;
 
     if (isEditing) {
-      final latestClipInState = appState.onlineVideoClips.firstWhereOrNull(
+      final latestClipInState = appState.onlineVideoClips.where(
         (c) => c.id == _originalEditingClip!.id,
-      );
+      ).firstOrNull;
       if (latestClipInState == null) {
         WidgetsBinding.instance.addPostFrameCallback(
           (_) => _resetFormToBlank(),
@@ -674,87 +756,33 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
             clipBehavior: Clip.antiAlias,
             child: Stack(
               children: [
-                // 检查视频是否已下载
-                if (widget.video.isDownloaded && widget.video.localPath != null)
-                  Focus(
-                    focusNode: _videoFocusNode,
-                    child: Shortcuts(
-                      shortcuts: <LogicalKeySet, Intent>{
-                        LogicalKeySet(LogicalKeyboardKey.space):
-                            const TogglePlayPauseIntent(),
+                // 视频播放器
+                Focus(
+                  focusNode: _videoFocusNode,
+                  child: Shortcuts(
+                    shortcuts: <LogicalKeySet, Intent>{
+                      LogicalKeySet(LogicalKeyboardKey.space):
+                          const TogglePlayPauseIntent(),
+                    },
+                    child: Actions(
+                      actions: <Type, Action<Intent>>{
+                        TogglePlayPauseIntent:
+                            CallbackAction<TogglePlayPauseIntent>(
+                              onInvoke: (Intent intent) => player.playOrPause(),
+                            ),
                       },
-                      child: Actions(
-                        actions: <Type, Action<Intent>>{
-                          TogglePlayPauseIntent:
-                              CallbackAction<TogglePlayPauseIntent>(
-                                onInvoke: (Intent intent) => player.playOrPause(),
-                              ),
+                      child: GestureDetector(
+                        onTap: () {
+                          if (!_videoFocusNode.hasFocus) {
+                            FocusScope.of(context).requestFocus(_videoFocusNode);
+                          }
+                          player.playOrPause();
                         },
-                        child: GestureDetector(
-                          onTap: () {
-                            if (!_videoFocusNode.hasFocus) {
-                              FocusScope.of(context).requestFocus(_videoFocusNode);
-                            }
-                            player.playOrPause();
-                          },
-                          child: Video(controller: controller),
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  // 显示下载提示界面
-                  Container(
-                    color: Colors.black87,
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.download,
-                            size: 64,
-                            color: Colors.grey[400],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Video Not Downloaded',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Please download the video first\nto enable editing',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[400],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              // TODO: 实现下载功能
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Download feature coming soon...'),
-                                  backgroundColor: Colors.blue[700],
-                                ),
-                              );
-                            },
-                            icon: const Icon(Icons.download),
-                            label: const Text('Download Video'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue[600],
-                              foregroundColor: Colors.white,
-                            ),
-                          ),
-                        ],
+                        child: Video(controller: controller),
                       ),
                     ),
                   ),
+                ),
                 // 快捷键提示悬浮窗
                 if (_showHints)
                   Positioned(
@@ -794,59 +822,41 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
           ),
         ),
 
-        // 进度条 - 只在视频已下载时显示
-        if (widget.video.isDownloaded && widget.video.localPath != null)
-          StreamBuilder<Duration>(
-            stream: player.stream.duration,
-            initialData: player.state.duration,
-            builder: (context, snapshot) {
-              final isReady = (snapshot.data ?? Duration.zero) > Duration.zero;
-              if (!isReady) {
-                return const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20.0),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 12),
-                child: CustomProgressBar(
-                  player: player,
-                  startTime: _formClip.startTime,
-                  endTime: _formClip.endTime,
-                  coverTime: _formClip.coverFrameTime,
-                  onSetStart: (time) => setState(
-                    () => _formClip = _formClip.copyWith(startTime: time),
-                  ),
-                  onSetEnd: (time) => setState(
-                    () => _formClip = _formClip.copyWith(endTime: time),
-                  ),
-                  onSetCover: (time) => _generateCoverAtTime(time),
-                  showThumbnailPreview: true, // 本地视频启用缩略图预览
-                  videoPath: widget.video.localPath!, // 使用本地视频路径
-                ),
+        // 进度条
+        StreamBuilder<Duration>(
+          stream: player.stream.duration,
+          initialData: player.state.duration,
+          builder: (context, snapshot) {
+            final isReady = (snapshot.data ?? Duration.zero) > Duration.zero;
+            if (!isReady) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20.0),
+                child: Center(child: CircularProgressIndicator()),
               );
-            },
-          ),
-
-        // 剪辑控制 - 只在视频已下载时显示
-        if (widget.video.isDownloaded && widget.video.localPath != null)
-          _buildClippingControls()
-        else
-          // 显示提示信息
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
-            child: Center(
-              child: Text(
-                'Video editing controls will be available after downloading',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
+            }
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+              child: CustomProgressBar(
+                player: player,
+                startTime: _formClip.startTime,
+                endTime: _formClip.endTime,
+                coverTime: _formClip.coverFrameTime,
+                onSetStart: (time) => setState(
+                  () => _formClip = _formClip.copyWith(startTime: time),
                 ),
-                textAlign: TextAlign.center,
+                onSetEnd: (time) => setState(
+                  () => _formClip = _formClip.copyWith(endTime: time),
+                ),
+                onSetCover: (time) => _generateCoverAtTime(time),
+                showThumbnailPreview: false, // 在线视频禁用缩略图预览
+                videoPath: widget.video.url, // 使用在线视频URL
               ),
-            ),
-          ),
+            );
+          },
+        ),
+
+        // 剪辑控制
+        _buildClippingControls(),
 
         // 表单
         Expanded(
