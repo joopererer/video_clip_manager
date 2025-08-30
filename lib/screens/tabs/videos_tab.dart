@@ -11,6 +11,7 @@ import '../../widgets/video_thumbnail.dart';
 import '../../widgets/online_video_add_dialog.dart';
 import '../player/clip_editor_screen.dart';
 import '../player/online_clip_editor_screen.dart';
+import '../add_online_video_screen.dart';
 
 class VideosTab extends StatefulWidget {
   final String searchQuery;
@@ -574,16 +575,31 @@ class _VideosTabState extends State<VideosTab> {
               subtitle: const Text('Add video from YouTube, Bilibili, etc.'),
               onTap: () {
                 Navigator.pop(context);
-                showDialog(
-                  context: context,
-                  builder: (context) => const OnlineVideoAddDialog(),
-                );
+                _showAddOnlineVideoScreen(context);
               },
             ),
           ],
         ),
       ),
     );
+  }
+
+  void _showAddOnlineVideoScreen(BuildContext context) async {
+    try {
+      final result = await showDialog<OnlineVideo>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AddOnlineVideoScreen(),
+      );
+      
+      if (result != null) {
+        final appState = context.read<AppState>();
+        appState.addOnlineVideo(result);
+        ToastUtils.showSuccess(context, 'Online video added successfully!');
+      }
+    } catch (e) {
+      ToastUtils.showError(context, 'Failed to add online video: $e');
+    }
   }
 
   void _pickAndAddVideos(BuildContext context) async {

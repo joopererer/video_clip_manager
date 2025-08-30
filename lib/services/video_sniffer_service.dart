@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:async';
 
 import 'package:http/http.dart' as http;
@@ -8,12 +7,17 @@ import 'package:html/dom.dart';
 
 class VideoSnifferService {
   static const Map<String, String> _headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Accept-Encoding': 'gzip, deflate',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
     'Connection': 'keep-alive',
     'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'none',
+    'Sec-Fetch-User': '?1',
+    'Cache-Control': 'max-age=0',
   };
 
   /// 从网页URL中嗅探视频链接
@@ -233,26 +237,132 @@ class VideoSnifferService {
     final videos = <VideoInfo>[];
     
     try {
-      // 查找视频播放器相关的脚本
+      // 基于 resource-sniffer 项目的实现，改进 MissAV 视频提取
+      
+      // 1. 查找所有包含视频相关关键词的script
       for (final script in document.querySelectorAll('script')) {
         final content = script.text;
-        if (content.contains('video') || content.contains('player')) {
+        final keywords = ['video', 'player', 'm3u8', 'mp4', 'stream', 'source', 'hls'];
+        final hasVideoKeywords = keywords.any((keyword) => content.toLowerCase().contains(keyword));
+        
+        if (hasVideoKeywords) {
           // 查找可能的视频URL模式
-          final videoUrlPattern = RegExp(r'["\']([^"\']*\.(?:mp4|m3u8|webm)[^"\']*)["\']');
-          final matches = videoUrlPattern.allMatches(content);
+          final patterns = [
+            RegExp(r'"([^"]*\.mp4[^"]*)"'),
+            RegExp(r'"([^"]*\.m3u8[^"]*)"'),
+            RegExp(r'"([^"]*\.webm[^"]*)"'),
+            RegExp(r"'([^']*\.mp4[^']*)'"),
+            RegExp(r"'([^']*\.m3u8[^']*)'"),
+            RegExp(r"'([^']*\.webm[^']*)'"),
+            // JSON格式的视频URL
+            RegExp(r'"url"\s*:\s*"([^"]*\.m3u8[^"]*)"'),
+            RegExp(r'"src"\s*:\s*"([^"]*\.m3u8[^"]*)"'),
+            RegExp(r'"source"\s*:\s*"([^"]*\.m3u8[^"]*)"'),
+            RegExp(r'"video_url"\s*:\s*"([^"]*\.m3u8[^"]*)"'),
+            RegExp(r'"stream_url"\s*:\s*"([^"]*\.m3u8[^"]*)"'),
+          ];
           
-          for (final match in matches) {
-            final url = match.group(1);
-            if (url != null && _isVideoUrl(url)) {
+          for (final pattern in patterns) {
+            final matches = pattern.allMatches(content);
+            for (final match in matches) {
+              final url = match.group(1);
+              if (url != null && _isVideoUrl(url)) {
+                final videoType = url.contains('.m3u8') ? VideoType.hls : VideoType.direct;
+                videos.add(VideoInfo(
+                  url: _resolveUrl(url, pageUrl),
+                  type: videoType,
+                  title: 'MissAV Video',
+                ));
+              }
+            }
+          }
+        }
+      }
+      
+      // 2. 查找 iframe 中的视频播放器
+      for (final iframe in document.querySelectorAll('iframe')) {
+        final src = iframe.attributes['src'];
+        final dataSrc = iframe.attributes['data-src'];
+        final videoSrc = iframe.attributes['data-video-src'];
+        
+        final iframeUrl = src ?? dataSrc ?? videoSrc;
+        if (iframeUrl != null && (iframeUrl.contains('player') || iframeUrl.contains('video'))) {
+          videos.add(VideoInfo(
+            url: _resolveUrl(iframeUrl, pageUrl),
+            type: VideoType.special,
+            title: 'MissAV Player',
+          ));
+        }
+      }
+      
+      // 3. 查找 data 属性中的视频信息
+      for (final element in document.querySelectorAll('[data-*]')) {
+        final attrs = element.attributes.keys.where((key) => key.toString().startsWith('data-')).toList();
+        
+        for (final attr in attrs) {
+          final attrStr = attr.toString();
+          if (attrStr.contains('video') || attrStr.contains('src') || attrStr.contains('player')) {
+            final videoUrl = element.attributes[attr];
+            if (videoUrl != null && _isVideoUrl(videoUrl)) {
+              final videoType = videoUrl.contains('.m3u8') ? VideoType.hls : VideoType.direct;
               videos.add(VideoInfo(
-                url: _resolveUrl(url, pageUrl),
-                type: VideoType.special,
-                title: 'MissAV Video',
+                url: _resolveUrl(videoUrl, pageUrl),
+                type: videoType,
+                title: 'MissAV Data Video',
               ));
             }
           }
         }
       }
+      
+      // 4. 查找 video 标签
+      for (final video in document.querySelectorAll('video')) {
+        final src = video.attributes['src'];
+        if (src != null && _isVideoUrl(src)) {
+          final videoType = src.contains('.m3u8') ? VideoType.hls : VideoType.direct;
+          videos.add(VideoInfo(
+            url: _resolveUrl(src, pageUrl),
+            type: videoType,
+            title: 'MissAV Video Tag',
+          ));
+        }
+        
+        // 查找 source 标签
+        for (final source in video.querySelectorAll('source')) {
+          final sourceSrc = source.attributes['src'];
+          if (sourceSrc != null && _isVideoUrl(sourceSrc)) {
+            final videoType = sourceSrc.contains('.m3u8') ? VideoType.hls : VideoType.direct;
+            videos.add(VideoInfo(
+              url: _resolveUrl(sourceSrc, pageUrl),
+              type: videoType,
+              title: 'MissAV Source Tag',
+            ));
+          }
+        }
+      }
+      
+      // 5. 全局搜索页面中的视频URL
+      final pageContent = document.outerHtml;
+      final globalPatterns = [
+        RegExp(r'https?://[^"\s]+\.m3u8[^"\s]*'),
+        RegExp(r'https?://[^"\s]+\.mp4[^"\s]*'),
+      ];
+      
+      for (final pattern in globalPatterns) {
+        final matches = pattern.allMatches(pageContent);
+        for (final match in matches) {
+          final url = match.group(0);
+          if (url != null && url.length > 20) {
+            final videoType = url.contains('.m3u8') ? VideoType.hls : VideoType.direct;
+            videos.add(VideoInfo(
+              url: url,
+              type: videoType,
+              title: 'MissAV Global Search',
+            ));
+          }
+        }
+      }
+      
     } catch (e) {
       print('VideoSnifferService: MissAV 处理失败: $e');
     }
@@ -269,17 +379,22 @@ class VideoSnifferService {
       for (final script in document.querySelectorAll('script')) {
         final content = script.text;
         if (content.contains('hls') || content.contains('m3u8')) {
-          final hlsPattern = RegExp(r'["\']([^"\']*\.m3u8[^"\']*)["\']');
-          final matches = hlsPattern.allMatches(content);
+          final hlsPatterns = [
+            RegExp(r'"([^"]*\.m3u8[^"]*)"'),
+            RegExp(r"'([^']*\.m3u8[^']*)'"),
+          ];
           
-          for (final match in matches) {
-            final url = match.group(1);
-            if (url != null) {
-              videos.add(VideoInfo(
-                url: _resolveUrl(url, pageUrl),
-                type: VideoType.hls,
-                title: 'XVideos HLS Stream',
-              ));
+          for (final pattern in hlsPatterns) {
+            final matches = pattern.allMatches(content);
+            for (final match in matches) {
+              final url = match.group(1);
+              if (url != null) {
+                videos.add(VideoInfo(
+                  url: _resolveUrl(url, pageUrl),
+                  type: VideoType.hls,
+                  title: 'XVideos HLS Stream',
+                ));
+              }
             }
           }
         }
