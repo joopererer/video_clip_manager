@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:media_kit/media_kit.dart';
+import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 import 'package:provider/provider.dart';
@@ -47,7 +47,7 @@ class OnlineClipEditorScreen extends StatefulWidget {
 }
 
 class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
-  late final Player player;
+  late final mk.Player player;
   late final VideoController controller;
   final MultiSplitViewController _splitViewController =
       MultiSplitViewController(
@@ -59,6 +59,13 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
 
   late OnlineVideoClip _formClip;
   OnlineVideoClip? _originalEditingClip;
+
+  // 动态质量选择器相关状态
+  List<VideoStream> _availableVideoStreams = [];
+  List<VideoStream> _availableAudioStreams = [];
+  VideoStream? _currentVideoStream;
+  VideoStream? _currentAudioStream;
+  List<StreamQuality> _qualityOptions = [];
 
   bool _isSaving = false;
   String? _coverPreviewFullPath;
@@ -127,6 +134,178 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     }
   }
 
+  /// 动态切换视频质量
+  Future<void> _switchVideoQuality(StreamQuality quality) async {
+    if (_currentVideoStream?.formatId == quality.stream.formatId) {
+      return; // 已经是当前质量
+    }
+
+    try {
+      // 记录当前播放位置
+      final currentPosition = player.state.position;
+      final wasPlaying = player.state.playing;
+
+      _showSnackDeferred(
+        '切换到 ${quality.displayName}...',
+        bgColor: Colors.blue[600],
+        duration: const Duration(seconds: 2),
+      );
+
+      final headers = <String, String>{
+        if (quality.stream.httpHeaders != null) ...quality.stream.httpHeaders!,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      };
+
+      // 如果有音频流，需要同时切换
+      if (_currentAudioStream != null) {
+        await player.open(
+          mk.Playlist([
+            mk.Media(quality.stream.url, httpHeaders: headers),
+            mk.Media(_currentAudioStream!.url, httpHeaders: headers),
+          ]),
+          play: false,
+        );
+      } else {
+        await player.open(
+          mk.Media(quality.stream.url, httpHeaders: headers),
+          play: false,
+        );
+      }
+
+      // 恢复播放位置
+      await player.seek(currentPosition);
+      
+      // 恢复播放状态
+      if (wasPlaying) {
+        await player.play();
+      }
+
+      _currentVideoStream = quality.stream;
+
+      _showSnackDeferred(
+        '已切换到 ${quality.displayName}',
+        bgColor: Colors.green[600],
+        duration: const Duration(seconds: 2),
+      );
+
+    } catch (e) {
+      _showSnackDeferred(
+        '切换质量失败: $e',
+        bgColor: Colors.red[600],
+        duration: const Duration(seconds: 3),
+      );
+    }
+  }
+
+  /// 显示质量选择器
+  void _showQualitySelector() {
+    if (_qualityOptions.isEmpty) {
+      _showSnackDeferred(
+        '暂无可选择的视频质量',
+        bgColor: Colors.orange[600],
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _buildQualitySelector(),
+    );
+  }
+
+  /// 构建质量选择器UI
+  Widget _buildQualitySelector() {
+    return Container(
+      margin: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 10.0,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceVariant,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12.0),
+                topRight: Radius.circular(12.0),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.high_quality,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8.0),
+                Text(
+                  '选择视频质量',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _qualityOptions.length,
+              itemBuilder: (context, index) {
+                final quality = _qualityOptions[index];
+                final isSelected = _currentVideoStream?.formatId == quality.stream.formatId;
+                
+                return ListTile(
+                  leading: Icon(
+                    quality.hasAudio ? Icons.volume_up : Icons.volume_off,
+                    color: quality.hasAudio ? Colors.green : Colors.red,
+                  ),
+                  title: Text(
+                    quality.displayName,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? Theme.of(context).colorScheme.primary : null,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '分辨率: ${quality.resolution} | 比特率: ${quality.bitrate.toInt()}kbps',
+                  ),
+                  trailing: isSelected 
+                    ? Icon(
+                        Icons.check_circle,
+                        color: Theme.of(context).colorScheme.primary,
+                      )
+                    : null,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _switchVideoQuality(quality);
+                  },
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8.0),
+        ],
+      ),
+    );
+  }
+
   /// 显示流选择对话框
   Future<VideoStream?> _showStreamSelectionDialog(List<StreamQuality> qualities) async {
     return showDialog<VideoStream>(
@@ -186,7 +365,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
   @override
   void initState() {
     super.initState();
-    player = Player();
+    player = mk.Player();
     controller = VideoController(player);
     _focusNode = FocusNode();
 
@@ -227,7 +406,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         final localFile = File(widget.video.localPath!);
         if (await localFile.exists()) {
           videoPath = widget.video.localPath!;
-          await player.open(Media(videoPath), play: false);
+          await player.open(mk.Media(videoPath), play: false);
           return;
         }
       }
@@ -236,7 +415,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
       if (videoPath != widget.video.url && videoPath.isNotEmpty) {
         try {
           await player.open(
-            Media(
+            mk.Media(
               videoPath,
               httpHeaders: {
                 if (httpHeaders != null) ...httpHeaders,
@@ -306,47 +485,99 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
       }
 
       // 优先从 yt-dlp 流中选择最佳可播放链接并携带HTTP头
-      final ytStreams = info.streams.whereType<VideoStream>().toList();
-      if (ytStreams.isNotEmpty) {
-        // 获取质量选项
-        final qualities = VideoStreamSelector.getQualityOptions(ytStreams);
+      final allStreams = info.streams.whereType<VideoStream>().toList();
+      final videoStreams = allStreams.where((s) => s.hasVideo).toList();
+      final audioStreams = allStreams.where((s) => s.hasAudio && !s.hasVideo).toList();
+      
+      // 存储流信息供动态切换使用
+      _availableVideoStreams = videoStreams;
+      _availableAudioStreams = audioStreams;
+      _qualityOptions = VideoStreamSelector.getQualityOptions(videoStreams);
+      
+      if (videoStreams.isNotEmpty) {
+        // 检查是否有包含音频的视频流
+        final videoWithAudio = videoStreams.where((s) => s.hasAudio).toList();
         
-        _showSnackDeferred(
-          '找到 ${ytStreams.length} 个流，${qualities.length} 个质量选项',
-          bgColor: Colors.blue[600],
-          duration: const Duration(seconds: 2),
-        );
-        
-        // 显示流选择对话框（即使只有一个选项也显示，让用户了解流信息）
-        VideoStream? selectedStream;
-        if (qualities.isNotEmpty) {
-          selectedStream = await _showStreamSelectionDialog(qualities);
+        if (videoWithAudio.isNotEmpty) {
+          // 有包含音频的视频流，直接使用
+          final best = VideoStreamSelector.selectBestStream(videoWithAudio) ?? videoWithAudio.first;
+          _currentVideoStream = best;
+          _currentAudioStream = null;
+          final headers = <String, String>{
+            if (best.httpHeaders != null) ...best.httpHeaders!,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+          };
+
+          _showSnackDeferred(
+            '使用包含音频的视频流: ${best.resolutionString}',
+            bgColor: Colors.green[700],
+            duration: const Duration(seconds: 3),
+          );
+
+          await player.open(
+            mk.Media(best.url, httpHeaders: headers),
+            play: false,
+          );
+          
+          await _saveSniffedVideoData(best.url, best.httpHeaders);
+          return;
+        } else if (audioStreams.isNotEmpty) {
+          // 视频和音频分离，需要选择最佳视频流和音频流
+          final bestVideo = VideoStreamSelector.selectBestStream(videoStreams) ?? videoStreams.first;
+          final bestAudio = audioStreams.first; // 选择第一个音频流
+          _currentVideoStream = bestVideo;
+          _currentAudioStream = bestAudio;
+          
+          final headers = <String, String>{
+            if (bestVideo.httpHeaders != null) ...bestVideo.httpHeaders!,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+          };
+
+          _showSnackDeferred(
+            '使用分离流: 视频${bestVideo.resolutionString} + 音频${bestAudio.formatNote ?? ''}',
+            bgColor: Colors.green[700],
+            duration: const Duration(seconds: 3),
+          );
+
+          // MediaKit 支持播放列表，可以同时播放视频和音频
+          await player.open(
+            mk.Playlist([
+              mk.Media(bestVideo.url, httpHeaders: headers),
+              mk.Media(bestAudio.url, httpHeaders: headers),
+            ]),
+            play: false,
+          );
+          
+          await _saveSniffedVideoData(bestVideo.url, bestVideo.httpHeaders);
+          return;
+        } else {
+          // 只有视频流，没有音频
+          final best = VideoStreamSelector.selectBestStream(videoStreams) ?? videoStreams.first;
+          _currentVideoStream = best;
+          _currentAudioStream = null;
+          final headers = <String, String>{
+            if (best.httpHeaders != null) ...best.httpHeaders!,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+          };
+
+          _showSnackDeferred(
+            '⚠️ 只有视频流，无音频: ${best.resolutionString}',
+            bgColor: Colors.orange[700],
+            duration: const Duration(seconds: 3),
+          );
+
+          await player.open(
+            mk.Media(best.url, httpHeaders: headers),
+            play: false,
+          );
+          
+          await _saveSniffedVideoData(best.url, best.httpHeaders);
+          return;
         }
-        
-        final best = selectedStream ?? VideoStreamSelector.selectBestStream(ytStreams) ?? ytStreams.first;
-        final headers = <String, String>{
-          if (best.httpHeaders != null) ...best.httpHeaders!,
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-        };
-
-        _showSnackDeferred(
-          '找到视频链接: ${info.title} (${best.hasAudio ? "有音频" : "无音频"} ${best.resolutionString})',
-          bgColor: Colors.green[700],
-          duration: const Duration(seconds: 3),
-        );
-
-        await player.open(
-          Media(best.url, httpHeaders: headers),
-          play: false,
-        );
-        
-        // 保存嗅探到的URL和headers到metadata，下次直接使用
-        await _saveSniffedVideoData(best.url, best.httpHeaders);
-        return;
       }
 
       // 回退：使用通用videoUrl（可能缺少必要headers）
-      await player.open(Media(info.videoUrl!), play: false);
+      await player.open(mk.Media(info.videoUrl!), play: false);
     } catch (e) {
       _showSnackDeferred(
         '视频嗅探失败: $e',
@@ -919,6 +1150,42 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                     ),
                   ),
                 ),
+                // 质量选择按钮
+                if (_qualityOptions.isNotEmpty)
+                  Positioned(
+                    top: 16,
+                    left: 16,
+                    child: Material(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(8),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: _showQualitySelector,
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.high_quality,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _currentVideoStream?.resolutionString ?? 'Auto',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 // 快捷键提示悬浮窗
                 if (_showHints)
                   Positioned(
