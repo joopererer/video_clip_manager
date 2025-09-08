@@ -585,6 +585,9 @@ class _VideosTabState extends State<VideosTab> {
   }
 
   void _showAddOnlineVideoScreen(BuildContext context) async {
+    // 在对话框显示之前获取 AppState 引用，避免异步操作后 context 失效
+    final appState = context.read<AppState>();
+    
     try {
       final result = await showDialog<OnlineVideo>(
         context: context,
@@ -593,12 +596,21 @@ class _VideosTabState extends State<VideosTab> {
       );
       
       if (result != null) {
-        final appState = context.read<AppState>();
-        appState.addOnlineVideo(result);
-        ToastUtils.showSuccess(context, 'Online video added successfully!');
+        try {
+          await appState.addOnlineVideo(result);
+          if (mounted) {
+            ToastUtils.showSuccess(context, 'Online video added successfully!');
+          }
+        } catch (e) {
+          if (mounted) {
+            ToastUtils.showError(context, 'Failed to add video: $e');
+          }
+        }
       }
     } catch (e) {
-      ToastUtils.showError(context, 'Failed to add online video: $e');
+      if (mounted) {
+        ToastUtils.showError(context, 'Failed to add online video: $e');
+      }
     }
   }
 

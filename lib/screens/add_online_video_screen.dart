@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/models.dart';
 import '../services/hybrid_video_sniffer_service.dart';
-import '../services/video_sniffer_service.dart';
+import '../services/yt_dlp_service.dart';
 import '../services/character_fix_service.dart';
 
 enum UrlValidationStatus {
@@ -28,6 +28,7 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
   String? _detectedTitle;
   String? _detectedVideoUrl;
   String? _detectedThumbnail;
+  Map<String, String>? _detectedHeaders;
   String? _errorMessage;
   UrlValidationStatus _urlValidationStatus = UrlValidationStatus.none;
   
@@ -575,7 +576,20 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
       if (videoInfo != null) {
         setState(() {
           _detectedTitle = CharacterFixService.fixCharacters(videoInfo.title);
-          _detectedVideoUrl = videoInfo.videoUrl;
+          
+          // 提取最佳流和HTTP头（若为yt-dlp返回的VideoStream）
+          final ytStreams = videoInfo.streams.whereType<VideoStream>().toList();
+          if (ytStreams.isNotEmpty) {
+            final best = VideoStreamSelector.selectBestStream(ytStreams) ?? ytStreams.first;
+            _detectedVideoUrl = best.url;
+            _detectedHeaders = best.httpHeaders;
+          } else {
+            _detectedVideoUrl = videoInfo.videoUrl;
+            _detectedHeaders = null;
+          }
+          
+          // 设置缩略图
+          _detectedThumbnail = videoInfo.thumbnail;
           
           // 如果当前没有标题，自动填充检测到的标题
           if (_titleController.text.isEmpty && _detectedTitle != null) {
@@ -611,8 +625,26 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
       if (!uri.hasScheme || !uri.hasAuthority) return false;
       
       final path = uri.path.toLowerCase();
-      final supportedExtensions = ['.mp4', '.m3u8', '.webm', '.avi', '.mkv'];
-      return supportedExtensions.any((ext) => path.endsWith(ext));
+      final query = uri.query.toLowerCase();
+      
+      // 支持的视频格式扩展名
+      final supportedExtensions = ['.mp4', '.m3u8', '.webm', '.avi', '.mkv', '.m4s', '.ts'];
+      
+      // 检查路径扩展名
+      if (supportedExtensions.any((ext) => path.endsWith(ext))) {
+        return true;
+      }
+      
+      // 检查特殊的视频流格式（如Bilibili的m4s，YouTube的格式参数等）
+      if (path.contains('/video/') || path.contains('/stream/') || 
+          query.contains('mime=video') || query.contains('itag=') ||
+          path.contains('upgcxcode') || // Bilibili特征
+          uri.host.contains('googlevideo.com') || // YouTube CDN
+          uri.host.contains('akamaized.net')) { // CDN服务
+        return true;
+      }
+      
+      return false;
     } catch (e) {
       return false;
     }
@@ -667,15 +699,12 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
   
   /// 添加视频
   Future<void> _addVideo() async {
-    print('AddOnlineVideoScreen: _addVideo called');
     
     if (!_formKey.currentState!.validate()) {
-      print('AddOnlineVideoScreen: Form validation failed');
       return;
     }
     
     if (!_canConfirm()) {
-      print('AddOnlineVideoScreen: Cannot confirm - conditions not met');
       return;
     }
     
@@ -689,7 +718,6 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
       final pageUrl = _pageUrlController.text.trim();
       final title = _titleController.text.trim();
       
-      print('AddOnlineVideoScreen: Creating OnlineVideo with:');
       print('  - videoUrl: $videoUrl');
       print('  - pageUrl: $pageUrl'); 
       print('  - title: $title');
@@ -699,22 +727,22 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: title,
         url: pageUrl.isNotEmpty ? pageUrl : videoUrl,
-        platform: _detectPlatform(videoUrl),
+        thumbnailUrl: _detectedThumbnail, // 直接设置缩略图URL
+        platform: _detectPlatform(pageUrl.isNotEmpty ? pageUrl : videoUrl),
         metadata: {
           'videoUrl': videoUrl,
+          if (_detectedHeaders != null) 'httpHeaders': _detectedHeaders,
           'detectedTitle': _detectedTitle,
           'detectedThumbnail': _detectedThumbnail,
           'addedAt': DateTime.now().toIso8601String(),
         },
       );
       
-      print('AddOnlineVideoScreen: OnlineVideo created successfully');
       
       // 返回结果
       Navigator.of(context).pop(onlineVideo);
       
     } catch (e) {
-      print('AddOnlineVideoScreen: Error creating video: $e');
       setState(() {
         _errorMessage = '创建视频失败: $e';
       });

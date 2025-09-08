@@ -134,6 +134,8 @@ class HybridVideoSnifferService {
       'youtu.be',
       'bilibili.com',
       'xvideos.com',
+      'missav.com',
+      'missav.ws',
       'pornhub.com',
       'redtube.com',
       'youporn.com',

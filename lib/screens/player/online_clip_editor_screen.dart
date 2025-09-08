@@ -14,7 +14,8 @@ import 'package:http/http.dart' as http;
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../services/thumbnail_service.dart';
-import '../../services/video_sniffer_service.dart';
+import '../../services/hybrid_video_sniffer_service.dart';
+import '../../services/yt_dlp_service.dart';
 
 import '../../widgets/custom_progress_bar.dart';
 
@@ -76,6 +77,111 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
 
   bool _showHints = false;
   late final FocusNode _focusNode;
+  bool _isSniffing = false;
+
+  void _showSnackDeferred(String message, {Color? bgColor, Duration? duration}) {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: bgColor,
+          duration: duration ?? const Duration(seconds: 3),
+        ),
+      );
+    });
+  }
+
+  /// 保存嗅探到的视频数据到AppState
+  Future<void> _saveSniffedVideoData(String videoUrl, Map<String, String>? httpHeaders) async {
+    try {
+      final appState = context.read<AppState>();
+      
+      // 创建更新后的视频对象
+      final updatedVideo = OnlineVideo(
+        id: widget.video.id,
+        url: widget.video.url,
+        title: widget.video.title,
+        thumbnailUrl: widget.video.thumbnailUrl,
+        platform: widget.video.platform,
+        isDownloaded: widget.video.isDownloaded,
+        localPath: widget.video.localPath,
+        downloadedAt: widget.video.downloadedAt,
+        metadata: {
+          ...widget.video.metadata,
+          'videoUrl': videoUrl,
+          'httpHeaders': httpHeaders,
+        },
+      );
+      
+      await appState.updateOnlineVideo(updatedVideo);
+      _showSnackDeferred(
+        '视频链接已缓存，下次播放更快',
+        bgColor: Colors.green[600],
+        duration: const Duration(seconds: 2),
+      );
+    } catch (e) {
+      // 保存失败不影响播放，只是下次需要重新嗅探
+      print('Failed to save sniffed video data: $e');
+    }
+  }
+
+  /// 显示流选择对话框
+  Future<VideoStream?> _showStreamSelectionDialog(List<StreamQuality> qualities) async {
+    return showDialog<VideoStream>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('选择视频质量'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: qualities.length,
+            itemBuilder: (context, index) {
+              final quality = qualities[index];
+              return ListTile(
+                leading: Icon(
+                  quality.hasAudio ? Icons.volume_up : Icons.volume_off,
+                  color: quality.hasAudio ? Colors.green : Colors.red,
+                ),
+                title: Text(quality.displayName),
+                subtitle: Text(
+                  '分辨率: ${quality.resolution} | 比特率: ${quality.bitrate.toInt()}kbps',
+                ),
+                trailing: quality.hasAudio 
+                  ? const Chip(
+                      label: Text('有音频'),
+                      backgroundColor: Colors.green,
+                      labelStyle: TextStyle(color: Colors.white),
+                    )
+                  : const Chip(
+                      label: Text('无音频'),
+                      backgroundColor: Colors.red,
+                      labelStyle: TextStyle(color: Colors.white),
+                    ),
+                onTap: () => Navigator.of(context).pop(quality.stream),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              // 使用默认最佳选择
+              final best = qualities.isNotEmpty ? qualities.first.stream : null;
+              Navigator.of(context).pop(best);
+            },
+            child: const Text('使用默认'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -104,6 +210,18 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     try {
       // 优先使用本地下载的视频
       String videoPath = widget.video.url;
+      Map<String, String>? httpHeaders;
+      // 若在添加时已嗅探过直链与头信息，优先使用
+      if (widget.video.metadata.containsKey('videoUrl')) {
+        final detectedUrl = widget.video.metadata['videoUrl'] as String?;
+        if (detectedUrl != null && detectedUrl.isNotEmpty) {
+          videoPath = detectedUrl;
+        }
+        final headers = widget.video.metadata['httpHeaders'];
+        if (headers is Map) {
+          httpHeaders = headers.map((k, v) => MapEntry(k.toString(), v.toString()));
+        }
+      }
       
       if (widget.video.isDownloaded && widget.video.localPath != null) {
         final localFile = File(widget.video.localPath!);
@@ -114,123 +232,126 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         }
       }
       
-      // 如果是网页URL，尝试嗅探视频链接
-      if (videoPath == widget.video.url && !widget.video.isDownloaded) {
+      // 尝试直接播放缓存的URL
+      if (videoPath != widget.video.url && videoPath.isNotEmpty) {
+        try {
+          await player.open(
+            Media(
+              videoPath,
+              httpHeaders: {
+                if (httpHeaders != null) ...httpHeaders,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+              },
+            ),
+            play: false,
+          );
+          _showSnackDeferred(
+            '使用缓存的视频链接播放',
+            bgColor: Colors.green[700],
+            duration: const Duration(seconds: 2),
+          );
+          return;
+        } catch (e) {
+          _showSnackDeferred(
+            '缓存链接播放失败，尝试重新嗅探: $e',
+            bgColor: Colors.orange[700],
+          );
+          // 缓存URL失败，立即尝试重新嗅探
+          await _sniffAndPlayVideo();
+          return;
+        }
+      }
+      
+      // 如果没有缓存的URL，尝试嗅探视频链接
+      if (!widget.video.isDownloaded) {
         await _sniffAndPlayVideo();
         return;
       }
       
-      // 尝试直接播放
-      await player.open(Media(videoPath), play: false);
-      
       // 监听播放器状态变化
       player.stream.error.listen((error) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Video loading error: $error'),
-              backgroundColor: Colors.red[700],
-            ),
-          );
-        }
+        _showSnackDeferred(
+          'Video loading error: $error',
+          bgColor: Colors.red[700],
+        );
       });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load video: $e'),
-            backgroundColor: Colors.red[700],
-          ),
-        );
-      }
+      _showSnackDeferred(
+        'Failed to load video: $e',
+        bgColor: Colors.red[700],
+      );
     }
   }
 
   /// 嗅探并播放在线视频
   Future<void> _sniffAndPlayVideo() async {
+    setState(() => _isSniffing = true);
     try {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('正在嗅探视频链接...'),
-            backgroundColor: Colors.blue[700],
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
+      _showSnackDeferred(
+        '正在嗅探视频链接...',
+        bgColor: Colors.blue[700],
+        duration: const Duration(seconds: 3),
+      );
 
-      // 嗅探视频链接
-      final videos = await VideoSnifferService.sniffVideoUrls(widget.video.url);
-      
-      if (videos.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('未找到可播放的视频链接，请尝试下载视频'),
-              backgroundColor: Colors.orange[700],
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        }
+      // 使用混合嗅探器（优先 yt-dlp，失败回落到自定义）
+      final info = await HybridVideoSnifferService.extractVideoInfo(widget.video.url);
+
+      if (info == null || (info.videoUrl == null || info.videoUrl!.isEmpty)) {
+        _showSnackDeferred(
+          '未找到可播放的视频链接，请检查页面或稍后重试',
+          bgColor: Colors.orange[700],
+          duration: const Duration(seconds: 5),
+        );
         return;
       }
 
-      // 选择最佳视频链接
-      final bestVideo = _selectBestVideo(videos);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('找到视频链接: ${bestVideo.title}'),
-            backgroundColor: Colors.green[700],
-            duration: const Duration(seconds: 2),
-          ),
+      // 优先从 yt-dlp 流中选择最佳可播放链接并携带HTTP头
+      final ytStreams = info.streams.whereType<VideoStream>().toList();
+      if (ytStreams.isNotEmpty) {
+        // 获取质量选项
+        final qualities = VideoStreamSelector.getQualityOptions(ytStreams);
+        
+        // 如果有多个选项，让用户选择；否则使用最佳的
+        VideoStream? selectedStream;
+        if (qualities.length > 1) {
+          selectedStream = await _showStreamSelectionDialog(qualities);
+        }
+        
+        final best = selectedStream ?? VideoStreamSelector.selectBestStream(ytStreams) ?? ytStreams.first;
+        final headers = <String, String>{
+          if (best.httpHeaders != null) ...best.httpHeaders!,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        };
+
+        _showSnackDeferred(
+          '找到视频链接: ${info.title} (${best.hasAudio ? "有音频" : "无音频"} ${best.resolutionString})',
+          bgColor: Colors.green[700],
+          duration: const Duration(seconds: 3),
         );
+
+        await player.open(
+          Media(best.url, httpHeaders: headers),
+          play: false,
+        );
+        
+        // 保存嗅探到的URL和headers到metadata，下次直接使用
+        await _saveSniffedVideoData(best.url, best.httpHeaders);
+        return;
       }
 
-      // 播放视频
-      await player.open(Media(bestVideo.url), play: false);
-      
+      // 回退：使用通用videoUrl（可能缺少必要headers）
+      await player.open(Media(info.videoUrl!), play: false);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('视频嗅探失败: $e'),
-            backgroundColor: Colors.red[700],
-          ),
-        );
-      }
+      _showSnackDeferred(
+        '视频嗅探失败: $e',
+        bgColor: Colors.red[700],
+      );
+    } finally {
+      if (mounted) setState(() => _isSniffing = false);
     }
   }
 
-  /// 选择最佳视频链接
-  VideoInfo _selectBestVideo(List<VideoInfo> videos) {
-    // 优先级：直接视频 > HLS > DASH > 其他
-    final priorityOrder = [
-      VideoType.direct,
-      VideoType.hls,
-      VideoType.dash,
-      VideoType.meta,
-      VideoType.jsonLd,
-      VideoType.special,
-      VideoType.link,
-    ];
-
-    for (final type in priorityOrder) {
-      final candidates = videos.where((v) => v.type == type).toList();
-      if (candidates.isNotEmpty) {
-        // 如果有多个同类型的视频，选择分辨率最高的
-        candidates.sort((a, b) {
-          final aRes = (a.width ?? 0) * (a.height ?? 0);
-          final bRes = (b.width ?? 0) * (b.height ?? 0);
-          return bRes.compareTo(aRes);
-        });
-        return candidates.first;
-      }
-    }
-
-    return videos.first;
-  }
+  
 
   @override
   void dispose() {
@@ -673,6 +794,15 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
             appBar: AppBar(
               title: Text(isEditing ? 'Edit Online Clip' : 'Create New Online Clip'),
               actions: [
+                if (_isSniffing)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
                 IconButton(
                   icon: Icon(
                     _showHints ? Icons.keyboard : Icons.keyboard_outlined,
@@ -1391,3 +1521,4 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     );
   }
 }
+

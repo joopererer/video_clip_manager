@@ -340,6 +340,13 @@ class VideoStream {
     
     return parts.join(' | ');
   }
+  
+  /// 获取质量分组键
+  String getQualityKey() {
+    final resolution = height ?? 0;
+    final audioFlag = hasAudio ? 'audio' : 'noaudio';
+    return '${resolution}p_$audioFlag';
+  }
 }
 
 /// 视频流选择器
@@ -354,21 +361,25 @@ class VideoStreamSelector {
       if (a.hasVideo && !b.hasVideo) return -1;
       if (!a.hasVideo && b.hasVideo) return 1;
       
-      // 2. 优先选择HLS流（更好的自适应）
+      // 2. 优先选择有音频的流（新增）
+      if (a.hasAudio && !b.hasAudio) return -1;
+      if (!a.hasAudio && b.hasAudio) return 1;
+      
+      // 3. 优先选择HLS流（更好的自适应）
       if (a.isHls && !b.isHls) return -1;
       if (!a.isHls && b.isHls) return 1;
       
-      // 3. 按分辨率排序（高分辨率优先）
+      // 4. 按分辨率排序（高分辨率优先）
       final aRes = (a.width ?? 0) * (a.height ?? 0);
       final bRes = (b.width ?? 0) * (b.height ?? 0);
       if (aRes != bRes) return bRes.compareTo(aRes);
       
-      // 4. 按比特率排序（高比特率优先）
+      // 5. 按比特率排序（高比特率优先）
       final aBitrate = a.tbr ?? a.vbr ?? 0;
       final bBitrate = b.tbr ?? b.vbr ?? 0;
-      return bBitrate.compareTo(aBitrate);
+      if (bBitrate != aBitrate) return bBitrate.compareTo(aBitrate);
       
-      // 5. 按帧率排序（高帧率优先）
+      // 6. 按帧率排序（高帧率优先）
       final aFps = a.fps ?? 0;
       final bFps = b.fps ?? 0;
       return bFps.compareTo(aFps);
@@ -406,5 +417,93 @@ class VideoStreamSelector {
     final directStreams = streams.where((stream) => stream.isDirectVideo).toList();
     return selectBestStream(directStreams);
   }
+  
+  /// 获取按质量分组的流列表（用于用户选择）
+  static List<StreamQuality> getQualityOptions(List<VideoStream> streams) {
+    final qualityMap = <String, List<VideoStream>>{};
+    
+    for (final stream in streams) {
+      if (!stream.hasVideo) continue; // 只考虑视频流
+      
+      final key = stream.getQualityKey();
+      qualityMap[key] ??= [];
+      qualityMap[key]!.add(stream);
+    }
+    
+    final qualities = <StreamQuality>[];
+    for (final entry in qualityMap.entries) {
+      final streams = entry.value;
+      final best = selectBestStream(streams);
+      if (best != null) {
+        qualities.add(StreamQuality(
+          key: entry.key,
+          displayName: _getQualityDisplayName(best),
+          hasAudio: best.hasAudio,
+          resolution: best.resolutionString,
+          bitrate: best.tbr ?? best.vbr ?? 0,
+          stream: best,
+        ));
+      }
+    }
+    
+    // 按质量排序
+    qualities.sort((a, b) {
+      // 优先音频
+      if (a.hasAudio && !b.hasAudio) return -1;
+      if (!a.hasAudio && b.hasAudio) return 1;
+      // 按分辨率排序
+      return b.bitrate.compareTo(a.bitrate);
+    });
+    
+    return qualities;
+  }
+  
+  static String _getQualityDisplayName(VideoStream stream) {
+    final parts = <String>[];
+    
+    if (stream.width != null && stream.height != null) {
+      parts.add('${stream.height}p');
+    } else if (stream.resolution != null) {
+      parts.add(stream.resolution!);
+    }
+    
+    if (stream.hasAudio) {
+      parts.add('🔊');
+    } else {
+      parts.add('🔇');
+    }
+    
+    if (stream.isHls) {
+      parts.add('HLS');
+    } else if (stream.isDash) {
+      parts.add('DASH');
+    }
+    
+    final bitrate = stream.tbr ?? stream.vbr;
+    if (bitrate != null && bitrate > 0) {
+      parts.add('${bitrate.toInt()}kbps');
+    }
+    
+    return parts.join(' ');
+  }
+}
+
+/// 流质量选项
+class StreamQuality {
+  final String key;
+  final String displayName;
+  final bool hasAudio;
+  final String resolution;
+  final double bitrate;
+  final VideoStream stream;
+  
+  StreamQuality({
+    required this.key,
+    required this.displayName,
+    required this.hasAudio,
+    required this.resolution,
+    required this.bitrate,
+    required this.stream,
+  });
 }
 
