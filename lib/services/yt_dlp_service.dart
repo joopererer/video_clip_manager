@@ -345,7 +345,9 @@ class VideoStream {
   String getQualityKey() {
     final resolution = height ?? 0;
     final audioFlag = hasAudio ? 'audio' : 'noaudio';
-    return '${resolution}p_$audioFlag';
+    final streamType = isHls ? 'hls' : (isDash ? 'dash' : 'direct');
+    final bitrate = (tbr ?? vbr ?? 0).toInt();
+    return '${resolution}p_${audioFlag}_${streamType}_${bitrate}k';
   }
 }
 

@@ -311,9 +311,15 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         // 获取质量选项
         final qualities = VideoStreamSelector.getQualityOptions(ytStreams);
         
-        // 如果有多个选项，让用户选择；否则使用最佳的
+        _showSnackDeferred(
+          '找到 ${ytStreams.length} 个流，${qualities.length} 个质量选项',
+          bgColor: Colors.blue[600],
+          duration: const Duration(seconds: 2),
+        );
+        
+        // 显示流选择对话框（即使只有一个选项也显示，让用户了解流信息）
         VideoStream? selectedStream;
-        if (qualities.length > 1) {
+        if (qualities.isNotEmpty) {
           selectedStream = await _showStreamSelectionDialog(qualities);
         }
         
