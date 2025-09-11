@@ -16,6 +16,7 @@ import '../../data/models.dart';
 import '../../services/thumbnail_service.dart';
 import '../../services/hybrid_video_sniffer_service.dart';
 import '../../services/yt_dlp_service.dart';
+import '../../services/online_video_cache_service.dart';
 
 import '../../widgets/custom_progress_bar.dart';
 
@@ -105,26 +106,22 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     try {
       final appState = context.read<AppState>();
       
-      // 创建更新后的视频对象
-      final updatedVideo = OnlineVideo(
-        id: widget.video.id,
-        url: widget.video.url,
-        title: widget.video.title,
-        thumbnailUrl: widget.video.thumbnailUrl,
-        platform: widget.video.platform,
-        isDownloaded: widget.video.isDownloaded,
-        localPath: widget.video.localPath,
-        downloadedAt: widget.video.downloadedAt,
-        metadata: {
-          ...widget.video.metadata,
-          'videoUrl': videoUrl,
-          'httpHeaders': httpHeaders,
-        },
+      // 使用新的缓存服务更新视频信息
+      final updatedVideo = OnlineVideoCacheService.updateVideoCache(
+        video: widget.video,
+        videoUrl: videoUrl,
+        httpHeaders: httpHeaders,
+        allStreams: [..._availableVideoStreams, ..._availableAudioStreams],
+        qualityOptions: _qualityOptions,
       );
       
       await appState.updateOnlineVideo(updatedVideo);
+      
+      final cacheStatus = OnlineVideoCacheService.getCacheStatus(updatedVideo);
+      final expirationHours = cacheStatus['expirationHours'] as int;
+      
       _showSnackDeferred(
-        '视频链接已缓存，下次播放更快',
+        '视频链接已缓存(${expirationHours}小时有效)，下次播放更快',
         bgColor: Colors.green[600],
         duration: const Duration(seconds: 2),
       );
@@ -390,8 +387,26 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
       // 优先使用本地下载的视频
       String videoPath = widget.video.url;
       Map<String, String>? httpHeaders;
-      // 若在添加时已嗅探过直链与头信息，优先使用
-      if (widget.video.metadata.containsKey('videoUrl')) {
+      
+      // 检查缓存状态
+      final cacheStatus = OnlineVideoCacheService.getCacheStatus(widget.video);
+      final isExpired = cacheStatus['isExpired'] as bool;
+      final isExpiringSoon = cacheStatus['isExpiringSoon'] as bool;
+      
+      // 如果链接即将过期，显示警告
+      if (isExpiringSoon && !isExpired) {
+        final timeUntilExpiration = cacheStatus['timeUntilExpiration'] as Duration?;
+        if (timeUntilExpiration != null) {
+          _showSnackDeferred(
+            '视频链接将在${timeUntilExpiration.inMinutes}分钟后过期',
+            bgColor: Colors.orange[600],
+            duration: const Duration(seconds: 3),
+          );
+        }
+      }
+      
+      // 若在添加时已嗅探过直链与头信息，且未过期，优先使用
+      if (!isExpired && widget.video.metadata.containsKey('videoUrl')) {
         final detectedUrl = widget.video.metadata['videoUrl'] as String?;
         if (detectedUrl != null && detectedUrl.isNotEmpty) {
           videoPath = detectedUrl;
@@ -400,6 +415,14 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         if (headers is Map) {
           httpHeaders = headers.map((k, v) => MapEntry(k.toString(), v.toString()));
         }
+        
+        // 从缓存中恢复流信息
+        _availableVideoStreams = OnlineVideoCacheService.getCachedStreams(widget.video) ?? [];
+        _availableAudioStreams = _availableVideoStreams.where((s) => s.hasAudio && !s.hasVideo).toList();
+        _availableVideoStreams = _availableVideoStreams.where((s) => s.hasVideo).toList();
+        _qualityOptions = OnlineVideoCacheService.getCachedQualityOptions(widget.video) ?? [];
+        
+        print('从缓存恢复: ${_availableVideoStreams.length}个视频流, ${_availableAudioStreams.length}个音频流, ${_qualityOptions.length}个质量选项');
       }
       
       if (widget.video.isDownloaded && widget.video.localPath != null) {
@@ -411,8 +434,8 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         }
       }
       
-      // 尝试直接播放缓存的URL
-      if (videoPath != widget.video.url && videoPath.isNotEmpty) {
+      // 尝试直接播放缓存的URL（仅当未过期时）
+      if (!isExpired && videoPath != widget.video.url && videoPath.isNotEmpty) {
         try {
           await player.open(
             mk.Media(
@@ -432,13 +455,24 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
           return;
         } catch (e) {
           _showSnackDeferred(
-            '缓存链接播放失败，尝试重新嗅探: $e',
+            '缓存链接播放失败，重新嗅探: $e',
             bgColor: Colors.orange[700],
           );
           // 缓存URL失败，立即尝试重新嗅探
           await _sniffAndPlayVideo();
           return;
         }
+      }
+      
+      // 如果链接已过期，直接重新嗅探
+      if (isExpired) {
+        _showSnackDeferred(
+          '视频链接已过期，正在重新获取...',
+          bgColor: Colors.blue[700],
+          duration: const Duration(seconds: 2),
+        );
+        await _sniffAndPlayVideo();
+        return;
       }
       
       // 如果没有缓存的URL，尝试嗅探视频链接

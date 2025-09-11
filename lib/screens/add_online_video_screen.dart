@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/models.dart';
 import '../services/hybrid_video_sniffer_service.dart';
+import '../services/online_video_cache_service.dart';
 import '../services/yt_dlp_service.dart';
 import '../services/character_fix_service.dart';
 
@@ -29,6 +30,8 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
   String? _detectedVideoUrl;
   String? _detectedThumbnail;
   Map<String, String>? _detectedHeaders;
+  List<VideoStream> _detectedStreams = [];
+  List<StreamQuality> _detectedQualityOptions = [];
   String? _errorMessage;
   UrlValidationStatus _urlValidationStatus = UrlValidationStatus.none;
   
@@ -577,15 +580,22 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
         setState(() {
           _detectedTitle = CharacterFixService.fixCharacters(videoInfo.title);
           
-          // 提取最佳流和HTTP头（若为yt-dlp返回的VideoStream）
+          // 提取所有流信息（若为yt-dlp返回的VideoStream）
           final ytStreams = videoInfo.streams.whereType<VideoStream>().toList();
           if (ytStreams.isNotEmpty) {
+            // 保存所有流信息
+            _detectedStreams = ytStreams;
+            _detectedQualityOptions = VideoStreamSelector.getQualityOptions(ytStreams);
+            
+            // 选择最佳流作为默认
             final best = VideoStreamSelector.selectBestStream(ytStreams) ?? ytStreams.first;
             _detectedVideoUrl = best.url;
             _detectedHeaders = best.httpHeaders;
           } else {
             _detectedVideoUrl = videoInfo.videoUrl;
             _detectedHeaders = null;
+            _detectedStreams = [];
+            _detectedQualityOptions = [];
           }
           
           // 设置缩略图
@@ -722,20 +732,22 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
       print('  - pageUrl: $pageUrl'); 
       print('  - title: $title');
       
-      // 创建OnlineVideo对象
-      final onlineVideo = OnlineVideo(
+      // 创建基础OnlineVideo对象
+      final baseVideo = OnlineVideo(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         title: title,
         url: pageUrl.isNotEmpty ? pageUrl : videoUrl,
         thumbnailUrl: _detectedThumbnail, // 直接设置缩略图URL
         platform: _detectPlatform(pageUrl.isNotEmpty ? pageUrl : videoUrl),
-        metadata: {
-          'videoUrl': videoUrl,
-          if (_detectedHeaders != null) 'httpHeaders': _detectedHeaders,
-          'detectedTitle': _detectedTitle,
-          'detectedThumbnail': _detectedThumbnail,
-          'addedAt': DateTime.now().toIso8601String(),
-        },
+      );
+      
+      // 使用缓存服务添加完整的流信息
+      final onlineVideo = OnlineVideoCacheService.updateVideoCache(
+        video: baseVideo,
+        videoUrl: videoUrl,
+        httpHeaders: _detectedHeaders,
+        allStreams: _detectedStreams,
+        qualityOptions: _detectedQualityOptions,
       );
       
       
