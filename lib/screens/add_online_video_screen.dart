@@ -522,15 +522,13 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
         return;
       }
       
-      // 检查文件扩展名
-      final path = uri.path.toLowerCase();
-      final supportedExtensions = ['.mp4', '.m3u8', '.webm', '.avi', '.mkv'];
-      final hasValidExtension = supportedExtensions.any((ext) => path.endsWith(ext));
+      // 使用统一的URL验证逻辑
+      final hasValidExtension = _isValidVideoUrl(url);
       
       if (!hasValidExtension) {
         setState(() {
           _urlValidationStatus = UrlValidationStatus.invalid;
-          _errorMessage = '不支持的视频格式，请使用: ${supportedExtensions.join(', ')}';
+          _errorMessage = '不支持的视频格式，请使用: .mp4, .m3u8, .webm, .avi, .mkv, .m4s 或支持的流媒体URL';
         });
         return;
       }
@@ -650,6 +648,7 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
           query.contains('mime=video') || query.contains('itag=') ||
           path.contains('upgcxcode') || // Bilibili特征
           uri.host.contains('googlevideo.com') || // YouTube CDN
+          uri.host.contains('upos-') || // Bilibili CDN
           uri.host.contains('akamaized.net')) { // CDN服务
         return true;
       }

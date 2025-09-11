@@ -17,6 +17,8 @@ import '../../services/thumbnail_service.dart';
 import '../../services/hybrid_video_sniffer_service.dart';
 import '../../services/yt_dlp_service.dart';
 import '../../services/online_video_cache_service.dart';
+import '../../services/audio_detection_service.dart';
+import '../../services/audio_video_merger_service.dart';
 
 import '../../widgets/custom_progress_bar.dart';
 
@@ -528,13 +530,21 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
       _availableAudioStreams = audioStreams;
       _qualityOptions = VideoStreamSelector.getQualityOptions(videoStreams);
       
+      // 显示音频检测摘要
+      final audioSummary = AudioDetectionService.getAudioDetectionSummary(allStreams);
+      print('音频检测摘要: ${audioSummary['recommendation']}');
+      print('总流数: ${audioSummary['totalStreams']}, 音频流: ${audioSummary['audioStreams']}, 音频检测率: ${audioSummary['audioDetectionRate']}%');
+      
       if (videoStreams.isNotEmpty) {
         // 检查是否有包含音频的视频流
         final videoWithAudio = videoStreams.where((s) => s.hasAudio).toList();
         
-        if (videoWithAudio.isNotEmpty) {
-          // 有包含音频的视频流，直接使用
-          final best = VideoStreamSelector.selectBestStream(videoWithAudio) ?? videoWithAudio.first;
+        // 首先尝试找到真正的组合流（有实际音频编解码器的）
+        final bestCombined = AudioDetectionService.getBestCombinedStream(allStreams);
+        
+        if (bestCombined != null) {
+          // 找到了真正的组合流，直接使用
+          final best = bestCombined;
           _currentVideoStream = best;
           _currentAudioStream = null;
           final headers = <String, String>{
@@ -542,8 +552,9 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
           };
 
+          final audioInfo = best.abr != null ? ' (音频: ${best.abr!.toInt()}kbps)' : ' (包含音频)';
           _showSnackDeferred(
-            '使用包含音频的视频流: ${best.resolutionString}',
+            '🔊 使用组合流: ${best.resolutionString}${audioInfo}',
             bgColor: Colors.green[700],
             duration: const Duration(seconds: 3),
           );
@@ -556,9 +567,9 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
           await _saveSniffedVideoData(best.url, best.httpHeaders);
           return;
         } else if (audioStreams.isNotEmpty) {
-          // 视频和音频分离，需要选择最佳视频流和音频流
+          // 没有真正的组合流，尝试不同的播放策略
           final bestVideo = VideoStreamSelector.selectBestStream(videoStreams) ?? videoStreams.first;
-          final bestAudio = audioStreams.first; // 选择第一个音频流
+          final bestAudio = AudioDetectionService.getBestAudioStream(allStreams) ?? audioStreams.first;
           _currentVideoStream = bestVideo;
           _currentAudioStream = bestAudio;
           
@@ -567,20 +578,91 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
           };
 
-          _showSnackDeferred(
-            '使用分离流: 视频${bestVideo.resolutionString} + 音频${bestAudio.formatNote ?? ''}',
-            bgColor: Colors.green[700],
-            duration: const Duration(seconds: 3),
-          );
+          // 策略1: 如果视频流是HLS格式，尝试直接播放（HLS可能包含音频轨道）
+          if (bestVideo.protocol == 'm3u8_native' || bestVideo.url.contains('.m3u8')) {
+            print('🎵 尝试播放HLS流: ${bestVideo.url}');
+            
+            _showSnackDeferred(
+              '🎵 播放HLS视频流: ${bestVideo.resolutionString}',
+              bgColor: Colors.blue[700],
+              duration: const Duration(seconds: 2),
+            );
 
-          // MediaKit 支持播放列表，可以同时播放视频和音频
-          await player.open(
-            mk.Playlist([
+            try {
+              await player.open(
+                mk.Media(bestVideo.url, httpHeaders: headers),
+                play: false,
+              );
+              
+              // HLS 流播放成功，但可能没有音频，所以我们还需要尝试添加音频
+              print('✅ HLS 视频流播放成功，检查是否需要添加音频...');
+              
+              // 延迟检查音频，如果没有音频则添加单独的音频流
+              Future.delayed(const Duration(seconds: 1), () async {
+                if (mounted) {
+                  await _tryAddSeparateAudioTrack(bestAudio, headers);
+                }
+              });
+              
+            } catch (e) {
+              print('❌ HLS 视频流播放失败: $e');
+              // 如果 HLS 播放失败，回退到分离流策略
+              await _playWithSeparateStreams(bestVideo, bestAudio, headers);
+            }
+          } else if (bestVideo.tbr != null && bestVideo.tbr! > 500) {
+            // 策略1.5: 如果视频流的总比特率很高，可能包含音频
+            print('🎵 高比特率视频流可能包含音频: ${bestVideo.tbr}kbps');
+            
+            _showSnackDeferred(
+              '🔊 尝试高比特率流: ${bestVideo.resolutionString} (${bestVideo.tbr!.toInt()}kbps)',
+              bgColor: Colors.purple[700],
+              duration: const Duration(seconds: 3),
+            );
+
+            await player.open(
               mk.Media(bestVideo.url, httpHeaders: headers),
-              mk.Media(bestAudio.url, httpHeaders: headers),
-            ]),
-            play: false,
-          );
+              play: false,
+            );
+          } else {
+            // 策略2: 寻找质量稍低但真正包含音频的组合流
+            final lowerQualityCombined = allStreams.where((s) => 
+              s.hasAudio && s.hasVideo && 
+              s.acodec != null && s.acodec != 'none' && s.acodec!.isNotEmpty
+            ).toList();
+            
+            if (lowerQualityCombined.isNotEmpty) {
+              final bestLowQuality = VideoStreamSelector.selectBestStream(lowerQualityCombined);
+              if (bestLowQuality != null) {
+                print('🎵 使用较低质量但包含音频的组合流: ${bestLowQuality.formatId}');
+                
+                _currentVideoStream = bestLowQuality;
+                _currentAudioStream = null;
+                
+                final lowQualityHeaders = <String, String>{
+                  if (bestLowQuality.httpHeaders != null) ...bestLowQuality.httpHeaders!,
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+                };
+
+                final audioInfo = bestLowQuality.abr != null ? ' (音频: ${bestLowQuality.abr!.toInt()}kbps)' : ' (包含音频)';
+                _showSnackDeferred(
+                  '🔊 使用较低质量组合流: ${bestLowQuality.resolutionString}${audioInfo}',
+                  bgColor: Colors.orange[700],
+                  duration: const Duration(seconds: 3),
+                );
+
+                await player.open(
+                  mk.Media(bestLowQuality.url, httpHeaders: lowQualityHeaders),
+                  play: false,
+                );
+              } else {
+                // 回退到分离流方案（目前不工作）
+                await _playWithSeparateStreams(bestVideo, bestAudio, headers);
+              }
+            } else {
+              // 回退到分离流方案（目前不工作）
+              await _playWithSeparateStreams(bestVideo, bestAudio, headers);
+            }
+          }
           
           await _saveSniffedVideoData(bestVideo.url, bestVideo.httpHeaders);
           return;
@@ -634,6 +716,8 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     _tagFocusNode.dispose();
     _videoFocusNode.dispose();
     _focusNode.dispose();
+    // 清理临时的音视频合并文件
+    AudioVideoMergerService.cleanupTempFiles();
     super.dispose();
   }
 
@@ -1825,6 +1909,134 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                 ),
         ),
       ],
+    );
+  }
+
+  /// 尝试为当前视频添加单独的音频轨道
+  Future<void> _tryAddSeparateAudioTrack(VideoStream? audioStream, Map<String, String> headers) async {
+    if (audioStream == null) {
+      print('❌ 没有可用的音频流');
+      _showSnackDeferred(
+        '⚠️ 仅播放视频（无音频流）',
+        bgColor: Colors.orange[700],
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+    
+    print('🎵 检测到音频流，但 MediaKit 暂不支持 HLS+音频同时播放');
+    print('   音频流: [${audioStream.formatId}] ${audioStream.acodec} ${audioStream.abr?.toInt() ?? 0}kbps');
+    
+    _showSnackDeferred(
+      '⚠️ 仅播放视频（音频需单独处理）',
+      bgColor: Colors.orange[700],
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  /// 尝试使用分离流播放的多种策略
+  Future<void> _playWithSeparateStreams(VideoStream bestVideo, VideoStream bestAudio, Map<String, String> headers) async {
+    final videoInfo = '视频${bestVideo.resolutionString}';
+    final audioInfo = bestAudio.abr != null ? 
+        '音频${bestAudio.abr!.toInt()}kbps' : 
+        '音频${bestAudio.formatNote ?? 'Unknown'}';
+    
+    print('🔧 尝试分离流播放策略...');
+    print('   视频流: ${bestVideo.url}');
+    print('   音频流: ${bestAudio.url}');
+    
+    _showSnackDeferred(
+      '🔧 正在合并音视频流...',
+      bgColor: Colors.blue[700],
+      duration: const Duration(seconds: 2),
+    );
+    
+    // 策略 1: 使用音视频合并服务
+    try {
+      final audioHeaders = <String, String>{
+        if (bestAudio.httpHeaders != null) ...bestAudio.httpHeaders!,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      };
+      
+      final mergedUrl = await AudioVideoMergerService.createMergedStreamUrl(
+        bestVideo, 
+        bestAudio,
+        videoHeaders: headers,
+        audioHeaders: audioHeaders,
+      );
+      
+      if (mergedUrl != null) {
+        print('✅ 成功创建合并流: $mergedUrl');
+        
+        _showSnackDeferred(
+          '✅ 音视频合并成功: ${videoInfo} + ${audioInfo}',
+          bgColor: Colors.green[700],
+          duration: const Duration(seconds: 3),
+        );
+        
+        await player.open(
+          mk.Media(mergedUrl, httpHeaders: headers),
+          play: false,
+        );
+        
+        return;
+      }
+    } catch (e) {
+      print('❌ 音视频合并失败: $e');
+    }
+    
+    // 策略 2: 尝试 MediaKit Playlist（可能不工作，但值得一试）
+    try {
+      _showSnackDeferred(
+        '🔧 尝试策略2: MediaKit Playlist',
+        bgColor: Colors.purple[700],
+        duration: const Duration(seconds: 2),
+      );
+      
+      final audioHeaders = <String, String>{
+        if (bestAudio.httpHeaders != null) ...bestAudio.httpHeaders!,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      };
+      
+      await player.open(
+        mk.Playlist([
+          mk.Media(bestVideo.url, httpHeaders: headers),
+          mk.Media(bestAudio.url, httpHeaders: audioHeaders),
+        ]),
+        play: false,
+      );
+      
+      _showSnackDeferred(
+        '✅ Playlist 播放: ${videoInfo} + ${audioInfo}',
+        bgColor: Colors.green[700],
+        duration: const Duration(seconds: 3),
+      );
+      
+      return;
+      
+    } catch (e) {
+      print('❌ MediaKit Playlist 失败: $e');
+    }
+    
+    // 策略 3: 回退到只播放视频
+    print('⚠️ 所有音视频合并策略都失败，回退到仅视频播放');
+    
+    _showSnackDeferred(
+      '⚠️ 音视频合并失败，仅播放视频: ${videoInfo}',
+      bgColor: Colors.orange[700],
+      duration: const Duration(seconds: 3),
+    );
+    
+    await player.open(
+      mk.Media(bestVideo.url, httpHeaders: headers),
+      play: false,
+    );
+    
+    // 显示详细的音频流信息给用户
+    _showSnackDeferred(
+      '💡 检测到音频流 ${audioInfo}，但无法与视频合并播放',
+      bgColor: Colors.grey[600],
+      duration: const Duration(seconds: 4),
     );
   }
 }

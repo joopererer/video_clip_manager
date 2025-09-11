@@ -273,8 +273,111 @@ class VideoStream {
     return false;
   }
   
-  /// 是否有音频
-  bool get hasAudio => acodec != null && acodec != 'none';
+  /// 是否有音频 (改进的检测逻辑)
+  bool get hasAudio {
+    // 1. 检查音频编解码器
+    if (acodec != null && acodec!.isNotEmpty && acodec != 'none') {
+      return true;
+    }
+    
+    // 2. 检查音频比特率
+    if (abr != null && abr! > 0) {
+      return true;
+    }
+    
+    // 3. 检查格式ID中的音频指示符
+    if (formatId != null) {
+      final id = formatId!.toLowerCase();
+      // YouTube音频格式ID通常包含这些
+      if (id.contains('audio') || 
+          id.startsWith('140') ||  // YouTube m4a audio
+          id.startsWith('141') ||  // YouTube m4a audio
+          id.startsWith('171') ||  // YouTube webm audio
+          id.startsWith('249') ||  // YouTube webm audio
+          id.startsWith('250') ||  // YouTube webm audio
+          id.startsWith('251')) {  // YouTube webm audio
+        return true;
+      }
+    }
+    
+    // 4. 检查格式说明中的音频指示符
+    if (formatNote != null) {
+      final note = formatNote!.toLowerCase();
+      if (note.contains('audio') || 
+          note.contains('sound') ||
+          note.contains('音频') ||
+          note.contains('声音')) {
+        return true;
+      }
+    }
+    
+    // 5. 检查文件扩展名
+    if (ext != null) {
+      final extension = ext!.toLowerCase();
+      if (extension == 'm4a' || 
+          extension == 'mp3' || 
+          extension == 'webm' ||
+          extension == 'ogg' ||
+          extension == 'aac') {
+        return true;
+      }
+    }
+    
+    // 6. 检查URL中的音频指示符
+    if (url.isNotEmpty) {
+      final urlLower = url.toLowerCase();
+      if (urlLower.contains('audio') || 
+          urlLower.contains('mime=audio') ||
+          urlLower.contains('type=audio')) {
+        return true;
+      }
+    }
+    
+    // 7. 特殊情况：如果有视频但tbr明显高于预期的纯视频流，可能包含音频
+    if (hasVideo && tbr != null && vbr != null) {
+      final expectedVideoBitrate = vbr! * 1.2; // 允许20%的误差
+      if (tbr! > expectedVideoBitrate) {
+        return true; // 总比特率明显高于视频比特率，可能包含音频
+      }
+    }
+    
+    // 8. 平台特定的音频检测规则
+    if (url.isNotEmpty) {
+      final urlLower = url.toLowerCase();
+      
+      // XVideos: HLS 流通常包含音频
+      if (urlLower.contains('xvideos.com') && isHls) {
+        return true;
+      }
+      
+      // Bilibili: 特殊处理 .m4s 文件
+      if (urlLower.contains('bilivideo.com') || urlLower.contains('upos-') || urlLower.contains('upgcxcode')) {
+        // .m4s 文件是DASH分段，视频流和音频流分离
+        if (ext == 'm4s' || urlLower.contains('.m4s')) {
+          // 对于 .m4s 文件，只有扩展名为 m4a 的才是音频流
+          if (ext == 'm4a') {
+            return true; // 明确的音频文件
+          }
+          // 对于 mp4 扩展名的 .m4s 文件，需要检查编解码器
+          return acodec != null && acodec!.isNotEmpty && acodec != 'none';
+        } else if (hasVideo) {
+          // 非 .m4s 的 Bilibili 视频流通常包含音频
+          return true;
+        }
+      }
+      
+      // 通用规则：如果是视频流且没有明确的音频信息，但比特率合理，假设有音频
+      if (hasVideo && tbr != null && tbr! > 100) {
+        // 对于分辨率较高的视频流，通常包含音频
+        final pixels = (width ?? 0) * (height ?? 0);
+        if (pixels > 200000) { // 大于约 480x360 的视频
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
   
   /// 是否为HLS流
   bool get isHls => protocol == 'm3u8_native' || url.contains('.m3u8');
@@ -357,8 +460,20 @@ class VideoStreamSelector {
   static VideoStream? selectBestStream(List<VideoStream> streams) {
     if (streams.isEmpty) return null;
     
+    // 过滤掉过低质量的流（小于 360p），但保留 HLS 流
+    final qualityStreams = streams.where((stream) {
+      final pixels = (stream.width ?? 0) * (stream.height ?? 0);
+      // 保留 HLS 流（通常质量较好）或至少 360p 的流
+      return stream.isHls || pixels >= 360 * 640;
+    }).toList();
+    
+    // 如果没有符合条件的流，回退到原始列表
+    final candidateStreams = qualityStreams.isNotEmpty ? qualityStreams : streams;
+    
+    print('🎯 流选择: 从 ${streams.length} 个流中筛选出 ${candidateStreams.length} 个候选流');
+    
     // 按优先级排序
-    streams.sort((a, b) {
+    candidateStreams.sort((a, b) {
       // 1. 优先选择有视频的流
       if (a.hasVideo && !b.hasVideo) return -1;
       if (!a.hasVideo && b.hasVideo) return 1;
@@ -387,7 +502,9 @@ class VideoStreamSelector {
       return bFps.compareTo(aFps);
     });
     
-    return streams.first;
+    final selected = candidateStreams.first;
+    print('✅ 选择的流: [${selected.formatId}] ${selected.resolutionString} ${selected.protocol}');
+    return selected;
   }
   
   /// 选择指定分辨率的流
