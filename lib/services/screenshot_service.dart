@@ -28,6 +28,10 @@ class ScreenshotService {
   final Completer<void> _readyCompleter = Completer<void>();
   bool _hostEnabled = false;
 
+  // markReady scheduling
+  Timer? _markReadyTimer;
+  bool _markReadyPending = false;
+
   bool get isHostAvailable => _hostEnabled && !_disposed;
 
   ScreenshotService._internal() {
@@ -43,13 +47,17 @@ class ScreenshotService {
   /// addPostFrameCallback). This reduces the chance of taking screenshots
   /// before Flutter has registered the texture.
   void markReady() {
-    // Delay enabling the host briefly to give the native side time to
-    // complete any pending texture callbacks. This reduces the window where
-    // re-creating textures immediately after dispose can race with native
-    // callbacks and crash the Dart runtime.
+    // Cancel any previously scheduled markReady and reschedule with the
+    // configured delay. Using a Timer lets us cancel/reschedule when the
+    // user changes the delay in settings.
     final int delayMs = _markReadyDelayMs;
-    print('ScreenshotService: scheduling markReady in ${delayMs}ms');
-    Future.delayed(Duration(milliseconds: delayMs), () {
+    print('ScreenshotService: scheduling markReady in ${delayMs}ms (cancel existing)');
+    _markReadyTimer?.cancel();
+    _markReadyPending = true;
+
+    _markReadyTimer = Timer(Duration(milliseconds: delayMs), () {
+      _markReadyTimer = null;
+      _markReadyPending = false;
       if (_disposed) return;
       _hostEnabled = true;
       if (!_readyCompleter.isCompleted) {
@@ -57,6 +65,27 @@ class ScreenshotService {
         _readyCompleter.complete();
       }
     });
+  }
+
+  /// Called when AppState markReady delay changed. If a markReady was pending,
+  /// cancel and reschedule using the new delay so the updated value takes
+  /// effect immediately.
+  void updateMarkReadyDelay() {
+    if (_markReadyPending) {
+      final int delayMs = _markReadyDelayMs;
+      print('ScreenshotService: markReady delay updated, rescheduling pending in ${delayMs}ms');
+      _markReadyTimer?.cancel();
+      _markReadyTimer = Timer(Duration(milliseconds: delayMs), () {
+        _markReadyTimer = null;
+        _markReadyPending = false;
+        if (_disposed) return;
+        _hostEnabled = true;
+        if (!_readyCompleter.isCompleted) {
+          print('ScreenshotService: marked ready (rescheduled)');
+          _readyCompleter.complete();
+        }
+      });
+    }
   }
 
   void disableHost() {
@@ -76,6 +105,7 @@ class ScreenshotService {
   Future<void> dispose() async {
     _disposed = true;
     _hostEnabled = false;
+    _markReadyTimer?.cancel();
     print('ScreenshotService: disposing');
     try {
       await _player.dispose();

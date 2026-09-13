@@ -14,6 +14,7 @@ import '../services/thumbnail_service.dart';
 import '../services/video_metadata_service.dart';
 import 'data_service.dart';
 import 'models.dart';
+import '../services/screenshot_service.dart';
 
 const String _prefsKeyDbPath = 'db_path';
 
@@ -140,6 +141,13 @@ class AppState extends ChangeNotifier {
     _markReadyDelayMs = ms;
     _prefs.setInt('mark_ready_delay_ms', ms);
     notifyListeners();
+    // Inform ScreenshotService so any pending markReady uses the new delay
+    try {
+      ScreenshotService().updateMarkReadyDelay();
+    } catch (e) {
+      // ignore: avoid_print
+      print('AppState: Failed to notify ScreenshotService about markReady delay change: $e');
+    }
   }
 
   // --- UI State Methods ---
