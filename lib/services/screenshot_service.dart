@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:io';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import '../data/app_state.dart';
 
 /// A single, long-lived Player+VideoController used only for screenshots.
 /// Serializes access so screenshot/open/seek are never run concurrently.

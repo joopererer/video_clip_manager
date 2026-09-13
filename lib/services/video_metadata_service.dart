@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'video_metadata_cache.dart';
 import 'screenshot_service.dart';
+import '../data/app_state.dart';
 
 class VideoMetadataService {
   /// Public method to get video duration using centralized ScreenshotService

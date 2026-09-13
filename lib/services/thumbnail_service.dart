@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 
 import 'path_service.dart';
 import 'screenshot_service.dart';
+import '../data/app_state.dart';
 
 class ThumbnailService {
   final PathService pathService;

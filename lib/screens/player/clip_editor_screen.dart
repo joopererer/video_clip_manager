@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import '../../data/app_state.dart';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
@@ -85,32 +87,39 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
       _resetFormToBlank();
     }
 
-    // Open with timeout and existence check to avoid hangs
-    try {
-      final file = File(widget.video.path);
-      final exists = await file.exists();
-      if (!exists) {
-        print('ClipEditor: file not found: ${widget.video.path}');
-      } else {
-        await player.open(Media(widget.video.path), play: false).timeout(Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10));
-      }
-    } on TimeoutException catch (te) {
-      print('ClipEditor: open timed out for ${widget.video.path}: $te');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('打开媒体超时: ${widget.video.path.split('\\').last}'),
-        backgroundColor: Colors.orange,
-        duration: Duration(seconds: 3),
-      ));
-    } catch (e) {
-      print('ClipEditor: open failed for ${widget.video.path}: $e');
-    }
-    
+    // Schedule async open to avoid using await inside initState
+    _openPlayerAsync();
+
     // 延迟请求焦点，确保组件完全初始化
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _focusNode.requestFocus();
       }
     });
+  }
+
+  Future<void> _openPlayerAsync() async {
+    try {
+      final file = File(widget.video.path);
+      final exists = await file.exists();
+      if (!exists) {
+        print('ClipEditor: file not found: ${widget.video.path}');
+        return;
+      }
+
+      await player.open(Media(widget.video.path), play: false).timeout(Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10));
+    } on TimeoutException catch (te) {
+      print('ClipEditor: open timed out for ${widget.video.path}: $te');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('打开媒体超时: ${widget.video.path.split('\\').last}'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ));
+      }
+    } catch (e) {
+      print('ClipEditor: open failed for ${widget.video.path}: $e');
+    }
   }
 
   @override
