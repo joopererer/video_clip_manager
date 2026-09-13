@@ -20,6 +20,7 @@ import 'tabs/playlists_tab.dart';
 import 'player/clip_playback_screen.dart';
 import 'player/clip_editor_screen.dart';
 import 'player/playlist_playback_screen.dart';
+import 'settings/settings_screen.dart';
 import '../widgets/video_import_dialog.dart';
 import '../widgets/playlist_import_export_dialog.dart';
 
@@ -490,6 +491,20 @@ class _MainScreenState extends State<MainScreen>
                       child: Text('Switch Database'),
                     ),
                   ],
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  tooltip: 'Preferences',
+                  onPressed: () async {
+                    // Navigate to settings screen
+                    try {
+                      final route = MaterialPageRoute(builder: (c) => const SettingsScreen());
+                      await Navigator.of(context).push(route);
+                    } catch (e) {
+                      print('Failed to open settings: $e');
+                    }
+                  },
                 ),
                 const SizedBox(width: 8),
                 IconButton(
