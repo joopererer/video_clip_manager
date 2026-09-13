@@ -61,6 +61,33 @@ class ThumbnailService {
     return _generateThumbnailInternal(videoPath, time, entityId, dbPath, true);
   }
 
+  /// Public API: generate thumbnail using legacy per-Player approach.
+  /// Writes file into thumbnail directory and returns filename on success.
+  Future<String?> generateThumbnailLegacy(
+    String videoPath,
+    Duration time,
+    String entityId, {
+    required String dbPath,
+  }) async {
+    final thumbDir = getThumbnailDirForDatabase(dbPath);
+    final fileName = getThumbnailFileName(entityId);
+    final thumbFile = File(p.join(thumbDir, fileName));
+    await Directory(thumbDir).create(recursive: true);
+
+    final data = await _generateWithTempPlayer(videoPath, time);
+    if (data != null) {
+      try {
+        await thumbFile.writeAsBytes(data);
+        debugPrint('ThumbnailService: Generated thumbnail (legacy) at ${thumbFile.path}');
+        return fileName;
+      } catch (e) {
+        debugPrint('ThumbnailService: Failed to write legacy thumbnail file ${thumbFile.path}: $e');
+        return null;
+      }
+    }
+    return null;
+  }
+
   Future<String?> _generateThumbnailInternal(
     String videoPath,
     Duration time,

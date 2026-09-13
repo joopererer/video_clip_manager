@@ -510,7 +510,8 @@ class AppState extends ChangeNotifier {
       if (_clips.isNotEmpty) {
         debugPrint('Regenerating thumbnails for ${_clips.length} clips...');
         final futures = _clips.map((clip) async {
-          final thumbnailFileName = await _thumbnailService.generateThumbnail(
+          // Use legacy per-Player generation for full Refresh All to maximize success.
+          final thumbnailFileName = await _thumbnailService.generateThumbnailLegacy(
             clip.videoPath,
             clip.coverFrameTime,
             clip.id,
