@@ -57,7 +57,18 @@ class PreviewService {
       final appState = AppState.instance;
       if (appState?.currentDbFullPath != null) {
         final dbDir = path.dirname(appState!.currentDbFullPath!);
-        cacheBasePath = path.join(dbDir, 'PreviewCache');
+        // If the DB or its parent is on OneDrive, avoid using OneDrive for cache to reduce locks/permission issues.
+        if (dbDir.toLowerCase().contains('onedrive')) {
+          final localApp = Platform.environment['LOCALAPPDATA'];
+          if (localApp != null && localApp.isNotEmpty) {
+            cacheBasePath = path.join(localApp, 'VideoClipManager', 'PreviewCache');
+          } else {
+            final appDir = await getApplicationDocumentsDirectory();
+            cacheBasePath = path.join(appDir.path, 'VideoClipManager', 'PreviewCache');
+          }
+        } else {
+          cacheBasePath = path.join(dbDir, 'PreviewCache');
+        }
       } else {
         // 备用方案：使用应用文档目录
         final appDir = await getApplicationDocumentsDirectory();

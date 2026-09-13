@@ -163,7 +163,7 @@ class ScreenshotService {
     return _queue.then((_) => _player.state.duration);
   }
 
-  /// Take a screenshot at [time] for [videoPath]. Serialized.
+  /// Take a screenshot at [time] for [videoPath]. Serialized with retries.
   Future<Uint8List?> takeScreenshot(String videoPath, Duration time) {
     if (_disposed || !_hostEnabled) {
       print('ScreenshotService: host disabled, skip screenshot for $videoPath @ ${time.inSeconds}s');
@@ -185,21 +185,72 @@ class ScreenshotService {
           print('ScreenshotService: host not ready before screenshot, continuing');
         }
 
-        await _ensureOpened(videoPath);
-        try {
-          await _player.seek(time).timeout(_seekTimeout);
-        } on TimeoutException catch (te) {
-          print('ScreenshotService: seek timed out for $videoPath @ ${time.inSeconds}s: $te');
-          completer.complete(null);
-          return;
+        const int maxAttempts = 3;
+        int attempt = 0;
+        Uint8List? result;
+
+        while (attempt < maxAttempts && !_disposed) {
+          attempt++;
+          print('ScreenshotService: attempt #$attempt for $videoPath @ ${time.inSeconds}s');
+
+          // Ensure opened (this is serialized)
+          await _ensureOpened(videoPath);
+
+          try {
+            await _player.seek(time).timeout(_seekTimeout);
+          } on TimeoutException catch (te) {
+            print('ScreenshotService: seek timed out for $videoPath @ ${time.inSeconds}s: $te');
+            // exponential backoff before retry
+            final backoffMs = 200 * (1 << (attempt - 1));
+            await Future.delayed(Duration(milliseconds: backoffMs));
+            // try re-opening on next attempt
+            try {
+              await _player.open(Media(videoPath), play: false).timeout(_openTimeout);
+              _openPath = videoPath;
+              print('ScreenshotService: re-opened $videoPath after seek timeout');
+            } catch (_) {}
+            continue;
+          }
+
+          await Future.delayed(const Duration(milliseconds: 200));
+
+          try {
+            result = await _player.screenshot();
+          } catch (e) {
+            print('ScreenshotService: screenshot threw for $videoPath on attempt $attempt: $e');
+            result = null;
+          }
+
+          print('ScreenshotService: screenshot attempt #$attempt result size: ${result != null ? result.length : 0}');
+
+          if (result != null && result.isNotEmpty) {
+            completer.complete(result);
+            return;
+          }
+
+          // not successful, backoff before retry
+          if (attempt < maxAttempts) {
+            final backoffMs = 200 * (1 << (attempt - 1));
+            print('ScreenshotService: backing off ${backoffMs}ms before retry');
+            await Future.delayed(Duration(milliseconds: backoffMs));
+            // attempt to re-open to refresh native host
+            try {
+              await _player.open(Media(videoPath), play: false).timeout(_openTimeout);
+              _openPath = videoPath;
+              print('ScreenshotService: re-opened $videoPath before next attempt');
+            } catch (e) {
+              print('ScreenshotService: re-open failed: $e');
+            }
+          }
         }
 
-        await Future.delayed(const Duration(milliseconds: 200));
-        final data = await _player.screenshot();
-        print('ScreenshotService: screenshot result for $videoPath @ ${time.inSeconds}s: ${data != null ? data.length : 0} bytes');
-        completer.complete(data);
+        // exhausted attempts
+        completer.complete(null);
       } catch (e) {
         print('ScreenshotService: screenshot failed for $videoPath @ ${time.inSeconds}s: $e');
+        try {
+          print('ScreenshotService: debug state -> openPath: $_openPath, hostEnabled: $_hostEnabled, playerState: ${_player.state}');
+        } catch (_) {}
         completer.complete(null);
       }
     });

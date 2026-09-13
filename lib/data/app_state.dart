@@ -88,8 +88,9 @@ class AppState extends ChangeNotifier {
     _openTimeoutSeconds = _prefs.getInt('timeout_open_seconds') ?? 10;
     _seekTimeoutSeconds = _prefs.getInt('timeout_seek_seconds') ?? 10;
     _playTimeoutSeconds = _prefs.getInt('timeout_play_seconds') ?? 5;
-    _screenshotTimeoutSeconds = _prefs.getInt('timeout_screenshot_seconds') ?? 15;
-    _markReadyDelayMs = _prefs.getInt('mark_ready_delay_ms') ?? 300;
+    // Increase defaults to be more tolerant on Windows/native races
+    _screenshotTimeoutSeconds = _prefs.getInt('timeout_screenshot_seconds') ?? 30;
+    _markReadyDelayMs = _prefs.getInt('mark_ready_delay_ms') ?? 2000;
     
     // 设置静态实例
     _instance = this;
@@ -461,13 +462,38 @@ class AppState extends ChangeNotifier {
         final dir = Directory(thumbDir);
         if (await dir.exists()) {
           try {
-            await dir.delete(recursive: true);
+            // Delete files individually to avoid OS-level directory lock errors
+            final files = dir.listSync(recursive: true);
+            for (final f in files) {
+              if (f is File) {
+                try {
+                  await f.delete();
+                } catch (e) {
+                  debugPrint('Warning: Could not delete thumbnail file ${f.path}: $e');
+                }
+              }
+            }
+            // Attempt to remove the directory if empty
+            try {
+              if ((await dir.list().toList()).isEmpty) {
+                await dir.delete();
+              }
+            } catch (e) {
+              debugPrint('Warning: Could not remove thumbnail directory: $e');
+            }
           } catch (e) {
-            debugPrint('Warning: Could not delete thumbnail directory: $e');
-            // Continue anyway, we'll overwrite existing thumbnails
+            debugPrint('Warning: Could not enumerate/delete thumbnail directory: $e');
+            // Continue anyway, we'll overwrite existing thumbnails when possible
           }
         }
       }
+
+      // Ensure the screenshot host is ready before regeneration starts
+      try {
+        ScreenshotService().markReady();
+        final delayMs = _markReadyDelayMs;
+        await Future.delayed(Duration(milliseconds: delayMs + 100));
+      } catch (_) {}
 
       for (int i = 0; i < _clips.length; i++) {
         _clips[i] = _clips[i].copyWith(thumbnailPath: null);

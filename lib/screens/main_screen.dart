@@ -101,6 +101,24 @@ class _MainScreenState extends State<MainScreen>
     }
   }
   
+  /// Prepare for a modal/navigation that may recreate or dispose video textures.
+  /// Suspend background preview generation and disable the screenshot host,
+  /// then wait briefly for the screenshot queue to become idle. This reduces
+  /// texture create/dispose races when opening dialogs like Settings / About.
+  Future<void> _prepareForModal() async {
+    try {
+      print('MainScreen: preparing for modal - suspending generation and disabling host');
+      PreviewService().suspendBackgroundGeneration();
+      ScreenshotService().disableHost();
+      // Wait for screenshot queue to drain but don't wait indefinitely.
+      await ScreenshotService().whenIdle().timeout(const Duration(seconds: 5));
+      // Small delay to allow native callbacks to settle.
+      await Future.delayed(const Duration(milliseconds: 50));
+    } catch (e) {
+      print('MainScreen: _prepareForModal warning: $e');
+    }
+  }
+  
   @override
   void dispose() {
     // 停止全局预生成
@@ -497,12 +515,17 @@ class _MainScreenState extends State<MainScreen>
                   icon: const Icon(Icons.settings),
                   tooltip: 'Preferences',
                   onPressed: () async {
-                    // Navigate to settings screen
                     try {
+                      await _prepareForModal();
                       final route = MaterialPageRoute(builder: (c) => const SettingsScreen());
                       await Navigator.of(context).push(route);
                     } catch (e) {
                       print('Failed to open settings: $e');
+                    } finally {
+                      try {
+                        ScreenshotService().markReady();
+                        PreviewService().resumeBackgroundGeneration();
+                      } catch (_) {}
                     }
                   },
                 ),
@@ -510,7 +533,19 @@ class _MainScreenState extends State<MainScreen>
                 IconButton(
                   icon: const Icon(Icons.info_outline),
                   tooltip: 'About',
-                  onPressed: _showAboutDialog,
+                  onPressed: () async {
+                    try {
+                      await _prepareForModal();
+                      _showAboutDialog();
+                    } catch (e) {
+                      print('Failed to open about dialog: $e');
+                    } finally {
+                      try {
+                        ScreenshotService().markReady();
+                        PreviewService().resumeBackgroundGeneration();
+                      } catch (_) {}
+                    }
+                  },
                 ),
               ],
               bottom: TabBar(
