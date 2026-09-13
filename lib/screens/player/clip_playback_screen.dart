@@ -14,6 +14,8 @@ import '../tabs/clips_tab.dart';
 import '../../utils/tag_utils.dart';
 import '../../widgets/custom_progress_bar.dart'; // 添加自定义进度条导入
 import '../../services/preview_service.dart'; // 添加预览服务导入
+import '../../services/video_metadata_service.dart';
+import '../../services/screenshot_service.dart';
 
 
 class ClipPlaybackScreen extends StatefulWidget {
@@ -215,35 +217,35 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   
   /// 继续预生成并显示loading
   Future<void> _continuePreGeneration() async {
-    if (widget.clip.videoPath == null) return;
-    
+    final videoPath = widget.clip.videoPath;
+    if (videoPath == null || videoPath.trim().isEmpty) return;
+
     try {
-      // 暂停全局预生成
       PreviewService().pauseGlobalPreGeneration();
-      
-      // 显示loading状态
       _showLoadingPreview();
-      
-      // 获取视频时长
-      final duration = mainPlayer.state.duration;
-      if (duration == Duration.zero) {
-        print('ClipPlayback: Cannot get video duration');
+
+      final file = File(videoPath);
+      if (!await file.exists()) {
+        print('ClipPlayback: Video file missing during pre-generation: $videoPath');
         return;
       }
-      
-      // 继续预生成
-      await PreviewService().preGenerateKeyFrames(
-        mainPlayer,
-        widget.clip.videoPath!,
-        duration,
-      );
-      
+
+      final duration = mainPlayer.state.duration;
+      if (duration == Duration.zero) {
+        final fallbackDuration = await VideoMetadataService().getVideoDuration(videoPath);
+        if (fallbackDuration == null || fallbackDuration == Duration.zero) {
+          print('ClipPlayback: Cannot get video duration');
+          return;
+        }
+        await PreviewService().preGenerateKeyFramesFromPath(videoPath, fallbackDuration);
+      } else {
+        await PreviewService().preGenerateKeyFramesFromPath(videoPath, duration);
+      }
+
       print('ClipPlayback: Pre-generation completed');
-      
     } catch (e) {
       print('ClipPlayback: Error continuing pre-generation: $e');
     } finally {
-      // 恢复全局预生成
       PreviewService().resumeGlobalPreGeneration();
     }
   }
@@ -359,35 +361,33 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     _focusNode.dispose();
     
     // 安全地停止和释放播放器
-    _disposePlayers();
-    
+    // Schedule actual disposal after ScreenshotService queue is idle to avoid
+    // racing with screenshot/open/seek tasks which can trigger native callbacks.
+    ScreenshotService().whenIdle().then((_) async {
+      try {
+        if (mainPlayer.state.playing) {
+          await mainPlayer.pause();
+        }
+        await Future.delayed(const Duration(milliseconds: 100));
+        await mainPlayer.dispose();
+        print('Players disposed successfully (delayed)');
+      } catch (e) {
+        print('Error during delayed player disposal: $e');
+        try {
+          mainPlayer.dispose();
+        } catch (e2) {
+          print('Force disposal also failed: $e2');
+        }
+      }
+    });
+
     super.dispose();
   }
 
   // 新增：安全的播放器释放方法
   Future<void> _disposePlayers() async {
-    try {
-      // 先暂停播放器
-      if (mainPlayer.state.playing) {
-        await mainPlayer.pause();
-      }
-      
-      // 等待一下确保暂停完成
-      await Future.delayed(Duration(milliseconds: 100));
-      
-      // 释放播放器
-      await mainPlayer.dispose();
-      
-      print('Players disposed successfully'); // 调试信息
-    } catch (e) {
-      print('Error during player disposal: $e'); // 调试信息
-      // 即使出错也要尝试强制释放
-      try {
-        mainPlayer.dispose();
-      } catch (e2) {
-        print('Force disposal also failed: $e2'); // 调试信息
-      }
-    }
+    // Deprecated: actual disposal scheduled in dispose() to wait for screenshot queue.
+    return Future.value();
   }
 
   void _replay() async {

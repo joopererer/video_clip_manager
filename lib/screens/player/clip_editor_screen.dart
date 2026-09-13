@@ -14,6 +14,7 @@ import '../../data/models.dart';
 import '../../services/thumbnail_service.dart';
 import '../../utils/tag_utils.dart';
 import '../../widgets/custom_progress_bar.dart';
+import '../../services/screenshot_service.dart';
 
 String formatDuration(Duration d) {
   final parts = d.toString().split('.').first.padLeft(8, '0').split(':');
@@ -96,7 +97,20 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
 
   @override
   void dispose() {
-    player.dispose();
+    // Delay player disposal until screenshot queue is idle to avoid native texture races
+    ScreenshotService().whenIdle().then((_) async {
+      try {
+        await player.dispose();
+        print('player disposed (delayed)');
+      } catch (e) {
+        print('Error disposing player after idle: $e');
+        try {
+          player.dispose();
+        } catch (e2) {
+          print('Force dispose failed: $e2');
+        }
+      }
+    });
     _splitViewController.dispose();
     _nameController.dispose();
     _notesController.dispose();

@@ -13,6 +13,7 @@ import '../../data/app_state.dart';
 // 添加颜色生成函数的导入
 import '../../widgets/custom_progress_bar.dart';
 import '../../services/preview_service.dart';
+import '../../services/screenshot_service.dart';
 
 // 播放模式枚举
 enum PlaybackMode {
@@ -1336,7 +1337,22 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     _positionSubscription?.cancel();
     _playingSubscription?.cancel();
     _focusNode.dispose(); // 释放焦点节点
-    player.dispose();
+
+    // Delay player disposal until screenshot queue is idle to avoid native texture races
+    ScreenshotService().whenIdle().then((_) async {
+      try {
+        await player.dispose();
+        print('Playlist player disposed (delayed)');
+      } catch (e) {
+        print('Error disposing playlist player after idle: $e');
+        try {
+          player.dispose();
+        } catch (e2) {
+          print('Force dispose failed: $e2');
+        }
+      }
+    });
+
     super.dispose();
   }
 

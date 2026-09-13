@@ -1,27 +1,21 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
 
 import 'path_service.dart';
+import 'screenshot_service.dart';
 
 class ThumbnailService {
   final PathService pathService;
 
-  final Player _player = Player();
-  late final VideoController _videoController;
-
-  VideoController get videoController => _videoController;
-
-  String? _currentlyOpenVideoPath;
   Future<void> _processingFuture = Future.value();
 
-  ThumbnailService({required this.pathService}) {
-    _videoController = VideoController(_player);
-  }
+  ThumbnailService({required this.pathService});
 
   String getThumbnailDirForDatabase(String dbPath) {
     final dbDir = p.dirname(dbPath);
@@ -83,47 +77,28 @@ class ThumbnailService {
 
     try {
       final thumbDir = getThumbnailDirForDatabase(dbPath);
-      final fileName = isTemp 
+      final fileName = isTemp
           ? getTempThumbnailFileName(entityId)
           : getThumbnailFileName(entityId);
       final thumbFile = File(p.join(thumbDir, fileName));
 
       await Directory(thumbDir).create(recursive: true);
 
-      if (_currentlyOpenVideoPath != videoPath) {
-        debugPrint(
-          'ThumbnailService: Switching to video $videoPath for entity $entityId',
-        );
-        await _player.open(Media(videoPath), play: false);
-        _currentlyOpenVideoPath = videoPath;
-        await _player.stream.buffer
-            .firstWhere((e) => e > Duration.zero)
-            .timeout(const Duration(seconds: 15));
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
-
-      debugPrint(
-        'ThumbnailService: Seeking to time $time for entity $entityId',
-      );
-      await _player.seek(time);
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      debugPrint('ThumbnailService: Taking screenshot for entity $entityId');
-      final data = await _player.screenshot();
+      debugPrint('ThumbnailService: Requesting screenshot for entity $entityId at $time');
+      final data = await ScreenshotService().takeScreenshot(videoPath, time).timeout(const Duration(seconds: 15), onTimeout: () => null);
 
       if (data != null) {
         await thumbFile.writeAsBytes(data);
-        debugPrint(
-          'ThumbnailService: Generated thumbnail at ${thumbFile.path}',
-        );
+        debugPrint('ThumbnailService: Generated thumbnail at ${thumbFile.path}');
         completer.complete(fileName);
         return fileName;
-      } else {
-        throw Exception('Screenshot failed: returned null data.');
       }
+
+      debugPrint('ThumbnailService: Screenshot returned null for $entityId');
+      completer.complete(null);
+      return null;
     } catch (e) {
       debugPrint('Error generating thumbnail for $entityId: $e');
-      _currentlyOpenVideoPath = null;
       completer.complete(null);
       return null;
     }
@@ -160,6 +135,6 @@ class ThumbnailService {
   }
 
   void dispose() {
-    _player.dispose();
+    // no-op: each generation delegated to ScreenshotService which is long-lived.
   }
 }

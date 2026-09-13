@@ -2,12 +2,12 @@ import 'dart:typed_data';
 import 'dart:async';
 import 'dart:io';
 import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import '../data/app_state.dart'; // Added for AppState
+import '../services/screenshot_service.dart'; // centralized screenshot/texture host
 
 /// 使用media_kit生成视频预览图的服务
 /// 预生成关键帧预览图，避免播放时的卡顿
@@ -27,27 +27,21 @@ class PreviewService {
   
   // 全局预生成状态
   bool _globalPreGenerating = false;
+  int _generationEpoch = 0;
   
   // 缓存目录
   Directory? _cacheDir;
   
-  // 使用单个播放器实例（类似ThumbnailService）
-  final Player _player = Player();
-  late final VideoController _videoController;
-  String? _currentlyOpenVideoPath;
-  
+  // 预生成任务必须使用临时 Player，不应持有任何长期存在的 VideoController。
+  // 共享/隐藏的 Video 纹理会导致 media_kit 在 Windows 上触发 native callback / 渲染生命周期异常。
+
   // 失败重试机制
   final Map<String, int> _failureCount = {}; // 记录每个视频的失败次数
   final Map<String, DateTime> _lastFailureTime = {}; // 记录最后失败时间
   static const int _maxFailures = 3; // 最大失败次数
   static const Duration _failureResetDuration = Duration(hours: 24); // 失败记录重置时间
   
-  PreviewService._internal() {
-    _videoController = VideoController(_player);
-  }
-  
-  /// 获取VideoController，用于在UI中创建Video widget
-  VideoController get videoController => _videoController;
+  PreviewService._internal();
   
   /// 初始化缓存目录
   Future<void> _initCacheDir() async {
@@ -245,6 +239,11 @@ class PreviewService {
     // 如果文件缓存也不存在，标记为需要重新生成
     print('PreviewService: No cache found, will regenerate for $videoPath');
     _preGenerating[cacheKey] = false; // 重置状态，允许重新生成
+  }
+
+  /// Public helper: pre-generate keyframes by video path using ScreenshotService.
+  Future<void> preGenerateKeyFramesFromPath(String videoPath, Duration totalDuration) async {
+    return await _preGenerateForVideo(videoPath, generationId: _generationEpoch);
   }
 
   /// 预生成关键帧预览图
@@ -522,14 +521,16 @@ class PreviewService {
       print('PreviewService: Global pre-generation already running');
       return;
     }
-    
+
+    _generationEpoch++;
+    final generationId = _generationEpoch;
     _globalPreGenerating = true;
     print('PreviewService: Starting global pre-generation for ${videoPaths.length} videos');
     print('PreviewService: Video paths: ${videoPaths.map((p) => p.split('/').last).join(', ')}');
     
     try {
       for (int i = 0; i < videoPaths.length; i++) {
-        if (!_globalPreGenerating) {
+        if (!_globalPreGenerating || generationId != _generationEpoch) {
           print('PreviewService: Global pre-generation was interrupted');
           break;
         }
@@ -561,46 +562,43 @@ class PreviewService {
           
           print('PreviewService: Starting pre-generation for $videoName');
           // 为单个视频预生成（不阻塞UI）
-          await _preGenerateForVideo(videoPath);
+          await _preGenerateForVideo(videoPath, generationId: generationId);
           
           // 短暂延迟，避免过度占用资源
           await Future.delayed(Duration(milliseconds: 100));
         } catch (e) {
           print('PreviewService: Error pre-generating for $videoName: $e');
-          // 记录失败
           _recordFailure(videoPath);
-          // 继续处理下一个视频，不要因为一个视频失败而停止整个流程
         }
       }
     } catch (e) {
       print('PreviewService: Error in global pre-generation: $e');
     } finally {
-      _globalPreGenerating = false;
+      if (generationId == _generationEpoch) {
+        _globalPreGenerating = false;
+      }
       print('PreviewService: Global pre-generation completed');
     }
   }
   
   /// 停止全局预生成
   void stopGlobalPreGeneration() {
+    _generationEpoch++;
     _globalPreGenerating = false;
     print('PreviewService: Global pre-generation stopped');
   }
   
   /// 暂停全局预生成（用于播放时暂停）
   void pauseGlobalPreGeneration() {
-    if (_globalPreGenerating) {
-      _globalPreGenerating = false;
-      print('PreviewService: Global pre-generation paused for playback');
-    }
+    _generationEpoch++;
+    _globalPreGenerating = false;
+    print('PreviewService: Global pre-generation paused for playback');
   }
   
   /// 恢复全局预生成（用于播放结束后恢复）
   void resumeGlobalPreGeneration() {
-    if (!_globalPreGenerating) {
-      print('PreviewService: Global pre-generation resumed');
-      // 这里可以重新启动全局预生成
-      // 暂时不自动重启，由main_screen控制
-    }
+    print('PreviewService: Global pre-generation resumed');
+    // We do not auto-restart here; the main screen owns the orchestration.
   }
   
   /// 检查视频是否有足够的缓存
@@ -636,169 +634,139 @@ class PreviewService {
   }
   
     /// 为单个视频预生成（后台执行）
-  Future<void> _preGenerateForVideo(String videoPath) async {
+  Future<void> _preGenerateForVideo(String videoPath, {required int generationId}) async {
     final cacheKey = _getCacheKey(videoPath);
     final videoName = videoPath.split('/').last;
-    
+
     if (_preGenerating[cacheKey] == true) {
       print('PreviewService: Already pre-generating for $videoName');
       return;
     }
-    
+
+    // 如果已被中断，请直接退出
+    if (generationId != _generationEpoch) {
+      print('PreviewService: Skipping stale generation for $videoName');
+      return;
+    }
+
     _preGenerating[cacheKey] = true;
     print('PreviewService: Starting pre-generation for video: $videoName');
-    
+
     try {
-      // 检查文件是否存在
       final videoFile = File(videoPath);
       if (!await videoFile.exists()) {
         print('PreviewService: Video file does not exist: $videoPath');
         _recordFailure(videoPath);
         return;
       }
-      
-      // 检查文件大小
+
       final fileSize = await videoFile.length();
       if (fileSize == 0) {
         print('PreviewService: Video file is empty: $videoPath');
         _recordFailure(videoPath);
         return;
       }
-      
+
       print('PreviewService: Video file size: ${(fileSize / (1024 * 1024)).toStringAsFixed(2)} MB');
-      
-      // 使用与ThumbnailService相同的模式
-      if (_currentlyOpenVideoPath != videoPath) {
-        print('PreviewService: Opening video: $videoName');
-        
-        try {
-          await _player.open(Media(videoPath), play: false);
-          _currentlyOpenVideoPath = videoPath;
-          
-          // 等待播放器初始化，使用与ThumbnailService相同的超时时间
-          await _player.stream.buffer
-              .firstWhere((e) => e > Duration.zero)
-              .timeout(const Duration(seconds: 15)); // 与ThumbnailService一致
-          await Future.delayed(const Duration(milliseconds: 500)); // 与ThumbnailService一致
-        } catch (e) {
-          print('PreviewService: Error opening video $videoName: $e');
-          _currentlyOpenVideoPath = null; // 重置状态
-          _recordFailure(videoPath);
-          return;
-        }
+
+      if (generationId != _generationEpoch) {
+        print('PreviewService: Generation cancelled before duration lookup for $videoName');
+        return;
       }
-      
-      final duration = _player.state.duration;
+
+      final screenshotService = ScreenshotService();
+      final duration = await screenshotService.getDuration(videoPath) ?? Duration.zero;
       print('PreviewService: Video duration: ${duration.inSeconds} seconds');
-      
+
+      if (generationId != _generationEpoch) {
+        print('PreviewService: Generation cancelled before keyframe loop for $videoName');
+        return;
+      }
+
       if (duration == Duration.zero) {
         print('PreviewService: Failed to get duration for $videoName - duration is zero');
-        _currentlyOpenVideoPath = null; // 重置状态
         _recordFailure(videoPath);
         return;
       }
-      
-      // 初始化缓存
+
       _keyframeCache[cacheKey] = {};
-      
-      // 生成关键帧时间点（优化策略：根据视频长度调整间隔）
+
       final keyframeTimes = <Duration>[];
       final videoLengthMinutes = duration.inMinutes;
-      
-      // 根据视频长度调整关键帧间隔和数量
       int intervalSeconds;
       int maxKeyframes;
-      
+
       if (videoLengthMinutes <= 5) {
-        // 短视频（≤5分钟）：每5秒一个，最多30个
         intervalSeconds = 5;
         maxKeyframes = 30;
       } else if (videoLengthMinutes <= 15) {
-        // 中等视频（5-15分钟）：每8秒一个，最多40个
         intervalSeconds = 8;
         maxKeyframes = 40;
       } else if (videoLengthMinutes <= 30) {
-        // 长视频（15-30分钟）：每10秒一个，最多50个
         intervalSeconds = 10;
         maxKeyframes = 50;
       } else {
-        // 超长视频（>30分钟）：每15秒一个，最多60个
         intervalSeconds = 15;
         maxKeyframes = 60;
       }
-      
-      print('PreviewService: Video length: ${videoLengthMinutes} minutes, interval: ${intervalSeconds}s, max keyframes: $maxKeyframes');
-      
+
       for (int i = 0; i < maxKeyframes; i++) {
         final time = Duration(seconds: i * intervalSeconds);
         if (time >= duration) break;
         keyframeTimes.add(time);
       }
-      
+
       print('PreviewService: Will generate ${keyframeTimes.length} keyframes for $videoName');
-      
-      // 为每个关键帧生成预览图
+
       for (int i = 0; i < keyframeTimes.length; i++) {
-        if (!_globalPreGenerating) {
+        if (!_globalPreGenerating || generationId != _generationEpoch) {
           print('PreviewService: Pre-generation interrupted for $videoName');
           break;
         }
-        
+
         final time = keyframeTimes[i];
         final progress = ((i + 1) / keyframeTimes.length * 100).toStringAsFixed(1);
-        
         print('PreviewService: Generating keyframe ${i + 1}/${keyframeTimes.length} (${progress}%) at ${time.inSeconds}s for $videoName');
-        
+
         try {
-          // 先检查本地缓存
           final cachedData = await _loadFromCache(videoPath, time);
           if (cachedData != null) {
             _keyframeCache[cacheKey]![time] = cachedData;
             print('PreviewService: Using cached keyframe at ${time.inSeconds}s for $videoName');
             continue;
           }
-          
-          // 跳转到关键帧时间（使用与ThumbnailService相同的模式）
-          await _player.seek(time);
-          await Future.delayed(const Duration(milliseconds: 500)); // 与ThumbnailService一致
-          
-          // 生成截图
-          final screenshot = await _player.screenshot();
+
+          final screenshot = await screenshotService.takeScreenshot(videoPath, time).timeout(const Duration(seconds: 10));
+          if (generationId != _generationEpoch) {
+            print('PreviewService: Generation cancelled while screenshotting $videoName');
+            break;
+          }
+
           if (screenshot != null) {
             _keyframeCache[cacheKey]![time] = screenshot;
-            // 保存到本地缓存
             await _saveToCache(videoPath, time, screenshot);
             print('PreviewService: Generated keyframe at ${time.inSeconds}s for $videoName');
           } else {
             print('PreviewService: Failed to generate screenshot at ${time.inSeconds}s for $videoName');
-            // 如果截图失败，记录为失败
             _recordFailure(videoPath);
-            print('PreviewService: Recorded failure for $videoName due to screenshot failure, failure count: ${_failureCount[cacheKey]}');
-            break; // 如果截图失败，停止生成更多关键帧
+            break;
           }
         } catch (e) {
           print('PreviewService: Error generating keyframe at ${time.inSeconds}s for $videoName: $e');
-          // 记录失败
           _recordFailure(videoPath);
-          print('PreviewService: Recorded failure for $videoName due to keyframe error, failure count: ${_failureCount[cacheKey]}');
-          break; // 如果出错，停止生成更多关键帧
+          break;
         }
       }
-      
+
       print('PreviewService: Completed pre-generation for $videoName - ${_keyframeCache[cacheKey]!.length} keyframes generated');
-      
-      // 记录成功生成
       _recordSuccess(videoPath);
-      
     } catch (e) {
       print('PreviewService: Error pre-generating for $videoName: $e');
-      _currentlyOpenVideoPath = null; // 重置，下次重新打开
-      
-      // 记录失败
       _recordFailure(videoPath);
-      print('PreviewService: Recorded failure for $videoName, failure count: ${_failureCount[cacheKey]}');
     } finally {
-      _preGenerating[cacheKey] = false;
+      if (generationId == _generationEpoch) {
+        _preGenerating[cacheKey] = false;
+      }
     }
   }
 
@@ -944,7 +912,8 @@ class PreviewService {
     _keyframeCache.clear();
     _processingRequests.clear();
     _preGenerating.clear();
-    _player.dispose();
+    _failureCount.clear();
+    _lastFailureTime.clear();
     print('PreviewService: Disposed');
   }
 

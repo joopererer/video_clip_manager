@@ -1,16 +1,19 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:async';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as path;
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:cross_file/cross_file.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 
 import '../data/app_state.dart';
 import '../data/models.dart';
 import '../utils/tag_utils.dart';
 import '../services/preview_service.dart'; // 添加预览服务导入
 import '../services/thumbnail_service.dart'; // 添加缩略图服务导入
+import '../services/screenshot_service.dart'; // 添加截图服务（off-screen Video host）
 import 'tabs/videos_tab.dart';
 import 'tabs/clips_tab.dart';
 import 'tabs/playlists_tab.dart';
@@ -45,6 +48,12 @@ class _MainScreenState extends State<MainScreen>
       () => setState(() => _searchQuery = _searchController.text),
     );
     _startGlobalPreGeneration();
+
+    // Mark ScreenshotService ready after first frame so the off-screen Video
+    // widget has a chance to be registered by Flutter's texture registry.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScreenshotService().markReady();
+    });
   }
   
   /// 启动全局预览预生成
@@ -63,34 +72,31 @@ class _MainScreenState extends State<MainScreen>
     
     // 收集所有视频路径：OriginalVideo + VideoClip
     final Set<String> allVideoPaths = {};
-    
-    // 添加 OriginalVideo 路径
+
     for (final video in appState.originalVideos) {
-      allVideoPaths.add(video.path);
+     allVideoPaths.add(video.path);
     }
-    
-         // 添加 VideoClip 中的视频路径
-     for (final clip in appState.clips) {
-       allVideoPaths.add(clip.videoPath);
+
+    for (final clip in appState.clips) {
+     if (clip.videoPath != null && clip.videoPath!.trim().isNotEmpty) {
+       allVideoPaths.add(clip.videoPath!);
      }
-     
-     final videoPaths = allVideoPaths.toList();
-     
-     print('MainScreen: Found ${videoPaths.length} unique videos (${appState.originalVideos.length} original + ${appState.clips.length} clips)');
+    }
+
+    final videoPaths = allVideoPaths
+       .where((p) => p.trim().isNotEmpty && File(p).existsSync())
+       .toList();
+
+    print('MainScreen: Found ${videoPaths.length} valid videos (${appState.originalVideos.length} original + ${appState.clips.length} clips)');
     print('MainScreen: Video paths: ${videoPaths.map((p) => p.split('/').last).join(', ')}');
-    
+
     if (videoPaths.isNotEmpty) {
-      print('MainScreen: Loading existing cache first...');
-      
-      // 首先加载已有的缓存文件到内存
-      await PreviewService().loadExistingCache();
-      
-      print('MainScreen: Starting global pre-generation for ${videoPaths.length} videos');
-      
-      // 在后台启动全局预生成
-      PreviewService().startGlobalPreGeneration(videoPaths);
+     print('MainScreen: Loading existing cache first...');
+     await PreviewService().loadExistingCache();
+     print('MainScreen: Starting global pre-generation for ${videoPaths.length} videos');
+     PreviewService().startGlobalPreGeneration(videoPaths);
     } else {
-      print('MainScreen: No videos found, skipping global pre-generation');
+     print('MainScreen: No valid videos found, skipping global pre-generation');
     }
   }
   
@@ -439,7 +445,11 @@ class _MainScreenState extends State<MainScreen>
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final thumbnailService = context.read<ThumbnailService>();
+
+    // Ensure ScreenshotService's off-screen Video is part of the widget tree so
+    // native texture callbacks happen on the platform thread. Keep it a single
+    // hidden Video widget that owns the texture for screenshots.
+    final screenshotService = ScreenshotService();
 
     return Scaffold(
       body: Stack(
@@ -751,26 +761,15 @@ class _MainScreenState extends State<MainScreen>
               ),
             ),
           ),
-          // This is the global, 1x1 pixel "drawing board" for screenshots
+          // Off-screen Video used by ScreenshotService for all screenshot tasks.
           Positioned(
-            left: -1, // Use -1 instead of 0 to ensure it's fully off-screen
-            top: -1,
-            width: 1,
-            height: 1,
-            child: Opacity(
-              opacity: 0.0, // Fully transparent
-              child: Video(controller: thumbnailService.videoController),
-            ),
-          ),
-          // This is the global, 1x1 pixel "drawing board" for preview screenshots
-          Positioned(
-            left: -2, // Use -2 to ensure it's fully off-screen and separate from thumbnail widget
+            left: -2,
             top: -2,
             width: 1,
             height: 1,
             child: Opacity(
-              opacity: 0.0, // Fully transparent
-              child: Video(controller: PreviewService().videoController),
+              opacity: 0.0,
+              child: Video(controller: screenshotService.videoController),
             ),
           ),
         ],
