@@ -602,7 +602,8 @@ class AppState extends ChangeNotifier {
       // Generate thumbnail for video
       String? thumbnailPath;
       if (_currentDbPath != null) {
-        thumbnailPath = await _thumbnailService.generateThumbnail(
+        // Use legacy generation for metadata-derived video thumbnails
+        thumbnailPath = await _thumbnailService.generateThumbnailLegacy(
           video.path,
           Duration(milliseconds: duration.inMilliseconds ~/ 2),
           video.id,
@@ -635,7 +636,7 @@ class AppState extends ChangeNotifier {
 
   // --- Clip Methods ---
   Future<void> addClip(VideoClip clip) async {
-    final thumbnailFileName = await _thumbnailService.generateThumbnail(
+    final thumbnailFileName = await _thumbnailService.generateThumbnailLegacy(
       clip.videoPath,
       clip.coverFrameTime,
       clip.id,
