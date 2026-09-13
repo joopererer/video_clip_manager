@@ -423,6 +423,28 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     });
 
     // 打开媒体文件
+    try {
+      final file = File(clip.videoPath);
+      final exists = await file.exists();
+      if (!exists) {
+        print('Playlist: file not found: ${clip.videoPath}, aborting item initialization');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('文件不存在: ${clip.videoPath.split('\\').last}'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ));
+          setState(() {
+            _isPlayerReady = false;
+            _isPlayerFullyInitialized = false;
+          });
+        }
+        return;
+      }
+    } catch (e) {
+      print('Playlist: error checking file existence: $e');
+    }
+
     await player.open(Media(clip.videoPath), play: false);
 
     if (mounted) {

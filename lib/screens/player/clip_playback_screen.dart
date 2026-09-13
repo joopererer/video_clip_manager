@@ -73,6 +73,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     mainPlayer = Player();
     mainController = VideoController(mainPlayer);
     _focusNode = FocusNode(); // 初始化焦点节点
+    // Disable screenshot host during active playback to avoid texture lifecycle races
+    ScreenshotService().disableHost();
     _initializePlayers();
     
     // 延迟请求焦点，确保组件完全初始化
@@ -99,6 +101,30 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       
       // 初始化主播放器
       print('Opening main player with: ${_currentClip.videoPath}'); // 调试信息
+      // Check file existence to avoid blocking the player on invalid paths
+      try {
+        final file = File(_currentClip.videoPath);
+        final exists = await file.exists();
+        if (!exists) {
+          print('ClipPlayback: file not found: ${_currentClip.videoPath}, aborting initialization');
+          if (mounted && !_disposed) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('文件不存在: ${_currentClip.videoPath.split('\\').last}'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ));
+            setState(() {
+              _isInitializing = false;
+              _isPlayerReady = false;
+            });
+            _scheduleRecovery();
+          }
+          return;
+        }
+      } catch (e) {
+        print('ClipPlayback: error checking file existence: $e');
+      }
+
       await mainPlayer.open(Media(_currentClip.videoPath), play: false);
       
       if (!mounted || _disposed) {
@@ -401,6 +427,10 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
         await Future.delayed(const Duration(milliseconds: 100));
         await mainPlayer.dispose();
         print('Players disposed successfully (delayed)');
+        // Re-enable screenshot host after players are fully disposed
+        try {
+          ScreenshotService().markReady();
+        } catch (_) {}
       } catch (e) {
         print('Error during delayed player disposal: $e');
         try {

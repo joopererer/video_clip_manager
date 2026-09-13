@@ -97,6 +97,14 @@ class ScreenshotService {
         return;
       }
       try {
+        // Check file existence to avoid opening invalid paths
+        final file = File(videoPath);
+        final exists = await file.exists();
+        if (!exists) {
+          print('ScreenshotService: file not found: $videoPath, skipping open');
+          return;
+        }
+
         await _player.open(Media(videoPath), play: false);
         // wait for buffer/first frame
         await _player.stream.buffer.firstWhere((d) => d > Duration.zero).timeout(const Duration(seconds: 15));
