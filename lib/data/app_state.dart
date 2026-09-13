@@ -306,7 +306,8 @@ class AppState extends ChangeNotifier {
           'Populating thumbnails for ${videosNeedingThumbnails.length} videos...',
         );
         final futures = videosNeedingThumbnails.map((video) async {
-          final thumbnailFileName = await _thumbnailService.generateThumbnail(
+          // Use legacy per-Player generation for reliability
+          final thumbnailFileName = await _thumbnailService.generateThumbnailLegacy(
             video.path,
             Duration(milliseconds: video.duration!.inMilliseconds ~/ 2),
             video.id,
@@ -354,7 +355,8 @@ class AppState extends ChangeNotifier {
           'Populating thumbnails for ${clipsNeedingThumbnails.length} clips...',
         );
         final futures = clipsNeedingThumbnails.map((clip) async {
-          final thumbnailFileName = await _thumbnailService.generateThumbnail(
+          // Use legacy per-Player generation to maximize success for initial/populate flows.
+          final thumbnailFileName = await _thumbnailService.generateThumbnailLegacy(
             clip.videoPath,
             clip.coverFrameTime,
             clip.id,

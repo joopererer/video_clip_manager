@@ -380,7 +380,8 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                 ? _formClip.startTime
                 : _formClip.coverFrameTime;
 
-            finalThumbnailPath = await thumbnailService.generateThumbnail(
+            // Use legacy generation to avoid ScreenshotService races during manual cover generation
+            finalThumbnailPath = await thumbnailService.generateThumbnailLegacy(
               widget.video.path,
               coverTime,
               _formClip.id,
