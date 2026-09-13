@@ -447,7 +447,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     }
 
     try {
-      await player.open(Media(clip.videoPath), play: false).timeout(const Duration(seconds: 10));
+      await player.open(Media(clip.videoPath), play: false).timeout(Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10));
     } on TimeoutException catch (te) {
       print('Playlist: open timed out for ${clip.videoPath}: $te');
       if (mounted) {
@@ -483,7 +483,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
           ? _pendingGlobalSeekTime!
           : startTime;
       try {
-        await player.seek(seekTarget).timeout(const Duration(seconds: 10));
+        await player.seek(seekTarget).timeout(Duration(seconds: AppState.instance?.seekTimeoutSeconds ?? 10));
       } on TimeoutException catch (te) {
         print('Playlist: seek timed out: $te');
         if (mounted) {
@@ -504,7 +504,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
       // 开始播放
       try {
-        await player.play().timeout(const Duration(seconds: 5));
+        await player.play().timeout(Duration(seconds: AppState.instance?.playTimeoutSeconds ?? 5));
       } on TimeoutException catch (te) {
         print('Playlist: play timed out: $te');
         if (mounted) {

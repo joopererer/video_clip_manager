@@ -761,7 +761,7 @@ class PreviewService {
             continue;
           }
 
-          final screenshot = await screenshotService.takeScreenshot(videoPath, time).timeout(const Duration(seconds: 10));
+          final screenshot = await screenshotService.takeScreenshot(videoPath, time).timeout(Duration(seconds: AppState.instance?.screenshotTimeoutSeconds ?? 15));
           if (generationId != _generationEpoch) {
             print('PreviewService: Generation cancelled while screenshotting $videoName (epoch $generationId vs active $_generationEpoch)');
             break;

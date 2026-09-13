@@ -126,7 +126,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       }
 
       try {
-        await mainPlayer.open(Media(_currentClip.videoPath), play: false).timeout(const Duration(seconds: 10));
+        await mainPlayer.open(Media(_currentClip.videoPath), play: false).timeout(Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10));
       } on TimeoutException catch (te) {
         print('ClipPlayback: open timed out for ${_currentClip.videoPath}: $te');
         if (mounted && !_disposed) {
@@ -168,7 +168,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       // 主播放器跳转到开始时间并开始播放
       print('Seeking main player to: ${_currentClip.startTime}'); // 调试信息
       try {
-        await mainPlayer.seek(_currentClip.startTime).timeout(const Duration(seconds: 10));
+        await mainPlayer.seek(_currentClip.startTime).timeout(Duration(seconds: AppState.instance?.seekTimeoutSeconds ?? 10));
       } on TimeoutException catch (te) {
         print('ClipPlayback: seek timed out: $te');
         _scheduleRecovery();
@@ -183,7 +183,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       
       print('Starting main player playback'); // 调试信息
       try {
-        await mainPlayer.play().timeout(const Duration(seconds: 5));
+        await mainPlayer.play().timeout(Duration(seconds: AppState.instance?.playTimeoutSeconds ?? 5));
       } on TimeoutException catch (te) {
         print('ClipPlayback: play timed out: $te');
         _scheduleRecovery();
@@ -355,7 +355,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     if (!_isPlayerReady || _disposed || _isClosing) return;
     
     try {
-      await mainPlayer.play().timeout(const Duration(seconds: 5));
+      await mainPlayer.play().timeout(Duration(seconds: AppState.instance?.playTimeoutSeconds ?? 5));
       if (mounted && !_disposed && !_isClosing) {
         setState(() {
           _isPlaying = true;

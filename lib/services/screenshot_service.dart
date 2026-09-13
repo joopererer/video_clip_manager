@@ -18,9 +18,10 @@ class ScreenshotService {
   Future<void> _queue = Future.value();
   bool _disposed = false;
 
-  // Timeouts for potentially blocking native operations. Configurable here.
-  final Duration _openTimeout = const Duration(seconds: 10);
-  final Duration _seekTimeout = const Duration(seconds: 10);
+  // Timeouts are read from AppState if available, otherwise use defaults.
+  Duration get _openTimeout => Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10);
+  Duration get _seekTimeout => Duration(seconds: AppState.instance?.seekTimeoutSeconds ?? 10);
+  int get _markReadyDelayMs => AppState.instance?.markReadyDelayMs ?? 300;
 
   // Completer that is completed when the off-screen Video widget has been
   // inserted into the widget tree and the texture host is (likely) ready.
@@ -46,9 +47,9 @@ class ScreenshotService {
     // complete any pending texture callbacks. This reduces the window where
     // re-creating textures immediately after dispose can race with native
     // callbacks and crash the Dart runtime.
-    const int delayMs = 300;
-    print('ScreenshotService: scheduling markReady in \\${delayMs}ms');
-    Future.delayed(const Duration(milliseconds: delayMs), () {
+    final int delayMs = _markReadyDelayMs;
+    print('ScreenshotService: scheduling markReady in ${delayMs}ms');
+    Future.delayed(Duration(milliseconds: delayMs), () {
       if (_disposed) return;
       _hostEnabled = true;
       if (!_readyCompleter.isCompleted) {

@@ -16,7 +16,7 @@ class VideoMetadataService {
         return null;
       }
 
-      final duration = await ScreenshotService().getDuration(videoPath).timeout(const Duration(seconds: 15), onTimeout: () {
+      final duration = await ScreenshotService().getDuration(videoPath).timeout(Duration(seconds: AppState.instance?.screenshotTimeoutSeconds ?? 15), onTimeout: () {
         debugPrint('[VideoMetadataService] Timeout getting duration for: $videoPath');
         return Duration.zero;
       });

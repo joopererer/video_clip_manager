@@ -85,7 +85,7 @@ class ThumbnailService {
       await Directory(thumbDir).create(recursive: true);
 
       debugPrint('ThumbnailService: Requesting screenshot for entity $entityId at $time');
-      final data = await ScreenshotService().takeScreenshot(videoPath, time).timeout(const Duration(seconds: 15), onTimeout: () => null);
+      final data = await ScreenshotService().takeScreenshot(videoPath, time).timeout(Duration(seconds: AppState.instance?.screenshotTimeoutSeconds ?? 15), onTimeout: () => null);
 
       if (data != null) {
         await thumbFile.writeAsBytes(data);

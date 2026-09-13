@@ -92,7 +92,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
       if (!exists) {
         print('ClipEditor: file not found: ${widget.video.path}');
       } else {
-        await player.open(Media(widget.video.path), play: false).timeout(const Duration(seconds: 10));
+        await player.open(Media(widget.video.path), play: false).timeout(Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10));
       }
     } on TimeoutException catch (te) {
       print('ClipEditor: open timed out for ${widget.video.path}: $te');
