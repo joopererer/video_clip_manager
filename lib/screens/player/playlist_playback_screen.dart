@@ -101,6 +101,8 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     player = Player();
     controller = VideoController(player);
     _focusNode = FocusNode(); // 初始化焦点节点
+    // Disable screenshot host while playlist playback is active to reduce texture races
+    ScreenshotService().disableHost();
     _initializePlaylist();
 
     // 延迟请求焦点，确保组件完全初始化
@@ -1349,6 +1351,14 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
           player.dispose();
         } catch (e2) {
           print('Force dispose failed: $e2');
+        }
+      } finally {
+        // Re-enable screenshot host after player disposed
+        try {
+          ScreenshotService().markReady();
+          print('ScreenshotService: markReady() called after playlist dispose');
+        } catch (e) {
+          print('Error marking ScreenshotService ready: $e');
         }
       }
     });
