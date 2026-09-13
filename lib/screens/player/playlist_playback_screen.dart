@@ -5,6 +5,7 @@ import 'package:media_kit/media_kit.dart' hide Playlist;
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -445,7 +446,32 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       print('Playlist: error checking file existence: $e');
     }
 
-    await player.open(Media(clip.videoPath), play: false);
+    try {
+      await player.open(Media(clip.videoPath), play: false).timeout(const Duration(seconds: 10));
+    } on TimeoutException catch (te) {
+      print('Playlist: open timed out for ${clip.videoPath}: $te');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('打开媒体超时: ${clip.videoPath.split('\\').last}'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ));
+        setState(() {
+          _isPlayerReady = false;
+          _isPlayerFullyInitialized = false;
+        });
+      }
+      return;
+    } catch (e) {
+      print('Playlist: open failed for ${clip.videoPath}: $e');
+      if (mounted) {
+        setState(() {
+          _isPlayerReady = false;
+          _isPlayerFullyInitialized = false;
+        });
+      }
+      return;
+    }
 
     if (mounted) {
       // 等待媒体加载完成
@@ -456,13 +482,43 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
               _pendingGlobalSeekTime != null)
           ? _pendingGlobalSeekTime!
           : startTime;
-      await player.seek(seekTarget);
+      try {
+        await player.seek(seekTarget).timeout(const Duration(seconds: 10));
+      } on TimeoutException catch (te) {
+        print('Playlist: seek timed out: $te');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('定位超时'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ));
+        }
+        return;
+      } catch (e) {
+        print('Playlist: seek failed: $e');
+        return;
+      }
 
       // 再等待一下确保seek完成
       await Future.delayed(Duration(milliseconds: 50));
 
       // 开始播放
-      await player.play();
+      try {
+        await player.play().timeout(const Duration(seconds: 5));
+      } on TimeoutException catch (te) {
+        print('Playlist: play timed out: $te');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('播放启动超时'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ));
+        }
+        return;
+      } catch (e) {
+        print('Playlist: play failed: $e');
+        return;
+      }
 
       setState(() {
         _isPlaying = true;

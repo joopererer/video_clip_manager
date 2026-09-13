@@ -85,7 +85,25 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
       _resetFormToBlank();
     }
 
-    player.open(Media(widget.video.path), play: false);
+    // Open with timeout and existence check to avoid hangs
+    try {
+      final file = File(widget.video.path);
+      final exists = await file.exists();
+      if (!exists) {
+        print('ClipEditor: file not found: ${widget.video.path}');
+      } else {
+        await player.open(Media(widget.video.path), play: false).timeout(const Duration(seconds: 10));
+      }
+    } on TimeoutException catch (te) {
+      print('ClipEditor: open timed out for ${widget.video.path}: $te');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('打开媒体超时: ${widget.video.path.split('\\').last}'),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 3),
+      ));
+    } catch (e) {
+      print('ClipEditor: open failed for ${widget.video.path}: $e');
+    }
     
     // 延迟请求焦点，确保组件完全初始化
     WidgetsBinding.instance.addPostFrameCallback((_) {

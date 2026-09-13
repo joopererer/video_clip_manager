@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:io';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -16,6 +17,10 @@ class ScreenshotService {
   // serialization queue
   Future<void> _queue = Future.value();
   bool _disposed = false;
+
+  // Timeouts for potentially blocking native operations. Configurable here.
+  final Duration _openTimeout = const Duration(seconds: 10);
+  final Duration _seekTimeout = const Duration(seconds: 10);
 
   // Completer that is completed when the off-screen Video widget has been
   // inserted into the widget tree and the texture host is (likely) ready.
@@ -105,12 +110,19 @@ class ScreenshotService {
           return;
         }
 
-        await _player.open(Media(videoPath), play: false);
-        // wait for buffer/first frame
-        await _player.stream.buffer.firstWhere((d) => d > Duration.zero).timeout(const Duration(seconds: 15));
-        await Future.delayed(const Duration(milliseconds: 200));
-        _openPath = videoPath;
-        print('ScreenshotService: opened $videoPath');
+        try {
+          // Attempt open with timeout to avoid indefinite blocking from native plugin
+          await _player.open(Media(videoPath), play: false).timeout(_openTimeout);
+
+          // wait for buffer/first frame
+          await _player.stream.buffer.firstWhere((d) => d > Duration.zero).timeout(const Duration(seconds: 15));
+          await Future.delayed(const Duration(milliseconds: 200));
+          _openPath = videoPath;
+          print('ScreenshotService: opened $videoPath');
+        } on TimeoutException catch (te) {
+          print('ScreenshotService: open timed out for $videoPath: $te');
+          return;
+        }
       } catch (e) {
         print('ScreenshotService: open failed for $videoPath: $e');
         rethrow;
@@ -142,7 +154,14 @@ class ScreenshotService {
         }
 
         await _ensureOpened(videoPath);
-        await _player.seek(time);
+        try {
+          await _player.seek(time).timeout(_seekTimeout);
+        } on TimeoutException catch (te) {
+          print('ScreenshotService: seek timed out for $videoPath @ ${time.inSeconds}s: $te');
+          completer.complete(null);
+          return;
+        }
+
         await Future.delayed(const Duration(milliseconds: 200));
         final data = await _player.screenshot();
         print('ScreenshotService: screenshot result for $videoPath @ ${time.inSeconds}s: ${data != null ? data.length : 0} bytes');

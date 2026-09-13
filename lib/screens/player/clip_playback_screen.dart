@@ -125,7 +125,30 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
         print('ClipPlayback: error checking file existence: $e');
       }
 
-      await mainPlayer.open(Media(_currentClip.videoPath), play: false);
+      try {
+        await mainPlayer.open(Media(_currentClip.videoPath), play: false).timeout(const Duration(seconds: 10));
+      } on TimeoutException catch (te) {
+        print('ClipPlayback: open timed out for ${_currentClip.videoPath}: $te');
+        if (mounted && !_disposed) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('打开媒体超时: ${_currentClip.videoPath.split('\\').last}'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ));
+          setState(() {
+            _isInitializing = false;
+            _isPlayerReady = false;
+          });
+          _scheduleRecovery();
+        }
+        return;
+      } catch (e) {
+        print('ClipPlayback: open failed for ${_currentClip.videoPath}: $e');
+        if (mounted && !_disposed) {
+          _scheduleRecovery();
+        }
+        return;
+      }
       
       if (!mounted || _disposed) {
         print('Widget disposed during initialization, aborting'); // 调试信息
@@ -137,16 +160,39 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       
       // 检查播放器状态
       if (mainPlayer.state.duration == Duration.zero) {
-        throw Exception('Main player failed to load media');
+        print('Main player failed to load media after open, scheduling recovery');
+        _scheduleRecovery();
+        return;
       }
       
       // 主播放器跳转到开始时间并开始播放
       print('Seeking main player to: ${_currentClip.startTime}'); // 调试信息
-      await mainPlayer.seek(_currentClip.startTime);
+      try {
+        await mainPlayer.seek(_currentClip.startTime).timeout(const Duration(seconds: 10));
+      } on TimeoutException catch (te) {
+        print('ClipPlayback: seek timed out: $te');
+        _scheduleRecovery();
+        return;
+      } catch (e) {
+        print('ClipPlayback: seek failed: $e');
+        _scheduleRecovery();
+        return;
+      }
+
       await Future.delayed(Duration(milliseconds: 100));
       
       print('Starting main player playback'); // 调试信息
-      await mainPlayer.play();
+      try {
+        await mainPlayer.play().timeout(const Duration(seconds: 5));
+      } on TimeoutException catch (te) {
+        print('ClipPlayback: play timed out: $te');
+        _scheduleRecovery();
+        return;
+      } catch (e) {
+        print('ClipPlayback: play failed: $e');
+        _scheduleRecovery();
+        return;
+      }
       
       if (mounted && !_disposed) {
         setState(() {
@@ -309,12 +355,15 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     if (!_isPlayerReady || _disposed || _isClosing) return;
     
     try {
-      await mainPlayer.play();
+      await mainPlayer.play().timeout(const Duration(seconds: 5));
       if (mounted && !_disposed && !_isClosing) {
         setState(() {
           _isPlaying = true;
         });
       }
+    } on TimeoutException catch (te) {
+      print('ClipPlaybackScreen: play timed out: $te');
+      _scheduleRecovery();
     } catch (e) {
       print('Error during play: $e'); // 调试信息
       _scheduleRecovery();
@@ -346,8 +395,18 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       }
       
       // 执行seek操作
-      await mainPlayer.seek(position);
-      
+      try {
+        await mainPlayer.seek(position).timeout(const Duration(seconds: 10));
+      } on TimeoutException catch (te) {
+        print('ClipPlaybackScreen: seek timed out: $te');
+        _scheduleRecovery();
+        return;
+      } catch (e) {
+        print('ClipPlaybackScreen: seek failed: $e');
+        _scheduleRecovery();
+        return;
+      }
+    
       // 验证seek是否成功
       await Future.delayed(Duration(milliseconds: 200)); // 增加延迟确保seek完成
       final newPosition = mainPlayer.state.position;
