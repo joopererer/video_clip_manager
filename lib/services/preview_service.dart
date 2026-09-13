@@ -532,7 +532,7 @@ class PreviewService {
     try {
       for (int i = 0; i < videoPaths.length; i++) {
         if (!_globalPreGenerating || generationId != _generationEpoch) {
-          print('PreviewService: Global pre-generation was interrupted');
+          print('PreviewService: Global pre-generation cancelled (epoch $generationId -> $_generationEpoch)');
           break;
         }
         
@@ -561,7 +561,7 @@ class PreviewService {
             continue;
           }
           
-          print('PreviewService: Starting pre-generation for $videoName');
+          print('PreviewService: Starting pre-generation for $videoName (epoch $generationId)');
           // 为单个视频预生成（不阻塞UI）
           await _preGenerateForVideo(videoPath, generationId: generationId);
           
@@ -578,7 +578,7 @@ class PreviewService {
       if (generationId == _generationEpoch) {
         _globalPreGenerating = false;
       }
-      print('PreviewService: Global pre-generation completed');
+      print('PreviewService: Global pre-generation completed (epoch $generationId, activeEpoch $_generationEpoch)');
     }
   }
   
@@ -646,12 +646,12 @@ class PreviewService {
 
     // 如果已被中断，请直接退出
     if (generationId != _generationEpoch) {
-      print('PreviewService: Skipping stale generation for $videoName');
+      print('PreviewService: Skipping stale generation for $videoName (epoch $generationId vs active $_generationEpoch)');
       return;
     }
 
     _preGenerating[cacheKey] = true;
-    print('PreviewService: Starting pre-generation for video: $videoName');
+    print('PreviewService: Starting pre-generation for video: $videoName (epoch $generationId)');
 
     try {
       final videoFile = File(videoPath);
@@ -671,7 +671,7 @@ class PreviewService {
       print('PreviewService: Video file size: ${(fileSize / (1024 * 1024)).toStringAsFixed(2)} MB');
 
       if (generationId != _generationEpoch) {
-        print('PreviewService: Generation cancelled before duration lookup for $videoName');
+        print('PreviewService: Generation cancelled before duration lookup for $videoName (epoch $generationId vs active $_generationEpoch)');
         return;
       }
 
@@ -680,7 +680,7 @@ class PreviewService {
       print('PreviewService: Video duration: ${duration.inSeconds} seconds');
 
       if (generationId != _generationEpoch) {
-        print('PreviewService: Generation cancelled before keyframe loop for $videoName');
+        print('PreviewService: Generation cancelled before keyframe loop for $videoName (epoch $generationId vs active $_generationEpoch)');
         return;
       }
 
@@ -739,7 +739,7 @@ class PreviewService {
 
           final screenshot = await screenshotService.takeScreenshot(videoPath, time).timeout(const Duration(seconds: 10));
           if (generationId != _generationEpoch) {
-            print('PreviewService: Generation cancelled while screenshotting $videoName');
+            print('PreviewService: Generation cancelled while screenshotting $videoName (epoch $generationId vs active $_generationEpoch)');
             break;
           }
 

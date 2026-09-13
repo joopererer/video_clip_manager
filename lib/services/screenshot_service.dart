@@ -22,6 +22,7 @@ class ScreenshotService {
   final Completer<void> _readyCompleter = Completer<void>();
 
   ScreenshotService._internal() {
+    print('ScreenshotService: initialized');
     _player = Player();
     _controller = VideoController(_player);
   }
@@ -34,15 +35,23 @@ class ScreenshotService {
   /// before Flutter has registered the texture.
   void markReady() {
     if (!_readyCompleter.isCompleted) {
+      print('ScreenshotService: marked ready');
       _readyCompleter.complete();
     }
   }
 
   /// Returns a future that completes when the internal queue is idle.
-  Future<void> whenIdle() => _disposed ? Future.value() : _queue;
+  Future<void> whenIdle() async {
+    if (_disposed) {
+      print('ScreenshotService: whenIdle called after dispose');
+      return;
+    }
+    await _queue;
+  }
 
   Future<void> dispose() async {
     _disposed = true;
+    print('ScreenshotService: disposing');
     try {
       await _player.dispose();
     } catch (_) {}
@@ -52,22 +61,28 @@ class ScreenshotService {
   Future<Duration?> _ensureOpened(String videoPath) {
     _queue = _queue.then((_) async {
       if (_disposed) throw StateError('ScreenshotService disposed');
+      print('ScreenshotService: ensureOpen -> $videoPath');
       // Wait for the off-screen Video to be ready (registered) before opening
       try {
         await _readyCompleter.future.timeout(const Duration(seconds: 5));
+        print('ScreenshotService: host ready before open');
       } catch (_) {
-        // ignore timeout, proceed anyway
+        print('ScreenshotService: host not ready before open, continuing');
       }
 
-      if (_openPath == videoPath) return;
+      if (_openPath == videoPath) {
+        print('ScreenshotService: already opened for $videoPath');
+        return;
+      }
       try {
         await _player.open(Media(videoPath), play: false);
         // wait for buffer/first frame
         await _player.stream.buffer.firstWhere((d) => d > Duration.zero).timeout(const Duration(seconds: 15));
         await Future.delayed(const Duration(milliseconds: 200));
         _openPath = videoPath;
+        print('ScreenshotService: opened $videoPath');
       } catch (e) {
-        // propagate
+        print('ScreenshotService: open failed for $videoPath: $e');
         rethrow;
       }
     });
@@ -83,21 +98,24 @@ class ScreenshotService {
         completer.complete(null);
         return;
       }
+      print('ScreenshotService: takeScreenshot start -> $videoPath @ ${time.inSeconds}s');
       try {
         // Ensure the off-screen Video has been attached before screenshotting.
         try {
           await _readyCompleter.future.timeout(const Duration(seconds: 5));
+          print('ScreenshotService: host ready before screenshot');
         } catch (_) {
-          // if not ready in time, continue but this increases risk
+          print('ScreenshotService: host not ready before screenshot, continuing');
         }
 
         await _ensureOpened(videoPath);
         await _player.seek(time);
         await Future.delayed(const Duration(milliseconds: 200));
         final data = await _player.screenshot();
+        print('ScreenshotService: screenshot result for $videoPath @ ${time.inSeconds}s: ${data != null ? data.length : 0} bytes');
         completer.complete(data);
       } catch (e) {
-        // Return null on error to avoid crashing callers
+        print('ScreenshotService: screenshot failed for $videoPath @ ${time.inSeconds}s: $e');
         completer.complete(null);
       }
     });
