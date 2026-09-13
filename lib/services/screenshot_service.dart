@@ -37,11 +37,20 @@ class ScreenshotService {
   /// addPostFrameCallback). This reduces the chance of taking screenshots
   /// before Flutter has registered the texture.
   void markReady() {
-    _hostEnabled = true;
-    if (!_readyCompleter.isCompleted) {
-      print('ScreenshotService: marked ready');
-      _readyCompleter.complete();
-    }
+    // Delay enabling the host briefly to give the native side time to
+    // complete any pending texture callbacks. This reduces the window where
+    // re-creating textures immediately after dispose can race with native
+    // callbacks and crash the Dart runtime.
+    const int delayMs = 300;
+    print('ScreenshotService: scheduling markReady in \\${delayMs}ms');
+    Future.delayed(const Duration(milliseconds: delayMs), () {
+      if (_disposed) return;
+      _hostEnabled = true;
+      if (!_readyCompleter.isCompleted) {
+        print('ScreenshotService: marked ready (delayed)');
+        _readyCompleter.complete();
+      }
+    });
   }
 
   void disableHost() {
