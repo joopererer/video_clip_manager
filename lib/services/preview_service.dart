@@ -27,6 +27,7 @@ class PreviewService {
   
   // 全局预生成状态
   bool _globalPreGenerating = false;
+  bool _backgroundGenerationSuspended = false;
   int _generationEpoch = 0;
   
   // 缓存目录
@@ -518,6 +519,11 @@ class PreviewService {
 
   /// 启动全局预生成
   Future<void> startGlobalPreGeneration(List<String> videoPaths) async {
+    if (_backgroundGenerationSuspended) {
+      print('PreviewService: Global pre-generation suspended during playback transition');
+      return;
+    }
+
     if (_globalPreGenerating) {
       print('PreviewService: Global pre-generation already running');
       return;
@@ -591,15 +597,28 @@ class PreviewService {
   
   /// 暂停全局预生成（用于播放时暂停）
   void pauseGlobalPreGeneration() {
+    _backgroundGenerationSuspended = true;
     _generationEpoch++;
     _globalPreGenerating = false;
     print('PreviewService: Global pre-generation paused for playback');
   }
-  
+
   /// 恢复全局预生成（用于播放结束后恢复）
   void resumeGlobalPreGeneration() {
+    _backgroundGenerationSuspended = false;
     print('PreviewService: Global pre-generation resumed');
     // We do not auto-restart here; the main screen owns the orchestration.
+  }
+
+  /// Conservative workaround for user-driven media transitions: while a dialog or
+  /// seek interaction is active, block any background preview generation from
+  /// re-entering the native screenshot queue.
+  void suspendBackgroundGeneration() {
+    pauseGlobalPreGeneration();
+  }
+
+  void resumeBackgroundGeneration() {
+    resumeGlobalPreGeneration();
   }
   
   /// 检查视频是否有足够的缓存
@@ -638,6 +657,11 @@ class PreviewService {
   Future<void> _preGenerateForVideo(String videoPath, {required int generationId}) async {
     final cacheKey = _getCacheKey(videoPath);
     final videoName = videoPath.split('/').last;
+
+    if (_backgroundGenerationSuspended) {
+      print('PreviewService: Skipping pre-generation for $videoName because background generation is suspended');
+      return;
+    }
 
     if (_preGenerating[cacheKey] == true) {
       print('PreviewService: Already pre-generating for $videoName');

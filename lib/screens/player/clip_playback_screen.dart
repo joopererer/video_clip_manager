@@ -52,6 +52,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   bool _isInitializing = false;
   Timer? _recoveryTimer;
   bool _disposed = false;
+  bool _isClosing = false;
   bool _isSeeking = false; // 新增：seek锁定标志
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<bool>? _playingSubscription;
@@ -263,11 +264,11 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   }
 
   Future<void> _safePause() async {
-    if (!_isPlayerReady || _disposed) return;
+    if (!_isPlayerReady || _disposed || _isClosing) return;
     
     try {
       await mainPlayer.pause();
-      if (mounted && !_disposed) {
+      if (mounted && !_disposed && !_isClosing) {
         setState(() {
           _isPlaying = false;
         });
@@ -279,11 +280,11 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   }
 
   Future<void> _safePlay() async {
-    if (!_isPlayerReady || _disposed) return;
+    if (!_isPlayerReady || _disposed || _isClosing) return;
     
     try {
       await mainPlayer.play();
-      if (mounted && !_disposed) {
+      if (mounted && !_disposed && !_isClosing) {
         setState(() {
           _isPlaying = true;
         });
@@ -295,8 +296,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   }
 
   Future<void> _safeSeek(Duration position) async {
-    if (!_isPlayerReady || _disposed) {
-      print('ClipPlaybackScreen: Cannot seek - player not ready or disposed'); // 调试信息
+    if (!_isPlayerReady || _disposed || _isClosing) {
+      print('ClipPlaybackScreen: Cannot seek - player not ready, closing, or disposed'); // 调试信息
       return;
     }
     
@@ -307,6 +308,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     
     try {
       _isSeeking = true; // 设置seek锁定
+      await _suspendBackgroundMediaWork();
       print('ClipPlaybackScreen: Attempting to seek main player to $position'); // 调试信息
       print('ClipPlaybackScreen: Main player state - duration: ${mainPlayer.state.duration}, position: ${mainPlayer.state.position}, playing: ${mainPlayer.state.playing}'); // 调试信息
       
@@ -344,22 +346,50 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     }
   }
 
+  Future<void> _suspendBackgroundMediaWork() async {
+    if (_disposed || _isClosing) return;
+    PreviewService().pauseGlobalPreGeneration();
+    await ScreenshotService().whenIdle();
+  }
+
+  Future<void> _closePlayback() async {
+    if (_disposed || _isClosing) return;
+    _isClosing = true;
+    print('ClipPlaybackScreen: closing playback dialog');
+
+    await _suspendBackgroundMediaWork();
+    _recoveryTimer?.cancel();
+    _positionSubscription?.cancel();
+    _playingSubscription?.cancel();
+
+    try {
+      if (mainPlayer.state.playing) {
+        await mainPlayer.pause();
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   void dispose() {
     print('ClipPlaybackScreen disposing...'); // 调试信息
     _disposed = true;
-    
-    // 恢复全局预生成
-    PreviewService().resumeGlobalPreGeneration();
-    
+    _isClosing = true;
+
+    // Stop any stale preview generation before disposing the native player.
+    PreviewService().pauseGlobalPreGeneration();
+
     // 取消所有定时器和订阅
     _recoveryTimer?.cancel();
     _positionSubscription?.cancel();
     _playingSubscription?.cancel();
-    
+
     // 释放焦点节点
     _focusNode.dispose();
-    
+
     // 安全地停止和释放播放器
     // Schedule actual disposal after ScreenshotService queue is idle to avoid
     // racing with screenshot/open/seek tasks which can trigger native callbacks.
@@ -522,7 +552,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       ),
     );
 
-    Navigator.of(context).pop(); // 关闭播放器
+    _closePlayback();
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -540,8 +570,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     appState.setSelectedTags([tag]); // 设置为只过滤这个标签
     
     // 关闭播放器并返回到clips_tab
-    Navigator.of(context).pop();
-    
+    _closePlayback();
+
     // 显示过滤成功的提示
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -760,7 +790,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: _closePlayback,
                     ),
                   ],
                 ),

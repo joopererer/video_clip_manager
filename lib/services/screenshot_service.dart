@@ -20,6 +20,9 @@ class ScreenshotService {
   // Completer that is completed when the off-screen Video widget has been
   // inserted into the widget tree and the texture host is (likely) ready.
   final Completer<void> _readyCompleter = Completer<void>();
+  bool _hostEnabled = false;
+
+  bool get isHostAvailable => _hostEnabled && !_disposed;
 
   ScreenshotService._internal() {
     print('ScreenshotService: initialized');
@@ -34,10 +37,16 @@ class ScreenshotService {
   /// addPostFrameCallback). This reduces the chance of taking screenshots
   /// before Flutter has registered the texture.
   void markReady() {
+    _hostEnabled = true;
     if (!_readyCompleter.isCompleted) {
       print('ScreenshotService: marked ready');
       _readyCompleter.complete();
     }
+  }
+
+  void disableHost() {
+    _hostEnabled = false;
+    print('ScreenshotService: host disabled for playback stability');
   }
 
   /// Returns a future that completes when the internal queue is idle.
@@ -51,6 +60,7 @@ class ScreenshotService {
 
   Future<void> dispose() async {
     _disposed = true;
+    _hostEnabled = false;
     print('ScreenshotService: disposing');
     try {
       await _player.dispose();
@@ -60,7 +70,10 @@ class ScreenshotService {
   /// Ensure the internal player has opened [videoPath]. Serialized.
   Future<Duration?> _ensureOpened(String videoPath) {
     _queue = _queue.then((_) async {
-      if (_disposed) throw StateError('ScreenshotService disposed');
+      if (_disposed || !_hostEnabled) {
+        print('ScreenshotService: host disabled, skip open for $videoPath');
+        return null;
+      }
       print('ScreenshotService: ensureOpen -> $videoPath');
       // Wait for the off-screen Video to be ready (registered) before opening
       try {
@@ -91,7 +104,10 @@ class ScreenshotService {
 
   /// Take a screenshot at [time] for [videoPath]. Serialized.
   Future<Uint8List?> takeScreenshot(String videoPath, Duration time) {
-    if (_disposed) return Future.value(null);
+    if (_disposed || !_hostEnabled) {
+      print('ScreenshotService: host disabled, skip screenshot for $videoPath @ ${time.inSeconds}s');
+      return Future.value(null);
+    }
     final completer = Completer<Uint8List?>();
     _queue = _queue.then((_) async {
       if (_disposed) {
