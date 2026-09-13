@@ -32,8 +32,9 @@ class PreviewService {
   // 缓存目录
   Directory? _cacheDir;
   
-  // 预生成任务必须使用临时 Player，不应持有任何长期存在的 VideoController。
-  // 共享/隐藏的 Video 纹理会导致 media_kit 在 Windows 上触发 native callback / 渲染生命周期异常。
+  // 预生成任务必须经过 ScreenshotService 单一 off-screen host。
+  // 任何临时 Player / 隐藏 VideoController 都可能导致媒体纹理和平台线程出现生命周期竞态，
+  // 特别是在 Windows 上容易触发 native callback / texture deleted 异常。
 
   // 失败重试机制
   final Map<String, int> _failureCount = {}; // 记录每个视频的失败次数

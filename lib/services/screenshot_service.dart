@@ -39,7 +39,7 @@ class ScreenshotService {
   }
 
   /// Returns a future that completes when the internal queue is idle.
-  Future<void> whenIdle() => _queue;
+  Future<void> whenIdle() => _disposed ? Future.value() : _queue;
 
   Future<void> dispose() async {
     _disposed = true;
