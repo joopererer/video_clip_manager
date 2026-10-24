@@ -43,9 +43,10 @@ class ClipPlaybackScreen extends StatefulWidget {
 }
 
 class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
-  // 播放器状态管理
-  late Player mainPlayer;
-  late VideoController mainController;
+  // 播放器状态管理（在 screenshot host 停用并 idle 后再创建）
+  Player? mainPlayer;
+  VideoController? mainController;
+  bool _playersCreated = false;
   
   // 播放器状态管理
   bool _isPlayerReady = false;
@@ -70,13 +71,9 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   void initState() {
     super.initState();
     _currentClip = widget.clip; // 初始化当前clip
-    mainPlayer = Player();
-    mainController = VideoController(mainPlayer);
     _focusNode = FocusNode(); // 初始化焦点节点
-    // Disable screenshot host during active playback to avoid texture lifecycle races
-    ScreenshotService().disableHost();
-    _initializePlayers();
-    
+    unawaited(_bootPlaybackPlayers());
+
     // 延迟请求焦点，确保组件完全初始化
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -85,8 +82,22 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     });
   }
 
+  Future<void> _bootPlaybackPlayers() async {
+    PreviewService().pauseGlobalPreGeneration();
+    await ScreenshotService().prepareForPlayback();
+    if (!mounted || _disposed) return;
+
+    final player = Player();
+    mainPlayer = player;
+    mainController = VideoController(player);
+    if (mounted) {
+      setState(() => _playersCreated = true);
+    }
+    await _initializePlayers();
+  }
+
   Future<void> _initializePlayers() async {
-    if (_isInitializing || _disposed) return;
+    if (_isInitializing || _disposed || mainPlayer == null) return;
     
     print('Initializing players for clip: ${_currentClip.name}'); // 调试信息
     
@@ -126,7 +137,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       }
 
       try {
-        await mainPlayer.open(Media(_currentClip.videoPath), play: false).timeout(Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10));
+        await mainPlayer!.open(Media(_currentClip.videoPath), play: false).timeout(Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10));
       } on TimeoutException catch (te) {
         print('ClipPlayback: open timed out for ${_currentClip.videoPath}: $te');
         if (mounted && !_disposed) {
@@ -159,7 +170,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       await Future.delayed(Duration(milliseconds: 300));
       
       // 检查播放器状态
-      if (mainPlayer.state.duration == Duration.zero) {
+      if (mainPlayer!.state.duration == Duration.zero) {
         print('Main player failed to load media after open, scheduling recovery');
         _scheduleRecovery();
         return;
@@ -168,7 +179,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       // 主播放器跳转到开始时间并开始播放
       print('Seeking main player to: ${_currentClip.startTime}'); // 调试信息
       try {
-        await mainPlayer.seek(_currentClip.startTime).timeout(Duration(seconds: AppState.instance?.seekTimeoutSeconds ?? 10));
+        await mainPlayer!.seek(_currentClip.startTime).timeout(Duration(seconds: AppState.instance?.seekTimeoutSeconds ?? 10));
       } on TimeoutException catch (te) {
         print('ClipPlayback: seek timed out: $te');
         _scheduleRecovery();
@@ -183,7 +194,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       
       print('Starting main player playback'); // 调试信息
       try {
-        await mainPlayer.play().timeout(Duration(seconds: AppState.instance?.playTimeoutSeconds ?? 5));
+        await mainPlayer!.play().timeout(Duration(seconds: AppState.instance?.playTimeoutSeconds ?? 5));
       } on TimeoutException catch (te) {
         print('ClipPlayback: play timed out: $te');
         _scheduleRecovery();
@@ -209,7 +220,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
 
       // 设置主播放器位置监听器
       _positionSubscription?.cancel();
-      _positionSubscription = mainPlayer.stream.position.listen((position) {
+      _positionSubscription = mainPlayer!.stream.position.listen((position) {
         if (mounted && !_disposed && !_isSeeking && _currentClip.endTime > Duration.zero &&
             position >= _currentClip.endTime) {
           print('ClipPlaybackScreen: Position reached end time, pausing'); // 调试信息
@@ -219,7 +230,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
 
       // 监听主播放器播放状态
       _playingSubscription?.cancel();
-      _playingSubscription = mainPlayer.stream.playing.listen((playing) {
+      _playingSubscription = mainPlayer!.stream.playing.listen((playing) {
         if (mounted && !_disposed) {
           setState(() {
             _isPlaying = playing;
@@ -243,8 +254,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   Future<void> _resetPlayers() async {
     try {
       // 如果播放器已经打开，先暂停
-      if (mainPlayer.state.playing) {
-        await mainPlayer.pause();
+      if (mainPlayer!.state.playing) {
+        await mainPlayer!.pause();
       }
       
       // 等待一下确保暂停完成
@@ -303,7 +314,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
         return;
       }
 
-      final duration = mainPlayer.state.duration;
+      final duration = mainPlayer!.state.duration;
       if (duration == Duration.zero) {
         final fallbackDuration = await VideoMetadataService().getVideoDuration(videoPath);
         if (fallbackDuration == null || fallbackDuration == Duration.zero) {
@@ -339,7 +350,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     if (!_isPlayerReady || _disposed || _isClosing) return;
     
     try {
-      await mainPlayer.pause();
+      await mainPlayer!.pause();
       if (mounted && !_disposed && !_isClosing) {
         setState(() {
           _isPlaying = false;
@@ -355,7 +366,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     if (!_isPlayerReady || _disposed || _isClosing) return;
     
     try {
-      await mainPlayer.play().timeout(Duration(seconds: AppState.instance?.playTimeoutSeconds ?? 5));
+      await mainPlayer!.play().timeout(Duration(seconds: AppState.instance?.playTimeoutSeconds ?? 5));
       if (mounted && !_disposed && !_isClosing) {
         setState(() {
           _isPlaying = true;
@@ -385,10 +396,10 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       _isSeeking = true; // 设置seek锁定
       await _suspendBackgroundMediaWork();
       print('ClipPlaybackScreen: Attempting to seek main player to $position'); // 调试信息
-      print('ClipPlaybackScreen: Main player state - duration: ${mainPlayer.state.duration}, position: ${mainPlayer.state.position}, playing: ${mainPlayer.state.playing}'); // 调试信息
+      print('ClipPlaybackScreen: Main player state - duration: ${mainPlayer!.state.duration}, position: ${mainPlayer!.state.position}, playing: ${mainPlayer!.state.playing}'); // 调试信息
       
       // 确保播放器处于可用状态
-      if (mainPlayer.state.duration == Duration.zero) {
+      if (mainPlayer!.state.duration == Duration.zero) {
         print('ClipPlaybackScreen: Main player duration is zero, attempting to recover...'); // 调试信息
         await _initializePlayers();
         return;
@@ -396,7 +407,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       
       // 执行seek操作
       try {
-        await mainPlayer.seek(position).timeout(const Duration(seconds: 10));
+        await mainPlayer!.seek(position).timeout(const Duration(seconds: 10));
       } on TimeoutException catch (te) {
         print('ClipPlaybackScreen: seek timed out: $te');
         _scheduleRecovery();
@@ -409,7 +420,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     
       // 验证seek是否成功
       await Future.delayed(Duration(milliseconds: 200)); // 增加延迟确保seek完成
-      final newPosition = mainPlayer.state.position;
+      final newPosition = mainPlayer!.state.position;
       print('ClipPlaybackScreen: Seek completed. New position: $newPosition, Target: $position'); // 调试信息
       
       if ((newPosition - position).abs() < Duration(seconds: 1)) {
@@ -448,8 +459,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     _playingSubscription?.cancel();
 
     try {
-      if (mainPlayer.state.playing) {
-        await mainPlayer.pause();
+      if (mainPlayer!.state.playing) {
+        await mainPlayer!.pause();
       }
     } catch (_) {}
 
@@ -478,22 +489,28 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     // 安全地停止和释放播放器
     // Schedule actual disposal after ScreenshotService queue is idle to avoid
     // racing with screenshot/open/seek tasks which can trigger native callbacks.
+    final playerToDispose = mainPlayer;
     ScreenshotService().whenIdle().then((_) async {
+      if (playerToDispose == null) {
+        try {
+          ScreenshotService().markReady();
+        } catch (_) {}
+        return;
+      }
       try {
-        if (mainPlayer.state.playing) {
-          await mainPlayer.pause();
+        if (playerToDispose.state.playing) {
+          await playerToDispose.pause();
         }
         await Future.delayed(const Duration(milliseconds: 100));
-        await mainPlayer.dispose();
+        await playerToDispose.dispose();
         print('Players disposed successfully (delayed)');
-        // Re-enable screenshot host after players are fully disposed
         try {
           ScreenshotService().markReady();
         } catch (_) {}
       } catch (e) {
         print('Error during delayed player disposal: $e');
         try {
-          mainPlayer.dispose();
+          await playerToDispose.dispose();
         } catch (e2) {
           print('Force disposal also failed: $e2');
         }
@@ -724,11 +741,12 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       _isMuted = !_isMuted;
     });
 
+    if (mainPlayer == null) return;
     if (_isMuted) {
-      mainPlayer.setVolume(0);
+      mainPlayer!.setVolume(0);
       print('ClipPlayback: Audio muted');
     } else {
-      mainPlayer.setVolume(100);
+      mainPlayer!.setVolume(100);
       print('ClipPlayback: Audio unmuted');
     }
   }
@@ -893,7 +911,10 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
                   children: [
-                    Video(controller: mainController),
+                    if (_playersCreated && mainController != null)
+                      Video(controller: mainController!)
+                    else
+                      const Center(child: CircularProgressIndicator()),
                     // 重播按钮
                     Positioned(
                       bottom: 8, // 恢复原来的位置
@@ -999,9 +1020,10 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                   ),
                   const SizedBox(height: 4),
                   // 进度条
-                  StreamBuilder<Duration>(
-                    stream: mainPlayer.stream.duration,
-                    initialData: mainPlayer.state.duration,
+                  if (_playersCreated && mainPlayer != null)
+                    StreamBuilder<Duration>(
+                    stream: mainPlayer!.stream.duration,
+                    initialData: mainPlayer!.state.duration,
                     builder: (context, snapshot) {
                       final totalDuration = snapshot.data ?? Duration.zero;
                       if (totalDuration == Duration.zero) {
@@ -1011,7 +1033,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                       return Container(
                         margin: const EdgeInsets.symmetric(horizontal: 8),
                         child: CustomProgressBar(
-                          player: mainPlayer,
+                          player: mainPlayer!,
                           startTime: currentClip.startTime,
                           endTime: currentClip.endTime,
                           onSetStart: (time) {},

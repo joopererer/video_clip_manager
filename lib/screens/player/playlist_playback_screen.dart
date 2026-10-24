@@ -96,15 +96,13 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
   final List<int> _playedItems = []; // 已播放的片段索引
   List<PlaylistItemWithClip> _generatedPlaylist = []; // 预生成的播放列表
 
+  bool _playerCreated = false;
+
   @override
   void initState() {
     super.initState();
-    player = Player();
-    controller = VideoController(player);
     _focusNode = FocusNode(); // 初始化焦点节点
-    // Disable screenshot host while playlist playback is active to reduce texture races
-    ScreenshotService().disableHost();
-    _initializePlaylist();
+    unawaited(_bootPlaylistPlayer());
 
     // 延迟请求焦点，确保组件完全初始化
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -327,6 +325,19 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       case PlaybackMode.random:
         return Colors.orange;
     }
+  }
+
+  Future<void> _bootPlaylistPlayer() async {
+    PreviewService().pauseGlobalPreGeneration();
+    await ScreenshotService().prepareForPlayback();
+    if (!mounted || _disposed) return;
+
+    player = Player();
+    controller = VideoController(player);
+    if (mounted) {
+      setState(() => _playerCreated = true);
+    }
+    _initializePlaylist();
   }
 
   void _initializePlaylist() {
@@ -1418,20 +1429,23 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     _playingSubscription?.cancel();
     _focusNode.dispose(); // 释放焦点节点
 
-    // Delay player disposal until screenshot queue is idle to avoid native texture races
+    if (!_playerCreated) {
+      super.dispose();
+      return;
+    }
+    final playerToDispose = player;
     ScreenshotService().whenIdle().then((_) async {
       try {
-        await player.dispose();
+        await playerToDispose.dispose();
         print('Playlist player disposed (delayed)');
       } catch (e) {
         print('Error disposing playlist player after idle: $e');
         try {
-          player.dispose();
+          await playerToDispose.dispose();
         } catch (e2) {
           print('Force dispose failed: $e2');
         }
       } finally {
-        // Re-enable screenshot host after player disposed
         try {
           ScreenshotService().markReady();
           print('ScreenshotService: markReady() called after playlist dispose');
@@ -1446,6 +1460,13 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_playerCreated) {
+      return Scaffold(
+        appBar: AppBar(title: Text('播放列表: ${widget.playlist.name}')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     if (_playlistItems.isEmpty) {
       return Scaffold(
         appBar: AppBar(title: Text('播放列表: ${widget.playlist.name}')),
@@ -1518,7 +1539,9 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                   children: [
                     GestureDetector(
                       onTap: _togglePlayPause,
-                      child: Video(controller: controller),
+                      child: _playerCreated
+                          ? Video(controller: controller)
+                          : const Center(child: CircularProgressIndicator()),
                     ),
                     // 快捷键提示悬浮窗
                     if (_showHints)

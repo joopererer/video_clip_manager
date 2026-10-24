@@ -1,10 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:flutter/foundation.dart';
-import 'dart:io';
-import 'video_metadata_cache.dart';
 import 'screenshot_service.dart';
 import '../data/app_state.dart';
 
@@ -12,7 +8,8 @@ class VideoMetadataService {
   /// Public method to get video duration using centralized ScreenshotService
   Future<Duration?> getVideoDuration(String videoPath) async {
     try {
-      if (!await File(videoPath).exists()) {
+      final isNetwork = videoPath.startsWith('http://') || videoPath.startsWith('https://');
+      if (!isNetwork && !await File(videoPath).exists()) {
         debugPrint('[VideoMetadataService] File does not exist: $videoPath');
         return null;
       }

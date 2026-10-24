@@ -8,6 +8,8 @@ import '../../widgets/clip_thumbnail.dart';
 import '../playlist/playlist_management_screen.dart';
 import '../player/playlist_playback_screen.dart';
 import '../../widgets/playlist_import_export_dialog.dart';
+import '../../services/preview_service.dart';
+import '../../services/screenshot_service.dart';
 
 class _PlaylistCardBase extends StatelessWidget {
   final Playlist playlist;
@@ -1064,11 +1066,15 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     }
   }
 
-  void _playPlaylist(
+  Future<void> _playPlaylist(
     BuildContext context,
     AppState appState,
     Playlist playlist,
-  ) {
+  ) async {
+    PreviewService().pauseGlobalPreGeneration();
+    await ScreenshotService().prepareForPlayback();
+    if (!context.mounted) return;
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => PlaylistPlaybackScreen(playlist: playlist),

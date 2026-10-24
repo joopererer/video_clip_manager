@@ -545,8 +545,10 @@ class PreviewService {
     _globalPreGenerating = true;
     print('PreviewService: Starting global pre-generation for ${videoPaths.length} videos');
     print('PreviewService: Video paths: ${videoPaths.map((p) => p.split('/').last).join(', ')}');
-    
+
     try {
+      await ScreenshotService().awaitHostReady();
+
       for (int i = 0; i < videoPaths.length; i++) {
         if (!_globalPreGenerating || generationId != _generationEpoch) {
           print('PreviewService: Global pre-generation cancelled (epoch $generationId -> $_generationEpoch)');
@@ -578,12 +580,16 @@ class PreviewService {
             continue;
           }
           
+          if (!ScreenshotService().isHostAvailable) {
+            print('PreviewService: Screenshot host disabled, stopping global pre-generation');
+            break;
+          }
+
+          await ScreenshotService().awaitHostReady();
           print('PreviewService: Starting pre-generation for $videoName (epoch $generationId)');
-          // 为单个视频预生成（不阻塞UI）
           await _preGenerateForVideo(videoPath, generationId: generationId);
-          
-          // 短暂延迟，避免过度占用资源
-          await Future.delayed(Duration(milliseconds: 100));
+          await ScreenshotService().whenIdle();
+          await Future.delayed(const Duration(milliseconds: 300));
         } catch (e) {
           print('PreviewService: Error pre-generating for $videoName: $e');
           _recordFailure(videoPath);

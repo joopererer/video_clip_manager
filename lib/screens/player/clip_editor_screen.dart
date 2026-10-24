@@ -17,6 +17,7 @@ import '../../services/thumbnail_service.dart';
 import '../../utils/tag_utils.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../../services/screenshot_service.dart';
+import '../../services/preview_service.dart';
 
 String formatDuration(Duration d) {
   final parts = d.toString().split('.').first.padLeft(8, '0').split(':');
@@ -74,11 +75,11 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
   bool _showHints = false; // 控制快捷键提示显示
   late final FocusNode _focusNode; // 全局焦点节点
 
+  bool _playerCreated = false;
+
   @override
   void initState() {
     super.initState();
-    player = Player();
-    controller = VideoController(player);
     _focusNode = FocusNode(); // 初始化焦点节点
 
     if (widget.clipToEdit != null) {
@@ -87,8 +88,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
       _resetFormToBlank();
     }
 
-    // Schedule async open to avoid using await inside initState
-    _openPlayerAsync();
+    unawaited(_bootEditorPlayer());
 
     // 延迟请求焦点，确保组件完全初始化
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -96,6 +96,24 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
         _focusNode.requestFocus();
       }
     });
+  }
+
+  Future<void> _bootEditorPlayer() async {
+    PreviewService().pauseGlobalPreGeneration();
+    await ScreenshotService().prepareForPlayback();
+    if (!mounted) return;
+
+    player = Player();
+    controller = VideoController(player);
+    if (mounted) {
+      setState(() => _playerCreated = true);
+    }
+    await _openPlayerAsync();
+    if (widget.clipToEdit != null && mounted) {
+      try {
+        await player.seek(widget.clipToEdit!.startTime);
+      } catch (_) {}
+    }
   }
 
   Future<void> _openPlayerAsync() async {
@@ -124,20 +142,30 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
 
   @override
   void dispose() {
-    // Delay player disposal until screenshot queue is idle to avoid native texture races
-    ScreenshotService().whenIdle().then((_) async {
-      try {
-        await player.dispose();
-        print('player disposed (delayed)');
-      } catch (e) {
-        print('Error disposing player after idle: $e');
+    if (_playerCreated) {
+      final playerToDispose = player;
+      ScreenshotService().whenIdle().then((_) async {
         try {
-          player.dispose();
-        } catch (e2) {
-          print('Force dispose failed: $e2');
+          if (playerToDispose.state.playing) {
+            await playerToDispose.pause();
+          }
+          await Future.delayed(const Duration(milliseconds: 100));
+          await playerToDispose.dispose();
+          print('player disposed (delayed)');
+        } catch (e) {
+          print('Error disposing player after idle: $e');
+          try {
+            await playerToDispose.dispose();
+          } catch (e2) {
+            print('Force dispose failed: $e2');
+          }
+        } finally {
+          try {
+            ScreenshotService().markReady();
+          } catch (_) {}
         }
-      }
-    });
+      });
+    }
     _splitViewController.dispose();
     _nameController.dispose();
     _notesController.dispose();
@@ -173,7 +201,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     const maxAttempts = 30; // 30次 * 100ms = 3秒
     
     while (attempts < maxAttempts && mounted) {
-      if (player.state.duration > Duration.zero) {
+      if (_playerCreated && player.state.duration > Duration.zero) {
         setState(() {
           _formClip = _formClip.copyWith(
             endTime: player.state.duration,
@@ -201,7 +229,9 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
       _originalEditingClip = clipToEdit;
       _formClip = clipToEdit.copyWith();
       _updateTextFieldsAndPreview();
-      player.seek(clipToEdit.startTime);
+      if (_playerCreated) {
+        player.seek(clipToEdit.startTime);
+      }
     });
 
     if (!fromInit) {
@@ -380,8 +410,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                 ? _formClip.startTime
                 : _formClip.coverFrameTime;
 
-            // Use legacy generation to avoid ScreenshotService races during manual cover generation
-            finalThumbnailPath = await thumbnailService.generateThumbnailLegacy(
+            finalThumbnailPath = await thumbnailService.generateThumbnail(
               widget.video.path,
               coverTime,
               _formClip.id,
@@ -626,6 +655,12 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_playerCreated) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.video.name)),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
     final appState = context.watch<AppState>();
     final thumbnailService = context.read<ThumbnailService>();
     final isEditing = _originalEditingClip != null;

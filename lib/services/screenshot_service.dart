@@ -94,13 +94,32 @@ class ScreenshotService {
     print('ScreenshotService: host disabled for playback stability');
   }
 
+  /// Schedule [markReady] and wait for the configured host settle delay.
+  Future<void> awaitHostReady() async {
+    if (_disposed) return;
+    markReady();
+    final delayMs = _markReadyDelayMs;
+    await Future.delayed(Duration(milliseconds: delayMs + 100));
+  }
+
+  /// Stop screenshot work and wait for the serialized queue before creating a visible Player.
+  Future<void> prepareForPlayback() async {
+    disableHost();
+    await whenIdle();
+    await Future.delayed(const Duration(milliseconds: 50));
+  }
+
   /// Returns a future that completes when the internal queue is idle.
-  Future<void> whenIdle() async {
+  Future<void> whenIdle({Duration timeout = const Duration(seconds: 15)}) async {
     if (_disposed) {
       print('ScreenshotService: whenIdle called after dispose');
       return;
     }
-    await _queue;
+    try {
+      await _queue.timeout(timeout);
+    } catch (e) {
+      print('ScreenshotService: whenIdle timed out or error: $e');
+    }
   }
 
   Future<void> dispose() async {
@@ -113,54 +132,67 @@ class ScreenshotService {
     } catch (_) {}
   }
 
-  /// Ensure the internal player has opened [videoPath]. Serialized.
-  Future<Duration?> _ensureOpened(String videoPath) {
-    _queue = _queue.then((_) async {
-      if (_disposed || !_hostEnabled) {
-        print('ScreenshotService: host disabled, skip open for $videoPath');
-        return null;
-      }
-      print('ScreenshotService: ensureOpen -> $videoPath');
-      // Wait for the off-screen Video to be ready (registered) before opening
-      try {
-        await _readyCompleter.future.timeout(const Duration(seconds: 5));
-        print('ScreenshotService: host ready before open');
-      } catch (_) {
-        print('ScreenshotService: host not ready before open, continuing');
-      }
+  /// Directly open [videoPath] in [_player].
+  /// Must be called within tasks already scheduled on [_queue] to avoid re-entrant deadlocks.
+  Future<void> _openDirectly(String videoPath) async {
+    if (_disposed || !_hostEnabled) {
+      print('ScreenshotService: host disabled, skip open for $videoPath');
+      return;
+    }
+    print('ScreenshotService: ensureOpen -> $videoPath');
+    // Wait for the off-screen Video to be ready (registered) before opening
+    try {
+      await _readyCompleter.future.timeout(const Duration(seconds: 5));
+      print('ScreenshotService: host ready before open');
+    } catch (_) {
+      print('ScreenshotService: host not ready before open, continuing');
+    }
 
-      if (_openPath == videoPath) {
-        print('ScreenshotService: already opened for $videoPath');
-        return;
-      }
-      try {
-        // Check file existence to avoid opening invalid paths
+    if (_openPath == videoPath) {
+      print('ScreenshotService: already opened for $videoPath');
+      return;
+    }
+    try {
+      // Check file existence for local paths; allow network paths
+      final isNetwork = videoPath.startsWith('http://') || videoPath.startsWith('https://');
+      if (!isNetwork) {
         final file = File(videoPath);
         final exists = await file.exists();
         if (!exists) {
           print('ScreenshotService: file not found: $videoPath, skipping open');
           return;
         }
+      }
 
-        try {
-          // Attempt open with timeout to avoid indefinite blocking from native plugin
-          await _player.open(Media(videoPath), play: false).timeout(_openTimeout);
+      try {
+        // Attempt open with timeout to avoid indefinite blocking from native plugin
+        await _player.open(Media(videoPath), play: false).timeout(_openTimeout);
 
-          // wait for buffer/first frame
-          await _player.stream.buffer.firstWhere((d) => d > Duration.zero).timeout(const Duration(seconds: 15));
-          await Future.delayed(const Duration(milliseconds: 200));
-          _openPath = videoPath;
-          print('ScreenshotService: opened $videoPath');
-        } on TimeoutException catch (te) {
-          print('ScreenshotService: open timed out for $videoPath: $te');
-          return;
-        }
+        // wait for buffer/first frame
+        await _player.stream.buffer.firstWhere((d) => d > Duration.zero).timeout(const Duration(seconds: 15));
+        await Future.delayed(const Duration(milliseconds: 200));
+        _openPath = videoPath;
+        print('ScreenshotService: opened $videoPath');
+      } on TimeoutException catch (te) {
+        print('ScreenshotService: open timed out for $videoPath: $te');
+        return;
+      }
+    } catch (e) {
+      print('ScreenshotService: open failed for $videoPath: $e');
+      rethrow;
+    }
+  }
+
+  /// Ensure the internal player has opened [videoPath]. Serialized.
+  Future<Duration?> _ensureOpened(String videoPath) {
+    _queue = _queue.then((_) async {
+      try {
+        await _openDirectly(videoPath);
       } catch (e) {
-        print('ScreenshotService: open failed for $videoPath: $e');
-        rethrow;
+        print('ScreenshotService: error opening $videoPath: $e');
       }
     });
-    return _queue.then((_) => _player.state.duration);
+    return _queue.then((_) => _player.state.duration, onError: (_) => null);
   }
 
   /// Take a screenshot at [time] for [videoPath]. Serialized with retries.
@@ -193,8 +225,8 @@ class ScreenshotService {
           attempt++;
           print('ScreenshotService: attempt #$attempt for $videoPath @ ${time.inSeconds}s');
 
-          // Ensure opened (this is serialized)
-          await _ensureOpened(videoPath);
+          // Ensure opened directly (already running within _queue)
+          await _openDirectly(videoPath);
 
           try {
             await _player.seek(time).timeout(_seekTimeout);

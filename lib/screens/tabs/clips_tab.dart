@@ -8,6 +8,8 @@ import '../player/clip_playback_screen.dart';
 import '../../widgets/clip_thumbnail.dart';
 import '../../widgets/add_to_playlist_dialog.dart';
 import '../../utils/tag_utils.dart';
+import '../../services/preview_service.dart';
+import '../../services/screenshot_service.dart';
 
 // 排序选项枚举
 enum SortOption {
@@ -531,7 +533,11 @@ class _ClipsTabState extends State<ClipsTab> {
     );
   }
 
-  void _playClip(BuildContext context, VideoClip clip) {
+  Future<void> _playClip(BuildContext context, VideoClip clip) async {
+    PreviewService().pauseGlobalPreGeneration();
+    await ScreenshotService().prepareForPlayback();
+    if (!context.mounted) return;
+
     final appState = context.read<AppState>();
     showDialog(
       context: context,

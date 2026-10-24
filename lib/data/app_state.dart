@@ -90,7 +90,8 @@ class AppState extends ChangeNotifier {
     _playTimeoutSeconds = _prefs.getInt('timeout_play_seconds') ?? 5;
     // Increase defaults to be more tolerant on Windows/native races
     _screenshotTimeoutSeconds = _prefs.getInt('timeout_screenshot_seconds') ?? 30;
-    _markReadyDelayMs = _prefs.getInt('mark_ready_delay_ms') ?? 2000;
+    // Single hidden-host model is more stable on Windows; keep a longer delay to reduce native race windows.
+    _markReadyDelayMs = _prefs.getInt('mark_ready_delay_ms') ?? 3000;
     
     // 设置静态实例
     _instance = this;
@@ -245,18 +246,21 @@ class AppState extends ChangeNotifier {
 
       _generateOriginalVideosIfNeeded();
       notifyListeners();
-
-      await _populateMissingMetadataAndThumbnails();
     } catch (e) {
       debugPrint("Error during initial load: $e");
     } finally {
       _setLoading(false);
     }
+
+    // Populate missing metadata and thumbnails in background without blocking UI
+    _populateMissingMetadataAndThumbnails();
   }
 
-  Future<void> _populateMissingMetadataAndThumbnails() async {
-    _isGeneratingThumbnails = true;
-    notifyListeners();
+  Future<void> _populateMissingMetadataAndThumbnails({bool showModal = false}) async {
+    if (showModal) {
+      _isGeneratingThumbnails = true;
+      notifyListeners();
+    }
 
     try {
       // 处理缺少元数据的视频
@@ -267,9 +271,11 @@ class AppState extends ChangeNotifier {
         debugPrint(
           'Populating metadata for ${videosNeedingMetadata.length} videos...',
         );
-        await Future.wait(
-          videosNeedingMetadata.map((v) => updateVideoMetadata(v.id)),
-        );
+        for (final v in videosNeedingMetadata) {
+          await updateVideoMetadata(v.id);
+          await ScreenshotService().whenIdle();
+          await Future.delayed(const Duration(milliseconds: 250));
+        }
       }
 
       // 处理缺少缩略图的视频（有duration但没有缩略图或缩略图文件不存在）
@@ -305,9 +311,9 @@ class AppState extends ChangeNotifier {
         debugPrint(
           'Populating thumbnails for ${videosNeedingThumbnails.length} videos...',
         );
-        final futures = videosNeedingThumbnails.map((video) async {
-          // Use legacy per-Player generation for reliability
-          final thumbnailFileName = await _thumbnailService.generateThumbnailLegacy(
+        for (final video in videosNeedingThumbnails) {
+          await ScreenshotService().awaitHostReady();
+          final thumbnailFileName = await _thumbnailService.generateThumbnail(
             video.path,
             Duration(milliseconds: video.duration!.inMilliseconds ~/ 2),
             video.id,
@@ -319,8 +325,9 @@ class AppState extends ChangeNotifier {
               _originalVideos[index] = video.copyWith(thumbnailPath: thumbnailFileName);
             }
           }
-        });
-        await Future.wait(futures);
+          await ScreenshotService().whenIdle();
+          await Future.delayed(const Duration(milliseconds: 250));
+        }
       }
 
       // 处理缺少缩略图的clips
@@ -354,9 +361,9 @@ class AppState extends ChangeNotifier {
         debugPrint(
           'Populating thumbnails for ${clipsNeedingThumbnails.length} clips...',
         );
-        final futures = clipsNeedingThumbnails.map((clip) async {
-          // Use legacy per-Player generation to maximize success for initial/populate flows.
-          final thumbnailFileName = await _thumbnailService.generateThumbnailLegacy(
+        for (final clip in clipsNeedingThumbnails) {
+          await ScreenshotService().awaitHostReady();
+          final thumbnailFileName = await _thumbnailService.generateThumbnail(
             clip.videoPath,
             clip.coverFrameTime,
             clip.id,
@@ -365,13 +372,16 @@ class AppState extends ChangeNotifier {
           if (thumbnailFileName != null) {
             updateClipThumbnail(clip.id, thumbnailFileName);
           }
-        });
-        await Future.wait(futures);
+          await ScreenshotService().whenIdle();
+          await Future.delayed(const Duration(milliseconds: 250));
+        }
       }
     } catch (e) {
       debugPrint("Error populating metadata and thumbnails: $e");
     } finally {
-      _isGeneratingThumbnails = false;
+      if (showModal) {
+        _isGeneratingThumbnails = false;
+      }
       notifyListeners();
       _scheduleSave();
     }
@@ -491,11 +501,7 @@ class AppState extends ChangeNotifier {
       }
 
       // Ensure the screenshot host is ready before regeneration starts
-      try {
-        ScreenshotService().markReady();
-        final delayMs = _markReadyDelayMs;
-        await Future.delayed(Duration(milliseconds: delayMs + 100));
-      } catch (_) {}
+      await ScreenshotService().awaitHostReady();
 
       for (int i = 0; i < _clips.length; i++) {
         _clips[i] = _clips[i].copyWith(thumbnailPath: null);
@@ -511,9 +517,9 @@ class AppState extends ChangeNotifier {
       // Regenerate thumbnails for clips
       if (_clips.isNotEmpty) {
         debugPrint('Regenerating thumbnails for ${_clips.length} clips...');
-        final futures = _clips.map((clip) async {
-          // Use legacy per-Player generation for full Refresh All to maximize success.
-          final thumbnailFileName = await _thumbnailService.generateThumbnailLegacy(
+        for (final clip in _clips) {
+          await ScreenshotService().awaitHostReady();
+          final thumbnailFileName = await _thumbnailService.generateThumbnail(
             clip.videoPath,
             clip.coverFrameTime,
             clip.id,
@@ -522,8 +528,9 @@ class AppState extends ChangeNotifier {
           if (thumbnailFileName != null) {
             updateClipThumbnail(clip.id, thumbnailFileName);
           }
-        });
-        await Future.wait(futures);
+          await ScreenshotService().whenIdle();
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
       }
 
       // Regenerate metadata and thumbnails for videos
@@ -531,10 +538,12 @@ class AppState extends ChangeNotifier {
         debugPrint(
           'Regenerating metadata and thumbnails for ${_originalVideos.length} videos...',
         );
-        final futures = _originalVideos.map(
-          (video) => updateVideoMetadata(video.id),
-        );
-        await Future.wait(futures);
+        for (final video in _originalVideos) {
+          await ScreenshotService().awaitHostReady();
+          await updateVideoMetadata(video.id);
+          await ScreenshotService().whenIdle();
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
       }
     } catch (e) {
       debugPrint('Error in forceRefreshThumbnails: $e');
@@ -602,13 +611,14 @@ class AppState extends ChangeNotifier {
       // Generate thumbnail for video
       String? thumbnailPath;
       if (_currentDbPath != null) {
-        // Use legacy generation for metadata-derived video thumbnails
-        thumbnailPath = await _thumbnailService.generateThumbnailLegacy(
+        await ScreenshotService().awaitHostReady();
+        thumbnailPath = await _thumbnailService.generateThumbnail(
           video.path,
           Duration(milliseconds: duration.inMilliseconds ~/ 2),
           video.id,
           dbPath: _currentDbPath!,
         );
+        await ScreenshotService().whenIdle();
       }
 
       _originalVideos[index] = video.copyWith(
@@ -636,7 +646,7 @@ class AppState extends ChangeNotifier {
 
   // --- Clip Methods ---
   Future<void> addClip(VideoClip clip) async {
-    final thumbnailFileName = await _thumbnailService.generateThumbnailLegacy(
+    final thumbnailFileName = await _thumbnailService.generateThumbnail(
       clip.videoPath,
       clip.coverFrameTime,
       clip.id,

@@ -109,11 +109,7 @@ class _MainScreenState extends State<MainScreen>
     try {
       print('MainScreen: preparing for modal - suspending generation and disabling host');
       PreviewService().suspendBackgroundGeneration();
-      ScreenshotService().disableHost();
-      // Wait for screenshot queue to drain but don't wait indefinitely.
-      await ScreenshotService().whenIdle().timeout(const Duration(seconds: 5));
-      // Small delay to allow native callbacks to settle.
-      await Future.delayed(const Duration(milliseconds: 50));
+      await ScreenshotService().prepareForPlayback().timeout(const Duration(seconds: 5));
     } catch (e) {
       print('MainScreen: _prepareForModal warning: $e');
     }
