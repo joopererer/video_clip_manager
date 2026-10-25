@@ -15,6 +15,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../services/thumbnail_service.dart';
+import '../../services/preview_service.dart';
 import '../../utils/tag_utils.dart';
 import '../../widgets/custom_progress_bar.dart';
 
@@ -78,6 +79,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
   @override
   void initState() {
     super.initState();
+    PreviewService().pauseGlobalPreGeneration();
     player = Player();
     controller = VideoController(player);
     _focusNode = FocusNode(); // 初始化焦点节点
@@ -100,6 +102,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
 
   @override
   void dispose() {
+    PreviewService().resumeGlobalPreGeneration();
     player.dispose();
     _splitViewController.dispose();
     _nameController.dispose();
@@ -174,9 +177,20 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
         ),
       );
     } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         _scrollToClip(clipToEdit.id);
-        player.seek(clipToEdit.startTime);
+        if (clipToEdit.startTime > Duration.zero) {
+          try {
+            if (player.state.duration == Duration.zero) {
+              await player.stream.duration
+                  .firstWhere((d) => d > Duration.zero)
+                  .timeout(const Duration(seconds: 8));
+            }
+          } catch (_) {}
+          if (mounted) {
+            player.seek(clipToEdit.startTime);
+          }
+        }
       });
     }
   }

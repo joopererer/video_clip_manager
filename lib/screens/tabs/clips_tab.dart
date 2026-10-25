@@ -8,6 +8,7 @@ import '../player/clip_playback_screen.dart';
 import '../../widgets/clip_thumbnail.dart';
 import '../../widgets/add_to_playlist_dialog.dart';
 import '../../utils/tag_utils.dart';
+import '../../services/preview_service.dart';
 
 // 排序选项枚举
 enum SortOption {
@@ -613,10 +614,13 @@ class _ClipsTabState extends State<ClipsTab> {
 
     // 用户在播放界面点击了“编辑”，等待播放器资源与 Windows Direct3D 纹理完全释放后再进入编辑页
     if (clipToEdit != null && context.mounted) {
-      await Future.delayed(const Duration(milliseconds: 150));
+      await Future.delayed(const Duration(milliseconds: 200));
       if (context.mounted) {
         _editClip(context, clipToEdit);
       }
+    } else {
+      // 仅当用户关闭播放器且未进入编辑页时，才恢复后台预生成
+      PreviewService().resumeGlobalPreGeneration();
     }
   }
 

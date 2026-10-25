@@ -103,19 +103,40 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
         return;
       }
 
-      // 等待一下确保媒体加载完成
-      await Future.delayed(Duration(milliseconds: 300));
+      // 等待媒体加载完成（网络流/HLS 需要建立网络连接并解析分片，通常耗时 1~6 秒）
+      Duration loadedDuration = mainPlayer.state.duration;
+      if (loadedDuration == Duration.zero) {
+        try {
+          final isNetwork = _currentClip.videoPath.startsWith('http://') ||
+              _currentClip.videoPath.startsWith('https://');
+          final timeout = isNetwork
+              ? const Duration(seconds: 12)
+              : const Duration(seconds: 2);
+          loadedDuration = await mainPlayer.stream.duration
+              .firstWhere((d) => d > Duration.zero)
+              .timeout(timeout);
+        } catch (_) {
+          loadedDuration = mainPlayer.state.duration;
+        }
+      }
 
-      // 检查播放器状态
-      if (mainPlayer.state.duration == Duration.zero) {
+      if (!mounted || _disposed) {
+        print('Widget disposed during initialization, aborting'); // 调试信息
+        return;
+      }
+
+      // 如果依然未能获取时长但已经有缓冲数据，也可以继续尝试
+      if (loadedDuration == Duration.zero && mainPlayer.state.buffer == Duration.zero) {
         throw Exception('Main player failed to load media');
       }
 
       // 主播放器跳转到开始时间并开始播放
       print('Seeking main player to: ${_currentClip.startTime}'); // 调试信息
       final targetSeek = widget.initialSeekTime ?? _currentClip.startTime;
-      await mainPlayer.seek(targetSeek);
-      await Future.delayed(Duration(milliseconds: 100));
+      if (targetSeek > Duration.zero) {
+        await mainPlayer.seek(targetSeek);
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
 
       print('Starting main player playback'); // 调试信息
       await mainPlayer.play();
@@ -198,6 +219,11 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   /// 智能预生成逻辑
   Future<void> _smartPreGenerate() async {
     if (widget.clip.videoPath == null) return;
+    if (_currentClip.videoPath.startsWith('http://') ||
+        _currentClip.videoPath.startsWith('https://')) {
+      // 网络流/在线视频不执行本地关键帧提取，避免播放与抓帧在同一播放器上冲突
+      return;
+    }
 
     try {
       // 检查当前进度
@@ -369,9 +395,6 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     print('ClipPlaybackScreen disposing...'); // 调试信息
     _disposed = true;
 
-    // 恢复全局预生成
-    PreviewService().resumeGlobalPreGeneration();
-
     // 取消所有定时器和订阅
     _recoveryTimer?.cancel();
     _positionSubscription?.cancel();
@@ -389,26 +412,13 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   // 新增：安全的播放器释放方法
   Future<void> _disposePlayers() async {
     try {
-      // 先暂停播放器
       if (mainPlayer.state.playing) {
         await mainPlayer.pause();
       }
-
-      // 等待一下确保暂停完成
-      await Future.delayed(Duration(milliseconds: 100));
-
-      // 释放播放器
       await mainPlayer.dispose();
-
       print('Players disposed successfully'); // 调试信息
     } catch (e) {
       print('Error during player disposal: $e'); // 调试信息
-      // 即使出错也要尝试强制释放
-      try {
-        mainPlayer.dispose();
-      } catch (e2) {
-        print('Force disposal also failed: $e2'); // 调试信息
-      }
     }
   }
 
@@ -535,19 +545,29 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     return null;
   }
 
-  void _editClip() {
+  Future<void> _editClip() async {
     if (_disposed) return;
     _disposed = true;
 
+    // 取消所有定时器和订阅
+    _recoveryTimer?.cancel();
+    _positionSubscription?.cancel();
+    _playingSubscription?.cancel();
+
     try {
       if (mainPlayer.state.playing) {
-        mainPlayer.pause();
+        await mainPlayer.pause();
       }
-    } catch (_) {}
+      await mainPlayer.dispose();
+      print('ClipPlaybackScreen: Player disposed cleanly prior to edit navigation');
+    } catch (e) {
+      print('ClipPlaybackScreen: Error disposing player before edit: $e');
+    }
 
-    // 关闭播放弹窗，并将当前 clip 作为结果回传给 ClipsTab 调用方
-    // 由 ClipsTab 在弹窗完全销毁并释放播放器后推入编辑页，避免原生 Direct3D 纹理与回调并发销毁导致崩溃
-    Navigator.of(context).pop(_currentClip);
+    if (mounted) {
+      // 关闭播放弹窗，并将当前 clip 作为结果回传给 ClipsTab 调用方
+      Navigator.of(context).pop(_currentClip);
+    }
   }
 
   void _filterByTag(String tag) {
