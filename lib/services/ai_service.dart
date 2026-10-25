@@ -61,6 +61,8 @@ class ClipCaptionInfo {
   final String summary;
   final String searchDocument;
 
+  List<String> get tags => keyActions;
+
   const ClipCaptionInfo({
     required this.scene,
     required this.mainSubject,
@@ -70,13 +72,14 @@ class ClipCaptionInfo {
   });
 
   factory ClipCaptionInfo.fromJson(Map<String, dynamic> json) {
+    final rawTags = json['tags'] ?? json['key_actions'] ?? json['actions'];
+    final scene = json['scene'] as String? ?? '';
+    final subject = (json['main_subject'] ?? json['subject']) as String? ?? '';
+    final sanitized = AiService.sanitizeTags(rawTags, scene: scene, mainSubject: subject);
     return ClipCaptionInfo(
-      scene: json['scene'] as String? ?? '',
-      mainSubject: json['main_subject'] as String? ?? '',
-      keyActions: (json['key_actions'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const [],
+      scene: scene,
+      mainSubject: subject,
+      keyActions: sanitized,
       summary: json['summary'] as String? ?? '',
       searchDocument: json['search_document'] as String? ?? '',
     );
@@ -365,16 +368,23 @@ class AiService {
     }
 
     final promptText = instruction ??
-        '你是一位资深视频镜头与剧情分析专家。'
-        '请按时间先后顺序仔细观察输入的一组视频连续关键帧画面，'
-        '提炼该视频片段的核心事件、环境场景、主要主体与关键动作序列。\n'
-        '【关键要求】：必须严格且仅输出标准纯 JSON 格式（不要使用任何外部 Markdown 标记），Schema 结构必须包含以下字段：\n'
+        '你是一位资深视频镜头与媒体资产分析专家。'
+        '请仔细观察按时间先后顺序排列的一组视频连续关键帧画面，提炼该视频片段的核心事件、环境场景、主要主体与专业分类标签。\n\n'
+        '【关键输出要求】：\n'
+        '1. 必须严格且仅输出标准纯 JSON 格式（不要使用 Markdown 代码块或外部额外文本）。\n'
+        '2. Schema 结构必须包含以下字段：\n'
         '{\n'
-        '  "scene": "简短精准的场景环境描述，如：雨夜城市街道、海滩日落、办公室会议室",\n'
-        '  "main_subject": "画面的核心主角/主体，如：红色跑车、冲浪运动员、演讲者",\n'
-        '  "key_actions": ["动作1", "动作2", "动作3"],\n'
+        '  "scene": "精炼场景环境名词（不超过8个字，例如：雪山、雨夜街道、办公室）",\n'
+        '  "main_subject": "画面的核心主角/主体（不超过6个字，例如：女人、跑车、金毛犬）",\n'
+        '  "tags": ["标签1", "标签2", "标签3", "标签4", "标签5"],\n'
+        '  "key_actions": ["动作动名词1", "动作动名词2"],\n'
         '  "summary": "一段生动连贯的自然语言剧情概要，详细描述整个片段发生了什么故事"\n'
-        '}';
+        '}\n\n'
+        '【标签规范（非常重要）】：\n'
+        '- "tags" 是面向专业视频素材管理系统（如 Eagle、Adobe Premiere、素材库）的分类关键词列表（建议 5-10 个）。\n'
+        '- 必须全部为【独立的原子关键词/名词/动名词】（2~4字为佳，如：女人、雪山、木棍、大雾、徒步、冬季、户外、远足）。\n'
+        '- 严禁包含整句或短语！严禁出现标点符号（绝不允许出现逗号、顿号、分号，如“行走，手持木棍”是严重错误的）！\n'
+        '- 请将动作与物体完全拆开为原子词，例如应输出 "徒步", "木棍"，而不是 "手持木棍行走"。';
 
     final contentItems = <Map<String, dynamic>>[
       {
@@ -438,6 +448,91 @@ class AiService {
     return parseCaptionFromRaw(rawText);
   }
 
+  /// 对模型输出的原始标签列表进行专业级媒体素材标签清洗与原子化：
+  /// 1. 拆分被逗号、顿号、分号、斜杠、空格等粘连的复合短句（如“行走，手持木棍” -> “行走”, “木棍”）
+  /// 2. 剥离无意义停用前缀词（如“一个”、“手持”、“手拿”、“身穿”、“在”）
+  /// 3. 过滤纯标点、无意义单字及过长句子（保留 2~8 字符的标准原子关键词）
+  /// 4. 融合主体名词与场景提炼词，去重并返回规范标签列表
+  static List<String> sanitizeTags(
+    dynamic rawTags, {
+    String? scene,
+    String? mainSubject,
+  }) {
+    final result = <String>{};
+
+    void processCandidate(String raw) {
+      if (raw.trim().isEmpty) return;
+      // 1. 按常见中英文分隔符切分（逗号、顿号、分号、竖线、斜杠、空格、换行）
+      final tokens = raw.split(RegExp(r'[,，、;；|/\\\s\n\r]+'));
+      for (final token in tokens) {
+        var clean = token
+            .replaceAll(RegExp(r'^[^\w\u4e00-\u9fa5]+|[^\w\u4e00-\u9fa5]+$'), '')
+            .trim();
+        if (clean.isEmpty) continue;
+
+        // 剥离常见谓词/助词前缀，提取核心物体或动作名词
+        // 例如："手持木棍" -> "木棍", "身穿蓝衣" -> "蓝衣", "一个女人" -> "女人"
+        for (final prefix in [
+          '一个', '一根', '一只', '一部', '一片', '手持', '手拿', '手提', '身穿',
+          '佩戴', '背着', '站在', '走在', '正在', '在'
+        ]) {
+          if (clean.startsWith(prefix) && clean.length > prefix.length + 1) {
+            clean = clean.substring(prefix.length).trim();
+            break;
+          }
+        }
+
+        // 剥离后缀助词
+        for (final suffix in ['的', '中', '着', '了']) {
+          if (clean.endsWith(suffix) && clean.length > suffix.length + 1) {
+            clean = clean.substring(0, clean.length - suffix.length).trim();
+            break;
+          }
+        }
+
+        // 过滤长度不符合原子标签规范的项（通常原子标签长度在 2 到 8 个字之间）
+        if (clean.length >= 2 && clean.length <= 8) {
+          result.add(clean);
+        }
+      }
+    }
+
+    // 处理 rawTags（兼容 List 或逗号隔开的 String）
+    if (rawTags is List) {
+      for (final item in rawTags) {
+        if (item != null) processCandidate(item.toString());
+      }
+    } else if (rawTags is String) {
+      processCandidate(rawTags);
+    }
+
+    // 智能补充主体名词（若有效）
+    if (mainSubject != null && mainSubject.trim().isNotEmpty) {
+      processCandidate(mainSubject);
+    }
+
+    // 智能提取场景中的精炼名词（若场景很短 <= 6 字直接加入，若长则尝试提取环境高频词）
+    if (scene != null && scene.trim().isNotEmpty) {
+      final s = scene.trim();
+      if (s.length >= 2 && s.length <= 6 && !s.contains(RegExp(r'[,，、。!！?？]'))) {
+        processCandidate(s);
+      } else {
+        // 如果 scene 是一长串描述，提取其中可能出现的高频环境词
+        for (final envKeyword in [
+          '雪山', '海滩', '森林', '沙漠', '草原', '街道', '办公室', '会议室',
+          '城市', '公路', '星空', '雾气', '大雾', '晴天', '雨夜', '室内', '户外',
+          '山脉', '湖泊', '河流', '日落', '日出', '夜景'
+        ]) {
+          if (s.contains(envKeyword)) {
+            result.add(envKeyword);
+          }
+        }
+      }
+    }
+
+    return result.toList();
+  }
+
   /// 鲁棒 JSON 解析器，自动剥离 Markdown 代码块并容错
   ClipCaptionInfo parseCaptionFromRaw(String rawText) {
     String clean = rawText.trim();
@@ -451,9 +546,9 @@ class AiService {
     try {
       final map = jsonDecode(clean) as Map<String, dynamic>;
       final scene = map['scene']?.toString() ?? '视频场景';
-      final mainSubject = map['main_subject']?.toString() ?? '主体';
-      final rawActions = (map['key_actions'] as List<dynamic>?) ?? [];
-      final keyActions = rawActions.map((a) => a.toString()).toList();
+      final mainSubject = (map['main_subject'] ?? map['subject'])?.toString() ?? '主体';
+      final rawTags = map['tags'] ?? map['key_actions'] ?? map['actions'] ?? [];
+      final keyActions = sanitizeTags(rawTags, scene: scene, mainSubject: mainSubject);
       final summary = map['summary']?.toString() ?? clean;
 
       final searchDoc = 'Scene: $scene\nMain Subject: $mainSubject\nActions: ${keyActions.join(", ")}\nSummary: $summary';
@@ -466,10 +561,11 @@ class AiService {
         searchDocument: searchDoc,
       );
     } catch (_) {
+      final keyActions = sanitizeTags(rawText);
       return ClipCaptionInfo(
         scene: '视频片段',
         mainSubject: '主体',
-        keyActions: const ['动作'],
+        keyActions: keyActions.isNotEmpty ? keyActions : const ['视频'],
         summary: rawText,
         searchDocument: rawText,
       );

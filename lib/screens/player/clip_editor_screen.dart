@@ -321,14 +321,18 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
       _notesController.text = newNotes;
 
       final currentTags = Set<String>.from(_formClip.tags);
-      for (final action in caption.keyActions) {
-        final clean = action.trim();
-        if (clean.isNotEmpty && clean.length <= 15) {
+      for (final tag in caption.keyActions) {
+        final clean = tag.trim();
+        if (clean.isNotEmpty &&
+            clean.length <= 10 &&
+            !clean.contains(RegExp(r'[,，、;；。!！?？]'))) {
           currentTags.add(clean);
         }
       }
-      if (caption.scene.isNotEmpty && caption.scene.length <= 10) {
-        currentTags.add(caption.scene);
+      if (caption.scene.isNotEmpty &&
+          caption.scene.length <= 6 &&
+          !caption.scene.contains(RegExp(r'[,，、;；。!！?？]'))) {
+        currentTags.add(caption.scene.trim());
       }
 
       setState(() {
