@@ -306,6 +306,11 @@ class AiService {
 
     // 1. 若配置了 API 端点（Ollama / LM Studio / DashScope / OpenAI 兼容）
     if (apiUrl != null && apiUrl.trim().isNotEmpty) {
+      final trimmedUrl = apiUrl.trim();
+      if ((trimmedUrl.contains('localhost:11434') || trimmedUrl.contains('127.0.0.1:11434')) &&
+          !(await isServerHealthy(trimmedUrl))) {
+        await ensureBuiltInLlamaServerRunning(port: '11434');
+      }
       return _generateCaptionViaApi(
         paths: paths,
         apiUrl: apiUrl.trim(),
@@ -470,4 +475,109 @@ class AiService {
       );
     }
   }
+
+  Process? _localServerProcess;
+  Process? get localServerProcess => _localServerProcess;
+
+  /// 停止内置服务进程
+  void stopBuiltInServer() {
+    _localServerProcess?.kill();
+    _localServerProcess = null;
+  }
+
+  /// 检测本地 llama-server.exe 执行程序
+  Future<String?> resolveLlamaServerExe() async {
+    final candidates = [
+      r'D:\workspace\local-media-ai\runtime\llama\llama-server.exe',
+      r'D:\workspace\FlutterProjects\video_clip_manager\runtime\llama\llama-server.exe',
+      r'runtime\llama\llama-server.exe',
+    ];
+    for (final c in candidates) {
+      if (File(c).existsSync()) return c;
+    }
+    return null;
+  }
+
+  /// 检测本地 Qwen2-VL GGUF 权重文件
+  Future<Map<String, String>?> resolveLocalQwenModels() async {
+    final searchDirs = [
+      r'D:\workspace\local-media-ai\runtime\models\qwen2-vl',
+      r'D:\workspace\FlutterProjects\video_clip_manager\runtime\models\qwen2-vl',
+      r'runtime\models\qwen2-vl',
+    ];
+
+    for (final dir in searchDirs) {
+      final modelFile = File(p.join(dir, 'Qwen2-VL-2B-Instruct-Q4_K_M.gguf'));
+      final mmprojFile = File(p.join(dir, 'mmproj-Qwen2-VL-2B-Instruct-f16.gguf'));
+      if (modelFile.existsSync() && mmprojFile.existsSync()) {
+        return {
+          'model': modelFile.path,
+          'mmproj': mmprojFile.path,
+        };
+      }
+    }
+    return null;
+  }
+
+  /// 检测指定 URL 的服务是否存活
+  Future<bool> isServerHealthy(String baseUrl) async {
+    try {
+      final healthUri = Uri.parse(
+        baseUrl.endsWith('/') ? '${baseUrl}health' : '$baseUrl/health',
+      );
+      final res = await http.get(healthUri).timeout(const Duration(milliseconds: 1200));
+      if (res.statusCode >= 200 && res.statusCode < 400) return true;
+    } catch (_) {}
+
+    try {
+      final modelsUri = Uri.parse(
+        baseUrl.endsWith('/') ? '${baseUrl}models' : '$baseUrl/models',
+      );
+      final res = await http.get(modelsUri).timeout(const Duration(milliseconds: 1200));
+      if (res.statusCode >= 200 && res.statusCode < 400) return true;
+    } catch (_) {}
+
+    return false;
+  }
+
+  /// 启动内置的 llama-server 守护进程
+  Future<bool> ensureBuiltInLlamaServerRunning({String port = '11434'}) async {
+    final baseUrl = 'http://127.0.0.1:$port';
+    if (await isServerHealthy(baseUrl)) return true;
+
+    final exe = await resolveLlamaServerExe();
+    final models = await resolveLocalQwenModels();
+
+    if (exe == null || models == null) {
+      return false;
+    }
+
+    try {
+      debugPrint('[AiService] Spawning built-in llama-server on port $port...');
+      _localServerProcess = await Process.start(
+        exe,
+        [
+          '-m', models['model']!,
+          '--mmproj', models['mmproj']!,
+          '--port', port,
+          '-ngl', '99',
+          '--ctx-size', '4096',
+        ],
+        mode: ProcessStartMode.detached,
+      );
+
+      // 轮询等待服务就绪
+      for (int i = 0; i < 15; i++) {
+        await Future.delayed(const Duration(milliseconds: 800));
+        if (await isServerHealthy(baseUrl)) {
+          debugPrint('[AiService] Built-in llama-server is ready!');
+          return true;
+        }
+      }
+    } catch (e) {
+      debugPrint('[AiService] Failed to start built-in llama-server: $e');
+    }
+    return false;
+  }
+
 }

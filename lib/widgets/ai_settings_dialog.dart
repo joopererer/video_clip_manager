@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -20,6 +21,10 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
 
   bool _obscureApiKey = true;
   bool _isTesting = false;
+  bool _isDownloadingModel = false;
+  String? _downloadProgress;
+  bool _localModelsReady = false;
+  String? _localModelPath;
   String? _testResult;
   bool _testSuccess = false;
 
@@ -64,6 +69,87 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
     _apiUrlController = TextEditingController(text: appState.vlmApiUrl);
     _apiKeyController = TextEditingController(text: appState.vlmApiKey);
     _modelController = TextEditingController(text: appState.vlmModel);
+    _checkLocalModelStatus();
+  }
+
+  Future<void> _checkLocalModelStatus() async {
+    final appState = context.read<AppState>();
+    final models = await appState.aiService.resolveLocalQwenModels();
+    if (mounted) {
+      setState(() {
+        _localModelsReady = models != null;
+        _localModelPath = models?['model'];
+      });
+    }
+  }
+
+  Future<void> _downloadBuiltInModel() async {
+    setState(() {
+      _isDownloadingModel = true;
+      _downloadProgress = '正在启动下载脚本，从国内高速镜像拉取模型文件...';
+    });
+
+    try {
+      final scriptCandidates = [
+        r'D:\workspace\local-media-ai\scripts\fetch_qwen2vl_models.ps1',
+        r'D:\workspace\FlutterProjects\video_clip_manager\scripts\fetch_qwen2vl_models.ps1',
+        r'scripts\fetch_qwen2vl_models.ps1',
+      ];
+      String? scriptPath;
+      for (final s in scriptCandidates) {
+        if (File(s).existsSync()) {
+          scriptPath = s;
+          break;
+        }
+      }
+
+      if (scriptPath == null) {
+        throw Exception('未找到下载脚本 scripts/fetch_qwen2vl_models.ps1');
+      }
+
+      final proc = await Process.start(
+        'powershell',
+        [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          scriptPath,
+          '-Mirror',
+          'https://hf-mirror.com',
+        ],
+      );
+
+      proc.stdout.transform(const SystemEncoding().decoder).listen((data) {
+        if (mounted) {
+          setState(() {
+            _downloadProgress = data.trim();
+          });
+        }
+      });
+
+      final exitCode = await proc.exitCode;
+      if (exitCode == 0) {
+        await _checkLocalModelStatus();
+        if (mounted) {
+          setState(() {
+            _downloadProgress = '模型下载完成并通过哈希校验！本地已就绪。';
+          });
+        }
+      } else {
+        throw Exception('下载退出代码: $exitCode');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _downloadProgress = '下载异常: $e';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloadingModel = false);
+      }
+    }
   }
 
   @override
@@ -105,6 +191,13 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
     });
 
     try {
+      final appState = context.read<AppState>();
+      if ((url.contains('localhost:11434') || url.contains('127.0.0.1:11434')) &&
+          !(await appState.aiService.isServerHealthy(url))) {
+        setState(() => _testResult = '正在检测并启动内置 llama.cpp 推理守护服务...');
+        await appState.aiService.ensureBuiltInLlamaServerRunning(port: '11434');
+      }
+
       final endpoint = url.endsWith('/')
           ? '${url}chat/completions'
           : '$url/chat/completions';
@@ -252,6 +345,76 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
                         ),
                       ),
                       const SizedBox(height: 16),
+                      if (_selectedMode == 'ollama') ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 14),
+                          decoration: BoxDecoration(
+                            color: _localModelsReady ? Colors.green.shade50 : Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _localModelsReady ? Colors.green.shade200 : Colors.blue.shade200,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    _localModelsReady ? Icons.check_circle : Icons.download_for_offline,
+                                    color: _localModelsReady ? Colors.green.shade700 : Colors.blue.shade700,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _localModelsReady
+                                        ? '本地内置模型已就绪 (免装 Ollama，支持 Vulkan GPU 加速)'
+                                        : '本地内置模型尚未下载 (约 2.2GB)',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: _localModelsReady ? Colors.green.shade900 : Colors.blue.shade900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _localModelsReady
+                                    ? '路径: $_localModelPath'
+                                    : '使用与 EmbeddingGemma 2 相同的机制，一键从国内镜像拉取 Qwen2-VL 模型：',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: _localModelsReady ? Colors.green.shade800 : Colors.blue.shade800,
+                                ),
+                              ),
+                              if (!_localModelsReady) ...[
+                                const SizedBox(height: 8),
+                                if (_downloadProgress != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8.0),
+                                    child: Text(
+                                      _downloadProgress!,
+                                      style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
+                                    ),
+                                  ),
+                                FilledButton.tonalIcon(
+                                  icon: _isDownloadingModel
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.download, size: 16),
+                                  label: Text(_isDownloadingModel ? '正在高速下载并校验...' : '一键下载本地 Qwen2-VL 模型 (国内镜像)'),
+                                  onPressed: _isDownloadingModel ? null : _downloadBuiltInModel,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
                       TextField(
                         controller: _apiUrlController,
                         decoration: const InputDecoration(
@@ -371,6 +534,6 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
 extension on String {
   String takePrefix(int len) {
     if (length <= len) return this;
-    return substring(0, len) + '...';
+    return '${substring(0, len)}...';
   }
 }
