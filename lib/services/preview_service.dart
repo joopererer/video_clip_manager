@@ -27,6 +27,7 @@ class PreviewService {
 
   // 全局预生成状态
   bool _globalPreGenerating = false;
+  bool _isSuspended = false;
 
   // 缓存目录
   Directory? _cacheDir;
@@ -550,6 +551,10 @@ class PreviewService {
 
   /// 启动全局预生成
   Future<void> startGlobalPreGeneration(List<String> videoPaths) async {
+    if (_isSuspended) {
+      print('PreviewService: Skipped startGlobalPreGeneration because pre-generation is suspended');
+      return;
+    }
     if (_globalPreGenerating) {
       print('PreviewService: Global pre-generation already running');
       return;
@@ -565,7 +570,7 @@ class PreviewService {
 
     try {
       for (int i = 0; i < videoPaths.length; i++) {
-        if (!_globalPreGenerating) {
+        if (!_globalPreGenerating || _isSuspended) {
           print('PreviewService: Global pre-generation was interrupted');
           break;
         }
@@ -630,19 +635,15 @@ class PreviewService {
 
   /// 暂停全局预生成（用于播放时暂停）
   void pauseGlobalPreGeneration() {
-    if (_globalPreGenerating) {
-      _globalPreGenerating = false;
-      print('PreviewService: Global pre-generation paused for playback');
-    }
+    _isSuspended = true;
+    _globalPreGenerating = false;
+    print('PreviewService: Global pre-generation paused for playback');
   }
 
   /// 恢复全局预生成（用于播放结束后恢复）
   void resumeGlobalPreGeneration() {
-    if (!_globalPreGenerating) {
-      print('PreviewService: Global pre-generation resumed');
-      // 这里可以重新启动全局预生成
-      // 暂时不自动重启，由main_screen控制
-    }
+    _isSuspended = false;
+    print('PreviewService: Global pre-generation resumed');
   }
 
   /// 检查视频是否有足够的缓存

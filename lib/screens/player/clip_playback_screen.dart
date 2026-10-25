@@ -50,6 +50,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   bool _isInitializing = false;
   Timer? _recoveryTimer;
   bool _disposed = false;
+  bool _isPlayerDisposed = false;
   bool _isSeeking = false; // 新增：seek锁定标志
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<bool>? _playingSubscription;
@@ -236,14 +237,14 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
         'ClipPlayback: Current progress: ${(progress * 100).toStringAsFixed(1)}%, remaining: ${(remainingPercentage * 100).toStringAsFixed(1)}%',
       );
 
-      if (remainingPercentage <= 0.3) {
-        // 剩余少于30%，继续生成并显示loading
+      if (remainingPercentage > 0.05 && remainingPercentage <= 0.3) {
+        // 剩余少于30%且未完成，继续生成并显示loading
         print(
           'ClipPlayback: Less than 30% remaining, continuing generation...',
         );
         await _continuePreGeneration();
       } else {
-        print('ClipPlayback: More than 30% remaining, skipping generation');
+        print('ClipPlayback: Cache complete or more than 30% remaining, skipping generation');
       }
     } catch (e) {
       print('ClipPlayback: Error in smart pre-generation: $e');
@@ -279,8 +280,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     } catch (e) {
       print('ClipPlayback: Error continuing pre-generation: $e');
     } finally {
-      // 恢复全局预生成
-      PreviewService().resumeGlobalPreGeneration();
+      // 在播放界面内不恢复全局预生成，避免后台抓帧争抢 Direct3D 纹理
     }
   }
 
@@ -411,6 +411,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
 
   // 新增：安全的播放器释放方法
   Future<void> _disposePlayers() async {
+    if (_isPlayerDisposed) return;
+    _isPlayerDisposed = true;
     try {
       if (mainPlayer.state.playing) {
         await mainPlayer.pause();
@@ -554,15 +556,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     _positionSubscription?.cancel();
     _playingSubscription?.cancel();
 
-    try {
-      if (mainPlayer.state.playing) {
-        await mainPlayer.pause();
-      }
-      await mainPlayer.dispose();
-      print('ClipPlaybackScreen: Player disposed cleanly prior to edit navigation');
-    } catch (e) {
-      print('ClipPlaybackScreen: Error disposing player before edit: $e');
-    }
+    await _disposePlayers();
 
     if (mounted) {
       // 关闭播放弹窗，并将当前 clip 作为结果回传给 ClipsTab 调用方
