@@ -12,6 +12,10 @@ class VideoClip extends Equatable {
   final int rating;
   final bool isFavorite;
   final String? thumbnailPath;
+  final String? aiSummary;
+  final String? aiScene;
+  final List<String> aiActions;
+  final int? hitTimestampMs;
 
   const VideoClip({
     required this.id,
@@ -25,6 +29,10 @@ class VideoClip extends Equatable {
     this.rating = 0,
     this.isFavorite = false,
     this.thumbnailPath,
+    this.aiSummary,
+    this.aiScene,
+    this.aiActions = const [],
+    this.hitTimestampMs,
   });
 
   factory VideoClip.fromJson(Map<String, dynamic> json) {
@@ -45,6 +53,10 @@ class VideoClip extends Equatable {
       rating: json['rating'] ?? 0,
       isFavorite: json['isFavorite'] ?? false,
       thumbnailPath: json['thumbnailPath'],
+      aiSummary: json['aiSummary'] as String?,
+      aiScene: json['aiScene'] as String?,
+      aiActions: List<String>.from(json['aiActions'] ?? []),
+      hitTimestampMs: json['hitTimestampMs'] as int?,
     );
   }
 
@@ -61,6 +73,10 @@ class VideoClip extends Equatable {
       'rating': rating,
       'isFavorite': isFavorite,
       'thumbnailPath': thumbnailPath,
+      'aiSummary': aiSummary,
+      'aiScene': aiScene,
+      'aiActions': aiActions,
+      'hitTimestampMs': hitTimestampMs,
     };
   }
 
@@ -76,6 +92,10 @@ class VideoClip extends Equatable {
     int? rating,
     bool? isFavorite,
     String? thumbnailPath,
+    String? aiSummary,
+    String? aiScene,
+    List<String>? aiActions,
+    int? hitTimestampMs,
   }) {
     // Return a new instance, handling nullable values for notes and thumbnailPath
     return VideoClip(
@@ -90,6 +110,10 @@ class VideoClip extends Equatable {
       rating: rating ?? this.rating,
       isFavorite: isFavorite ?? this.isFavorite,
       thumbnailPath: thumbnailPath ?? this.thumbnailPath,
+      aiSummary: aiSummary ?? this.aiSummary,
+      aiScene: aiScene ?? this.aiScene,
+      aiActions: aiActions ?? this.aiActions,
+      hitTimestampMs: hitTimestampMs ?? this.hitTimestampMs,
     );
   }
 
@@ -106,6 +130,10 @@ class VideoClip extends Equatable {
     rating,
     isFavorite,
     thumbnailPath,
+    aiSummary,
+    aiScene,
+    aiActions,
+    hitTimestampMs,
   ];
 }
 

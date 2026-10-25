@@ -14,6 +14,9 @@ import '../services/thumbnail_service.dart';
 import '../services/video_metadata_service.dart';
 import 'data_service.dart';
 import 'models.dart';
+import '../services/ai_service.dart';
+import '../services/delta_engine.dart';
+import '../services/frame_embedding_pool.dart';
 
 const String _prefsKeyDbPath = 'db_path';
 
@@ -26,6 +29,37 @@ class AppState extends ChangeNotifier {
   final ThumbnailService _thumbnailService;
   late final DataService _dataService;
   late final VideoMetadataService _videoMetadataService;
+  late final AiService _aiService;
+  late final FrameEmbeddingPool _framePool;
+  late final DeltaEngine _deltaEngine;
+
+  AiService get aiService => _aiService;
+  FrameEmbeddingPool get framePool => _framePool;
+  DeltaEngine get deltaEngine => _deltaEngine;
+
+  final Map<String, MaxSimResult> _semanticScores = {};
+  bool _isSemanticSearching = false;
+  bool get isSemanticSearching => _isSemanticSearching;
+  Map<String, MaxSimResult> get semanticScores => Map.unmodifiable(_semanticScores);
+
+  // VLM 视觉大模型配置
+  String get vlmMode => _prefs.getString('vlm_mode') ?? 'ollama';
+  String get vlmApiUrl => _prefs.getString('vlm_api_url') ?? 'http://localhost:11434/v1';
+  String get vlmApiKey => _prefs.getString('vlm_api_key') ?? '';
+  String get vlmModel => _prefs.getString('vlm_model') ?? 'qwen2-vl:2b';
+
+  Future<void> saveVlmConfig({
+    required String mode,
+    required String apiUrl,
+    required String apiKey,
+    required String model,
+  }) async {
+    await _prefs.setString('vlm_mode', mode);
+    await _prefs.setString('vlm_api_url', apiUrl);
+    await _prefs.setString('vlm_api_key', apiKey);
+    await _prefs.setString('vlm_model', model);
+    notifyListeners();
+  }
 
   List<VideoClip> _clips = [];
   List<OriginalVideo> _originalVideos = [];
@@ -88,6 +122,9 @@ class AppState extends ChangeNotifier {
        _thumbnailService = thumbnailService {
     _dataService = DataService(pathService: _pathService);
     _videoMetadataService = VideoMetadataService();
+    _aiService = AiService();
+    _framePool = FrameEmbeddingPool();
+    _deltaEngine = DeltaEngine(pool: _framePool, aiService: _aiService);
     _clipsIsGridView = _prefs.getBool('clipsIsGridView') ?? false;
     _videosIsGridView = _prefs.getBool('videosIsGridView') ?? false;
     _playlistsIsGridView = _prefs.getBool('playlistsIsGridView') ?? false;
@@ -698,6 +735,65 @@ class AppState extends ChangeNotifier {
 
 
 
+  /// 执行跨片段语义检索
+  Future<void> performSemanticSearch({
+    required String query,
+    required String modelDir,
+    String? ortLib,
+    double minScore = 0.35,
+  }) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      _semanticScores.clear();
+      notifyListeners();
+      return;
+    }
+
+    _isSemanticSearching = true;
+    notifyListeners();
+
+    try {
+      final queryVec = await _aiService.embedText(
+        text: trimmed,
+        prefix: 'search_query: ',
+        modelDir: modelDir,
+        ortLib: ortLib,
+      );
+
+      _semanticScores.clear();
+
+      for (final clip in _clips) {
+        final frames = _framePool.getFramesInRange(
+          clip.videoPath,
+          clip.startTime.inMilliseconds,
+          clip.endTime.inMilliseconds,
+        );
+        if (frames.isNotEmpty) {
+          final maxSim = _deltaEngine.computeMaxSim(
+            queryVector: queryVec,
+            frames: frames,
+          );
+          if (maxSim.score >= minScore) {
+            _semanticScores[clip.id] = maxSim;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[AppState] performSemanticSearch error: $e');
+    } finally {
+      _isSemanticSearching = false;
+      notifyListeners();
+    }
+  }
+
+  /// 清除语义检索结果
+  void clearSemanticSearch() {
+    if (_semanticScores.isNotEmpty) {
+      _semanticScores.clear();
+      notifyListeners();
+    }
+  }
+
   // --- Getters with Filtering ---
   List<VideoClip> getFilteredClips({
     String searchQuery = '',
@@ -708,19 +804,45 @@ class AppState extends ChangeNotifier {
     final tags = selectedTags ?? _selectedTags;
     final rating = selectedRating ?? _selectedRating;
     final favorite = selectedFavorite ?? _selectedFavorite;
+    final query = searchQuery.toLowerCase().trim();
 
-    return _clips.where((clip) {
-      final query = searchQuery.toLowerCase();
-      final textMatch =
-          query.isEmpty ||
+    final filtered = <VideoClip>[];
+
+    for (final clip in _clips) {
+      final textMatch = query.isEmpty ||
           clip.name.toLowerCase().contains(query) ||
-          (clip.notes?.toLowerCase().contains(query) ?? false);
+          (clip.notes?.toLowerCase().contains(query) ?? false) ||
+          (clip.aiSummary?.toLowerCase().contains(query) ?? false) ||
+          (clip.aiScene?.toLowerCase().contains(query) ?? false) ||
+          clip.aiActions.any((a) => a.toLowerCase().contains(query));
+
+      final semHit = _semanticScores[clip.id];
+      final semanticMatch = semHit != null;
+
+      final isMatch = textMatch || semanticMatch;
       final tagMatch =
           tags.isEmpty || tags.every((tag) => clip.tags.contains(tag));
       final ratingMatch = rating == null || clip.rating == rating;
       final favoriteMatch = favorite == null || clip.isFavorite == favorite;
-      return textMatch && tagMatch && ratingMatch && favoriteMatch;
-    }).toList();
+
+      if (isMatch && tagMatch && ratingMatch && favoriteMatch) {
+        if (semHit != null) {
+          filtered.add(clip.copyWith(hitTimestampMs: semHit.hitTimestampMs));
+        } else {
+          filtered.add(clip);
+        }
+      }
+    }
+
+    if (_semanticScores.isNotEmpty) {
+      filtered.sort((a, b) {
+        final scoreA = _semanticScores[a.id]?.score ?? 0.0;
+        final scoreB = _semanticScores[b.id]?.score ?? 0.0;
+        return scoreB.compareTo(scoreA);
+      });
+    }
+
+    return filtered;
   }
 
   List<OriginalVideo> getFilteredVideos({String searchQuery = ''}) {

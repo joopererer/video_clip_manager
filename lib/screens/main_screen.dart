@@ -1,3 +1,4 @@
+import '../widgets/ai_settings_dialog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -490,6 +491,17 @@ class _MainScreenState extends State<MainScreen>
                 ),
                 const SizedBox(width: 8),
                 IconButton(
+                  icon: const Icon(Icons.auto_awesome),
+                  tooltip: 'AI 视觉大模型与多模态设置',
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => const AiSettingsDialog(),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                IconButton(
                   icon: const Icon(Icons.settings),
                   tooltip: 'External Scrapers Settings',
                   onPressed: () {
@@ -542,8 +554,13 @@ class _MainScreenState extends State<MainScreen>
                         padding: const EdgeInsets.all(8.0),
                         child: TextField(
                           controller: _searchController,
+                          onSubmitted: (val) {
+                            if (val.trim().isNotEmpty) {
+                              appState.performSemanticSearch(query: val, modelDir: 'models');
+                            }
+                          },
                           decoration: InputDecoration(
-                            labelText: 'Search...',
+                            labelText: 'Search title, notes, tags or AI semantic query...',
                             prefixIcon: const Icon(Icons.search),
                             suffixIcon: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
@@ -680,11 +697,37 @@ class _MainScreenState extends State<MainScreen>
                                           ),
                                       ],
                                     ),
+                                  if (_searchQuery.isNotEmpty && _tabController.index == 0)
+                                    appState.isSemanticSearching
+                                        ? const Padding(
+                                            padding: EdgeInsets.symmetric(horizontal: 8.0),
+                                            child: SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(strokeWidth: 2),
+                                            ),
+                                          )
+                                        : IconButton(
+                                            icon: Icon(
+                                              Icons.auto_awesome,
+                                              color: appState.semanticScores.isNotEmpty
+                                                  ? Colors.amber.shade700
+                                                  : Colors.purple.shade400,
+                                              size: 20,
+                                            ),
+                                            tooltip: 'AI 语义多模态检索',
+                                            onPressed: () => appState.performSemanticSearch(
+                                              query: _searchQuery,
+                                              modelDir: 'models',
+                                            ),
+                                          ),
                                   if (_searchQuery.isNotEmpty)
                                     IconButton(
                                       icon: const Icon(Icons.clear),
-                                      onPressed: () =>
-                                          _searchController.clear(),
+                                      onPressed: () {
+                                        appState.clearSemanticSearch();
+                                        _searchController.clear();
+                                      },
                                     ),
                                 ],
                               ),

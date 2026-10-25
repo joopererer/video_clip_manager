@@ -1,4 +1,7 @@
+import '../../widgets/ai_settings_dialog.dart';
+import 'dart:async';
 import 'dart:io';
+import '../../services/frame_embedding_pool.dart';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
@@ -57,7 +60,8 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
   bool _isSettingCover = false;
   int _coverPreviewTimestamp = 0; // 用于强制刷新封面预览
   int _clipsListTimestamp = 0; // 用于强制刷新clips列表
-  String? _tempThumbnailPath; // 临时封面路径，只有保存后才同步到clip
+  String? _tempThumbnailPath;
+  bool _isGeneratingAiCaption = false; // 临时封面路径，只有保存后才同步到clip
 
   final _nameController = TextEditingController();
   final _notesController = TextEditingController();
@@ -268,7 +272,109 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     );
   }
 
-  Future<void> _saveOrUpdateClip() async {
+    Future<void> _generateAiCaption(AppState appState) async {
+    final startMs = _formClip.startTime.inMilliseconds;
+    final endMs = _formClip.endTime.inMilliseconds;
+    if (endMs <= startMs) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('片段起止时间无效，请先调整区间')),
+      );
+      return;
+    }
+
+    setState(() => _isGeneratingAiCaption = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('正在抽帧并由 Qwen2-VL 进行智能解构，请稍候...'),
+        duration: Duration(seconds: 4),
+      ),
+    );
+
+    try {
+      final frames = await appState.aiService.extractClipFrames(
+        videoPathOrUrl: widget.video.path,
+        startMs: startMs,
+        endMs: endMs,
+        strategy: 'interval',
+        everyMs: 2000,
+        maxFrames: 6,
+      );
+
+      if (frames.isEmpty) {
+        throw Exception('未能从视频片段中抽取到有效画面');
+      }
+
+      final caption = await appState.aiService.generateCaption(
+        frames: frames,
+        framePaths: frames.map((f) => f.path).toList(),
+        apiUrl: appState.vlmApiUrl,
+        apiKey: appState.vlmApiKey,
+        model: appState.vlmModel,
+      );
+
+      if (!mounted) return;
+
+      final newNotes = caption.summary.isNotEmpty
+          ? '${caption.summary}\n[场景]: ${caption.scene}\n[主体]: ${caption.mainSubject}'
+          : caption.scene;
+
+      _notesController.text = newNotes;
+
+      final currentTags = Set<String>.from(_formClip.tags);
+      for (final action in caption.keyActions) {
+        final clean = action.trim();
+        if (clean.isNotEmpty && clean.length <= 15) {
+          currentTags.add(clean);
+        }
+      }
+      if (caption.scene.isNotEmpty && caption.scene.length <= 10) {
+        currentTags.add(caption.scene);
+      }
+
+      setState(() {
+        _formClip = _formClip.copyWith(
+          notes: newNotes,
+          tags: currentTags.toList(),
+          aiSummary: caption.summary,
+          aiScene: caption.scene,
+          aiActions: caption.keyActions,
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✨ AI 解构成功！已自动填充剧情描述与推荐标签'),
+          backgroundColor: Colors.green,
+        ),
+      );
+        } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('AI 解构失败: $e'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 8),
+            action: SnackBarAction(
+              label: '配置引擎',
+              textColor: Colors.amberAccent,
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => const AiSettingsDialog(),
+                );
+              },
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingAiCaption = false);
+      }
+    }
+  }
+
+Future<void> _saveOrUpdateClip() async {
     if (_isSaving) return;
 
     final name = _nameController.text.trim();
@@ -368,7 +474,22 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
         _originalEditingClip = _formClip.copyWith();
       }
 
-      if (mounted) {
+            // 增量同步母视频帧池（后台异步运行，不阻塞当前保存流程）
+      unawaited(
+        appState.deltaEngine
+            .syncClipRange(
+              videoPathOrUrl: widget.video.path,
+              startMs: _formClip.startTime.inMilliseconds,
+              endMs: _formClip.endTime.inMilliseconds,
+              modelDir: 'models',
+            )
+            .catchError((err) {
+              debugPrint('[ClipEditorScreen] Background delta sync error: $err');
+              return <VideoFrameEmbeddingRecord>[];
+            }),
+      );
+
+if (mounted) {
         // 清除临时封面路径
         _tempThumbnailPath = null;
 
@@ -834,6 +955,40 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                 const SizedBox(height: 12),
                 _buildTagEditor(appState),
                 const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Text(
+                      'Notes & AI 智能解构',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.settings, size: 16),
+                      tooltip: '配置 VLM 视觉大模型引擎',
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => const AiSettingsDialog(),
+                        );
+                      },
+                    ),
+                    _isGeneratingAiCaption
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : TextButton.icon(
+                            icon: const Icon(Icons.auto_awesome, size: 14),
+                            label: const Text(
+                              '✨ AI 智能解构',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            onPressed: () => _generateAiCaption(appState),
+                          ),
+                  ],
+                ),
+                const SizedBox(height: 6),
                 TextField(
                   controller: _notesController,
                   maxLines: 2,

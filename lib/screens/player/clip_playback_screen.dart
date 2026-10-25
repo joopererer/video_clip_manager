@@ -22,7 +22,8 @@ class ClipPlaybackScreen extends StatefulWidget {
   final List<String> selectedTags; // 当前选中的标签
   final int? selectedRating; // 当前选中的星级
   final bool? selectedFavorite; // 当前选中的收藏状态
-  final SortOption currentSortOption; // 当前排序选项
+  final SortOption currentSortOption;
+  final Duration? initialSeekTime; // 当前排序选项
 
   const ClipPlaybackScreen({
     super.key,
@@ -33,6 +34,7 @@ class ClipPlaybackScreen extends StatefulWidget {
     this.selectedRating,
     this.selectedFavorite,
     this.currentSortOption = SortOption.dateAddedDesc,
+      this.initialSeekTime,
   });
 
   @override
@@ -112,7 +114,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
 
       // 主播放器跳转到开始时间并开始播放
       print('Seeking main player to: ${_currentClip.startTime}'); // 调试信息
-      await mainPlayer.seek(_currentClip.startTime);
+      final targetSeek = widget.initialSeekTime ?? _currentClip.startTime;
+      await mainPlayer.seek(targetSeek);
       await Future.delayed(Duration(milliseconds: 100));
 
       print('Starting main player playback'); // 调试信息

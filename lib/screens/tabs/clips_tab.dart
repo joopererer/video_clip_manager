@@ -475,6 +475,43 @@ class _ClipsTabState extends State<ClipsTab> {
                           fontFamily: 'monospace',
                         ),
                       ),
+                      if (clip.hitTimestampMs != null)
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade700,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.location_searching, size: 11, color: Colors.white),
+                              const SizedBox(width: 4),
+                              Text(
+                                '命中时刻: ${formatDuration(Duration(milliseconds: clip.hitTimestampMs!))}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (clip.aiSummary != null && clip.aiSummary!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2.0),
+                          child: Text(
+                            '✨ ${clip.aiSummary!}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.tealAccent.shade100,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       const SizedBox(height: 6),
                       // Rating stars and favorite button in one row
                       Row(
@@ -566,6 +603,9 @@ class _ClipsTabState extends State<ClipsTab> {
             selectedRating: widget.selectedRating,
             selectedFavorite: widget.selectedFavorite,
             currentSortOption: _currentSortOption,
+            initialSeekTime: clip.hitTimestampMs != null
+                ? Duration(milliseconds: clip.hitTimestampMs!)
+                : null,
           ),
         ),
       ),
