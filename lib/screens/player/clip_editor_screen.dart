@@ -160,7 +160,9 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
       _originalEditingClip = clipToEdit;
       _formClip = clipToEdit.copyWith();
       _updateTextFieldsAndPreview();
-      player.seek(clipToEdit.startTime);
+      if (!fromInit) {
+        player.seek(clipToEdit.startTime);
+      }
     });
 
     if (!fromInit) {
@@ -174,6 +176,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToClip(clipToEdit.id);
+        player.seek(clipToEdit.startTime);
       });
     }
   }

@@ -581,9 +581,9 @@ class _ClipsTabState extends State<ClipsTab> {
     );
   }
 
-  void _playClip(BuildContext context, VideoClip clip) {
+  void _playClip(BuildContext context, VideoClip clip) async {
     final appState = context.read<AppState>();
-    showDialog(
+    final clipToEdit = await showDialog<VideoClip?>(
       context: context,
       barrierDismissible: false, // 防止误关闭
       builder: (context) => Dialog(
@@ -610,6 +610,14 @@ class _ClipsTabState extends State<ClipsTab> {
         ),
       ),
     );
+
+    // 用户在播放界面点击了“编辑”，等待播放器资源与 Windows Direct3D 纹理完全释放后再进入编辑页
+    if (clipToEdit != null && context.mounted) {
+      await Future.delayed(const Duration(milliseconds: 150));
+      if (context.mounted) {
+        _editClip(context, clipToEdit);
+      }
+    }
   }
 
   void _editClip(BuildContext context, VideoClip clip) {

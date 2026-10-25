@@ -9,7 +9,6 @@ import 'package:path/path.dart' as p;
 
 import '../../data/models.dart';
 import '../../data/app_state.dart';
-import 'clip_editor_screen.dart';
 import '../tabs/clips_tab.dart';
 import '../../utils/tag_utils.dart';
 import '../../widgets/custom_progress_bar.dart'; // 添加自定义进度条导入
@@ -537,24 +536,18 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   }
 
   void _editClip() {
-    final appState = context.read<AppState>();
-    final video = appState.originalVideos.firstWhere(
-      (v) => v.path == _currentClip.videoPath,
-      orElse: () => OriginalVideo(
-        id: 'temp_${_currentClip.videoPath.hashCode}',
-        path: _currentClip.videoPath,
-        name: _currentClip.videoPath.split('/').last,
-      ),
-    );
+    if (_disposed) return;
+    _disposed = true;
 
-    Navigator.of(context).pop(); // 关闭播放器
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            ClipEditorScreen(video: video, clipToEdit: _currentClip),
-      ),
-    );
+    try {
+      if (mainPlayer.state.playing) {
+        mainPlayer.pause();
+      }
+    } catch (_) {}
+
+    // 关闭播放弹窗，并将当前 clip 作为结果回传给 ClipsTab 调用方
+    // 由 ClipsTab 在弹窗完全销毁并释放播放器后推入编辑页，避免原生 Direct3D 纹理与回调并发销毁导致崩溃
+    Navigator.of(context).pop(_currentClip);
   }
 
   void _filterByTag(String tag) {
