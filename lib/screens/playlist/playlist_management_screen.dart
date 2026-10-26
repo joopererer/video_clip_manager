@@ -428,11 +428,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              SizedBox(
-                width: 60,
-                height: 40,
-                child: ClipThumbnail(clip: clip),
-              ),
+              SizedBox(width: 60, height: 40, child: ClipThumbnail(clip: clip)),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -480,7 +476,10 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
                   color: Colors.red,
                 ),
                 onPressed: () => _removeClipFromPlaylist(itemWithClip),
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36), // 减小按钮约束
+                constraints: const BoxConstraints(
+                  minWidth: 36,
+                  minHeight: 36,
+                ), // 减小按钮约束
               ),
             ],
           ),

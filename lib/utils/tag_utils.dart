@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 Color generateTagColor(String tag) {
   // 使用tag的hashCode来生成一致的种子
   final random = Random(tag.hashCode);
-  
+
   // 预定义一组鲜艳的颜色
   final colors = [
     Colors.red.shade400,
@@ -26,7 +26,7 @@ Color generateTagColor(String tag) {
     Colors.brown.shade400,
     Colors.blueGrey.shade400,
   ];
-  
+
   return colors[random.nextInt(colors.length)];
 }
 
@@ -38,18 +38,11 @@ Widget buildTagChip(String tag) {
     decoration: BoxDecoration(
       color: color.withValues(alpha: 0.2),
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(
-        color: color.withValues(alpha: 0.6),
-        width: 1,
-      ),
+      border: Border.all(color: color.withValues(alpha: 0.6), width: 1),
     ),
     child: Text(
       tag,
-      style: TextStyle(
-        fontSize: 10,
-        color: color,
-        fontWeight: FontWeight.w500,
-      ),
+      style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w500),
     ),
   );
 }
@@ -64,10 +57,7 @@ Widget buildTagChipWithTap(String tag, VoidCallback onTap) {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withValues(alpha: 0.6),
-          width: 1,
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.6), width: 1),
       ),
       child: Text(
         tag,
@@ -86,10 +76,6 @@ Widget buildTagText(String tag) {
   final color = generateTagColor(tag);
   return Text(
     tag,
-    style: TextStyle(
-      fontSize: 14,
-      color: color,
-      fontWeight: FontWeight.w500,
-    ),
+    style: TextStyle(fontSize: 14, color: color, fontWeight: FontWeight.w500),
   );
-} 
+}

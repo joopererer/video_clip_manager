@@ -1,28 +1,41 @@
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
-import 'screenshot_service.dart';
-import '../data/app_state.dart';
+import 'package:media_kit/media_kit.dart';
 
+// A simple service dedicated to one task: getting video duration.
 class VideoMetadataService {
-  /// Public method to get video duration using centralized ScreenshotService
+  /// Public method to get video duration.
+  /// Runs directly on the main thread since media_kit requires UI thread.
   Future<Duration?> getVideoDuration(String videoPath) async {
     try {
-      final isNetwork = videoPath.startsWith('http://') || videoPath.startsWith('https://');
-      if (!isNetwork && !await File(videoPath).exists()) {
+      if (!await File(videoPath).exists()) {
         debugPrint('[VideoMetadataService] File does not exist: $videoPath');
         return null;
       }
 
-      final duration = await ScreenshotService().getDuration(videoPath).timeout(Duration(seconds: AppState.instance?.screenshotTimeoutSeconds ?? 15), onTimeout: () {
-        debugPrint('[VideoMetadataService] Timeout getting duration for: $videoPath');
-        return Duration.zero;
-      });
+      // Create a temporary player for duration extraction
+      final player = Player();
+      await player.open(Media(videoPath), play: false);
 
+      // Wait for the duration to become available.
+      final duration = await player.stream.duration
+          .firstWhere((d) => d > Duration.zero)
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              debugPrint(
+                '[VideoMetadataService] Timeout getting duration for: $videoPath',
+              );
+              return Duration.zero;
+            },
+          );
+
+      await player.dispose();
       return duration == Duration.zero ? null : duration;
-    } catch (error, stackTrace) {
-      debugPrint('[VideoMetadataService] Error getting duration for $videoPath: $error');
-      debugPrintStack(stackTrace: stackTrace);
+    } catch (e) {
+      debugPrint(
+        '[VideoMetadataService] Error getting duration for $videoPath: $e',
+      );
       return null;
     }
   }

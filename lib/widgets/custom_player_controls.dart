@@ -147,14 +147,16 @@ class _CustomPlayerControlsState extends State<CustomPlayerControls> {
                 builder: (context, durationSnapshot) {
                   final duration = durationSnapshot.data ?? Duration.zero;
                   if (duration.inSeconds == 0) return const SizedBox.shrink();
-                  
+
                   return Column(
                     children: [
                       Slider(
                         value: position.inMilliseconds.toDouble(),
                         max: duration.inMilliseconds.toDouble(),
                         onChanged: (value) {
-                          widget.player.seek(Duration(milliseconds: value.toInt()));
+                          widget.player.seek(
+                            Duration(milliseconds: value.toInt()),
+                          );
                         },
                         activeColor: Colors.white,
                         inactiveColor: Colors.white.withOpacity(0.3),
@@ -181,7 +183,7 @@ class _CustomPlayerControlsState extends State<CustomPlayerControls> {
               );
             },
           ),
-          
+
           // 控制按钮
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -200,7 +202,8 @@ class _CustomPlayerControlsState extends State<CustomPlayerControls> {
                     icon: const Icon(Icons.replay_10, color: Colors.white),
                     onPressed: () {
                       final currentPosition = widget.player.state.position;
-                      final newPosition = currentPosition - const Duration(seconds: 10);
+                      final newPosition =
+                          currentPosition - const Duration(seconds: 10);
                       widget.player.seek(newPosition);
                     },
                   ),
@@ -208,13 +211,14 @@ class _CustomPlayerControlsState extends State<CustomPlayerControls> {
                     icon: const Icon(Icons.forward_10, color: Colors.white),
                     onPressed: () {
                       final currentPosition = widget.player.state.position;
-                      final newPosition = currentPosition + const Duration(seconds: 10);
+                      final newPosition =
+                          currentPosition + const Duration(seconds: 10);
                       widget.player.seek(newPosition);
                     },
                   ),
                 ],
               ),
-              
+
               // 右侧控制按钮
               Row(
                 children: [
@@ -255,11 +259,13 @@ class _CustomPlayerControlsState extends State<CustomPlayerControls> {
                       );
                     },
                   ),
-                  
+
                   // 全屏按钮
                   IconButton(
                     icon: Icon(
-                      widget.isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                      widget.isFullscreen
+                          ? Icons.fullscreen_exit
+                          : Icons.fullscreen,
                       color: Colors.white,
                     ),
                     onPressed: widget.onToggleFullscreen,
@@ -278,4 +284,4 @@ class _CustomPlayerControlsState extends State<CustomPlayerControls> {
     final seconds = duration.inSeconds % 60;
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
-} 
+}

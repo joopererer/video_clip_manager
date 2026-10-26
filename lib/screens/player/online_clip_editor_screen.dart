@@ -1,0 +1,2043 @@
+import 'dart:async';
+import 'dart:io';
+
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:media_kit/media_kit.dart' as mk;
+import 'package:media_kit_video/media_kit_video.dart';
+import 'package:multi_split_view/multi_split_view.dart';
+import 'package:provider/provider.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:http/http.dart' as http;
+
+import '../../data/app_state.dart';
+import '../../data/models.dart';
+import '../../services/thumbnail_service.dart';
+import '../../services/hybrid_video_sniffer_service.dart';
+import '../../services/yt_dlp_service.dart';
+import '../../services/online_video_cache_service.dart';
+import '../../services/audio_detection_service.dart';
+import '../../services/audio_video_merger_service.dart';
+
+import '../../widgets/custom_progress_bar.dart';
+
+String formatDuration(Duration d) {
+  final parts = d.toString().split('.').first.padLeft(8, '0').split(':');
+  return '${parts[0]}:${parts[1]}:${parts[2]}';
+}
+
+class SaveIntent extends Intent {
+  const SaveIntent();
+}
+
+class TogglePlayPauseIntent extends Intent {
+  const TogglePlayPauseIntent();
+}
+
+class OnlineClipEditorScreen extends StatefulWidget {
+  final OnlineVideo video;
+  final OnlineVideoClip? clipToEdit;
+
+  const OnlineClipEditorScreen({
+    super.key, 
+    required this.video, 
+    this.clipToEdit,
+  });
+
+  @override
+  State<OnlineClipEditorScreen> createState() => _OnlineClipEditorScreenState();
+}
+
+class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
+  late final mk.Player player;
+  late final VideoController controller;
+  final MultiSplitViewController _splitViewController =
+      MultiSplitViewController(
+        areas: [
+          Area(flex: 13, data: 'editor'),
+          Area(flex: 7, data: 'list'),
+        ],
+      );
+
+  late OnlineVideoClip _formClip;
+  OnlineVideoClip? _originalEditingClip;
+
+  // 动态质量选择器相关状态
+  List<VideoStream> _availableVideoStreams = [];
+  List<VideoStream> _availableAudioStreams = [];
+  VideoStream? _currentVideoStream;
+  VideoStream? _currentAudioStream;
+  List<StreamQuality> _qualityOptions = [];
+
+  bool _isSaving = false;
+  String? _coverPreviewFullPath;
+  bool _isSettingCover = false;
+  int _coverPreviewTimestamp = 0;
+  int _clipsListTimestamp = 0;
+  String? _tempThumbnailPath;
+
+  final _nameController = TextEditingController();
+  final _notesController = TextEditingController();
+  final _newTagController = TextEditingController();
+  final _tagFocusNode = FocusNode();
+  final _videoFocusNode = FocusNode();
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  bool _isMuted = false;
+
+  bool _showHints = false;
+  late final FocusNode _focusNode;
+  bool _isSniffing = false;
+
+  void _showSnackDeferred(String message, {Color? bgColor, Duration? duration}) {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: bgColor,
+          duration: duration ?? const Duration(seconds: 3),
+        ),
+      );
+    });
+  }
+
+  /// 保存嗅探到的视频数据到AppState
+  Future<void> _saveSniffedVideoData(String videoUrl, Map<String, String>? httpHeaders) async {
+    try {
+      final appState = context.read<AppState>();
+      
+      // 使用新的缓存服务更新视频信息
+      final updatedVideo = OnlineVideoCacheService.updateVideoCache(
+        video: widget.video,
+        videoUrl: videoUrl,
+        httpHeaders: httpHeaders,
+        allStreams: [..._availableVideoStreams, ..._availableAudioStreams],
+        qualityOptions: _qualityOptions,
+      );
+      
+      await appState.updateOnlineVideo(updatedVideo);
+      
+      final cacheStatus = OnlineVideoCacheService.getCacheStatus(updatedVideo);
+      final expirationHours = cacheStatus['expirationHours'] as int;
+      
+      _showSnackDeferred(
+        '视频链接已缓存(${expirationHours}小时有效)，下次播放更快',
+        bgColor: Colors.green[600],
+        duration: const Duration(seconds: 2),
+      );
+    } catch (e) {
+      // 保存失败不影响播放，只是下次需要重新嗅探
+      print('Failed to save sniffed video data: $e');
+    }
+  }
+
+  /// 动态切换视频质量
+  Future<void> _switchVideoQuality(StreamQuality quality) async {
+    if (_currentVideoStream?.formatId == quality.stream.formatId) {
+      return; // 已经是当前质量
+    }
+
+    try {
+      // 记录当前播放位置
+      final currentPosition = player.state.position;
+      final wasPlaying = player.state.playing;
+
+      _showSnackDeferred(
+        '切换到 ${quality.displayName}...',
+        bgColor: Colors.blue[600],
+        duration: const Duration(seconds: 2),
+      );
+
+      final headers = <String, String>{
+        if (quality.stream.httpHeaders != null) ...quality.stream.httpHeaders!,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      };
+
+      // 如果有音频流，需要同时切换
+      if (_currentAudioStream != null) {
+        await player.open(
+          mk.Playlist([
+            mk.Media(quality.stream.url, httpHeaders: headers),
+            mk.Media(_currentAudioStream!.url, httpHeaders: headers),
+          ]),
+          play: false,
+        );
+      } else {
+        await player.open(
+          mk.Media(quality.stream.url, httpHeaders: headers),
+          play: false,
+        );
+      }
+
+      // 恢复播放位置
+      await player.seek(currentPosition);
+      
+      // 恢复播放状态
+      if (wasPlaying) {
+        await player.play();
+      }
+
+      _currentVideoStream = quality.stream;
+
+      _showSnackDeferred(
+        '已切换到 ${quality.displayName}',
+        bgColor: Colors.green[600],
+        duration: const Duration(seconds: 2),
+      );
+
+    } catch (e) {
+      _showSnackDeferred(
+        '切换质量失败: $e',
+        bgColor: Colors.red[600],
+        duration: const Duration(seconds: 3),
+      );
+    }
+  }
+
+  /// 显示质量选择器
+  void _showQualitySelector() {
+    if (_qualityOptions.isEmpty) {
+      _showSnackDeferred(
+        '暂无可选择的视频质量',
+        bgColor: Colors.orange[600],
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _buildQualitySelector(),
+    );
+  }
+
+  /// 构建质量选择器UI
+  Widget _buildQualitySelector() {
+    return Container(
+      margin: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 10.0,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceVariant,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12.0),
+                topRight: Radius.circular(12.0),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.high_quality,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8.0),
+                Text(
+                  '选择视频质量',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: _qualityOptions.length,
+              itemBuilder: (context, index) {
+                final quality = _qualityOptions[index];
+                final isSelected = _currentVideoStream?.formatId == quality.stream.formatId;
+                
+                return ListTile(
+                  leading: Icon(
+                    quality.hasAudio ? Icons.volume_up : Icons.volume_off,
+                    color: quality.hasAudio ? Colors.green : Colors.red,
+                  ),
+                  title: Text(
+                    quality.displayName,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? Theme.of(context).colorScheme.primary : null,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '分辨率: ${quality.resolution} | 比特率: ${quality.bitrate.toInt()}kbps',
+                  ),
+                  trailing: isSelected 
+                    ? Icon(
+                        Icons.check_circle,
+                        color: Theme.of(context).colorScheme.primary,
+                      )
+                    : null,
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _switchVideoQuality(quality);
+                  },
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 8.0),
+        ],
+      ),
+    );
+  }
+
+  /// 显示流选择对话框
+  Future<VideoStream?> _showStreamSelectionDialog(List<StreamQuality> qualities) async {
+    return showDialog<VideoStream>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('选择视频质量'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: qualities.length,
+            itemBuilder: (context, index) {
+              final quality = qualities[index];
+              return ListTile(
+                leading: Icon(
+                  quality.hasAudio ? Icons.volume_up : Icons.volume_off,
+                  color: quality.hasAudio ? Colors.green : Colors.red,
+                ),
+                title: Text(quality.displayName),
+                subtitle: Text(
+                  '分辨率: ${quality.resolution} | 比特率: ${quality.bitrate.toInt()}kbps',
+                ),
+                trailing: quality.hasAudio 
+                  ? const Chip(
+                      label: Text('有音频'),
+                      backgroundColor: Colors.green,
+                      labelStyle: TextStyle(color: Colors.white),
+                    )
+                  : const Chip(
+                      label: Text('无音频'),
+                      backgroundColor: Colors.red,
+                      labelStyle: TextStyle(color: Colors.white),
+                    ),
+                onTap: () => Navigator.of(context).pop(quality.stream),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              // 使用默认最佳选择
+              final best = qualities.isNotEmpty ? qualities.first.stream : null;
+              Navigator.of(context).pop(best);
+            },
+            child: const Text('使用默认'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    player = mk.Player();
+    controller = VideoController(player);
+    _focusNode = FocusNode();
+
+    if (widget.clipToEdit != null) {
+      _startEditing(widget.clipToEdit!, fromInit: true);
+    } else {
+      _resetFormToBlank();
+    }
+
+    // 对于在线视频，使用URL而不是本地路径
+    _initializeVideo();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
+  Future<void> _initializeVideo() async {
+    try {
+      // 优先使用本地下载的视频
+      String videoPath = widget.video.url;
+      Map<String, String>? httpHeaders;
+      
+      // 检查缓存状态
+      final cacheStatus = OnlineVideoCacheService.getCacheStatus(widget.video);
+      final isExpired = cacheStatus['isExpired'] as bool;
+      final isExpiringSoon = cacheStatus['isExpiringSoon'] as bool;
+      
+      // 如果链接即将过期，显示警告
+      if (isExpiringSoon && !isExpired) {
+        final timeUntilExpiration = cacheStatus['timeUntilExpiration'] as Duration?;
+        if (timeUntilExpiration != null) {
+          _showSnackDeferred(
+            '视频链接将在${timeUntilExpiration.inMinutes}分钟后过期',
+            bgColor: Colors.orange[600],
+            duration: const Duration(seconds: 3),
+          );
+        }
+      }
+      
+      // 若在添加时已嗅探过直链与头信息，且未过期，优先使用
+      if (!isExpired && widget.video.metadata.containsKey('videoUrl')) {
+        final detectedUrl = widget.video.metadata['videoUrl'] as String?;
+        if (detectedUrl != null && detectedUrl.isNotEmpty) {
+          videoPath = detectedUrl;
+        }
+        final headers = widget.video.metadata['httpHeaders'];
+        if (headers is Map) {
+          httpHeaders = headers.map((k, v) => MapEntry(k.toString(), v.toString()));
+        }
+        
+        // 从缓存中恢复流信息
+        _availableVideoStreams = OnlineVideoCacheService.getCachedStreams(widget.video) ?? [];
+        _availableAudioStreams = _availableVideoStreams.where((s) => s.hasAudio && !s.hasVideo).toList();
+        _availableVideoStreams = _availableVideoStreams.where((s) => s.hasVideo).toList();
+        _qualityOptions = OnlineVideoCacheService.getCachedQualityOptions(widget.video) ?? [];
+        
+        print('从缓存恢复: ${_availableVideoStreams.length}个视频流, ${_availableAudioStreams.length}个音频流, ${_qualityOptions.length}个质量选项');
+      }
+      
+      if (widget.video.isDownloaded && widget.video.localPath != null) {
+        final localFile = File(widget.video.localPath!);
+        if (await localFile.exists()) {
+          videoPath = widget.video.localPath!;
+          await player.open(mk.Media(videoPath), play: false);
+          return;
+        }
+      }
+      
+      // 尝试直接播放缓存的URL（仅当未过期时）
+      if (!isExpired && videoPath != widget.video.url && videoPath.isNotEmpty) {
+        try {
+          await player.open(
+            mk.Media(
+              videoPath,
+              httpHeaders: {
+                if (httpHeaders != null) ...httpHeaders,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+              },
+            ),
+            play: false,
+          );
+          _showSnackDeferred(
+            '使用缓存的视频链接播放',
+            bgColor: Colors.green[700],
+            duration: const Duration(seconds: 2),
+          );
+          return;
+        } catch (e) {
+          _showSnackDeferred(
+            '缓存链接播放失败，重新嗅探: $e',
+            bgColor: Colors.orange[700],
+          );
+          // 缓存URL失败，立即尝试重新嗅探
+          await _sniffAndPlayVideo();
+          return;
+        }
+      }
+      
+      // 如果链接已过期，直接重新嗅探
+      if (isExpired) {
+        _showSnackDeferred(
+          '视频链接已过期，正在重新获取...',
+          bgColor: Colors.blue[700],
+          duration: const Duration(seconds: 2),
+        );
+        await _sniffAndPlayVideo();
+        return;
+      }
+      
+      // 如果没有缓存的URL，尝试嗅探视频链接
+      if (!widget.video.isDownloaded) {
+        await _sniffAndPlayVideo();
+        return;
+      }
+      
+      // 监听播放器状态变化
+      player.stream.error.listen((error) {
+        _showSnackDeferred(
+          'Video loading error: $error',
+          bgColor: Colors.red[700],
+        );
+      });
+    } catch (e) {
+      _showSnackDeferred(
+        'Failed to load video: $e',
+        bgColor: Colors.red[700],
+      );
+    }
+  }
+
+  /// 嗅探并播放在线视频
+  Future<void> _sniffAndPlayVideo() async {
+    setState(() => _isSniffing = true);
+    try {
+      _showSnackDeferred(
+        '正在嗅探视频链接...',
+        bgColor: Colors.blue[700],
+        duration: const Duration(seconds: 3),
+      );
+
+      // 使用混合嗅探器（优先 yt-dlp，失败回落到自定义）
+      final info = await HybridVideoSnifferService.extractVideoInfo(widget.video.url);
+
+      if (info == null || (info.videoUrl == null || info.videoUrl!.isEmpty)) {
+        _showSnackDeferred(
+          '未找到可播放的视频链接，请检查页面或稍后重试',
+          bgColor: Colors.orange[700],
+          duration: const Duration(seconds: 5),
+        );
+        return;
+      }
+
+      // 优先从 yt-dlp 流中选择最佳可播放链接并携带HTTP头
+      final allStreams = info.streams.whereType<VideoStream>().toList();
+      final videoStreams = allStreams.where((s) => s.hasVideo).toList();
+      final audioStreams = allStreams.where((s) => s.hasAudio && !s.hasVideo).toList();
+      
+      // 存储流信息供动态切换使用
+      _availableVideoStreams = videoStreams;
+      _availableAudioStreams = audioStreams;
+      _qualityOptions = VideoStreamSelector.getQualityOptions(videoStreams);
+      
+      // 显示音频检测摘要
+      final audioSummary = AudioDetectionService.getAudioDetectionSummary(allStreams);
+      print('音频检测摘要: ${audioSummary['recommendation']}');
+      print('总流数: ${audioSummary['totalStreams']}, 音频流: ${audioSummary['audioStreams']}, 音频检测率: ${audioSummary['audioDetectionRate']}%');
+      
+      if (videoStreams.isNotEmpty) {
+        // 检查是否有包含音频的视频流
+        final videoWithAudio = videoStreams.where((s) => s.hasAudio).toList();
+        
+        // 首先尝试找到真正的组合流（有实际音频编解码器的）
+        final bestCombined = AudioDetectionService.getBestCombinedStream(allStreams);
+        
+        if (bestCombined != null) {
+          // 找到了真正的组合流，直接使用
+          final best = bestCombined;
+          _currentVideoStream = best;
+          _currentAudioStream = null;
+          final headers = <String, String>{
+            if (best.httpHeaders != null) ...best.httpHeaders!,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+          };
+
+          final audioInfo = best.abr != null ? ' (音频: ${best.abr!.toInt()}kbps)' : ' (包含音频)';
+          _showSnackDeferred(
+            '🔊 使用组合流: ${best.resolutionString}${audioInfo}',
+            bgColor: Colors.green[700],
+            duration: const Duration(seconds: 3),
+          );
+
+          await player.open(
+            mk.Media(best.url, httpHeaders: headers),
+            play: false,
+          );
+          
+          await _saveSniffedVideoData(best.url, best.httpHeaders);
+          return;
+        } else if (audioStreams.isNotEmpty) {
+          // 没有真正的组合流，尝试不同的播放策略
+          final bestVideo = VideoStreamSelector.selectBestStream(videoStreams) ?? videoStreams.first;
+          final bestAudio = AudioDetectionService.getBestAudioStream(allStreams) ?? audioStreams.first;
+          _currentVideoStream = bestVideo;
+          _currentAudioStream = bestAudio;
+          
+          final headers = <String, String>{
+            if (bestVideo.httpHeaders != null) ...bestVideo.httpHeaders!,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+          };
+
+          // 策略1: 如果视频流是HLS格式，尝试直接播放（HLS可能包含音频轨道）
+          if (bestVideo.protocol == 'm3u8_native' || bestVideo.url.contains('.m3u8')) {
+            print('🎵 尝试播放HLS流: ${bestVideo.url}');
+            
+            _showSnackDeferred(
+              '🎵 播放HLS视频流: ${bestVideo.resolutionString}',
+              bgColor: Colors.blue[700],
+              duration: const Duration(seconds: 2),
+            );
+
+            try {
+              await player.open(
+                mk.Media(bestVideo.url, httpHeaders: headers),
+                play: false,
+              );
+              
+              // HLS 流播放成功，但可能没有音频，所以我们还需要尝试添加音频
+              print('✅ HLS 视频流播放成功，检查是否需要添加音频...');
+              
+              // 延迟检查音频，如果没有音频则添加单独的音频流
+              Future.delayed(const Duration(seconds: 1), () async {
+                if (mounted) {
+                  await _tryAddSeparateAudioTrack(bestAudio, headers);
+                }
+              });
+              
+            } catch (e) {
+              print('❌ HLS 视频流播放失败: $e');
+              // 如果 HLS 播放失败，回退到分离流策略
+              await _playWithSeparateStreams(bestVideo, bestAudio, headers);
+            }
+          } else if (bestVideo.tbr != null && bestVideo.tbr! > 500) {
+            // 策略1.5: 如果视频流的总比特率很高，可能包含音频
+            print('🎵 高比特率视频流可能包含音频: ${bestVideo.tbr}kbps');
+            
+            _showSnackDeferred(
+              '🔊 尝试高比特率流: ${bestVideo.resolutionString} (${bestVideo.tbr!.toInt()}kbps)',
+              bgColor: Colors.purple[700],
+              duration: const Duration(seconds: 3),
+            );
+
+            await player.open(
+              mk.Media(bestVideo.url, httpHeaders: headers),
+              play: false,
+            );
+          } else {
+            // 策略2: 寻找质量稍低但真正包含音频的组合流
+            final lowerQualityCombined = allStreams.where((s) => 
+              s.hasAudio && s.hasVideo && 
+              s.acodec != null && s.acodec != 'none' && s.acodec!.isNotEmpty
+            ).toList();
+            
+            if (lowerQualityCombined.isNotEmpty) {
+              final bestLowQuality = VideoStreamSelector.selectBestStream(lowerQualityCombined);
+              if (bestLowQuality != null) {
+                print('🎵 使用较低质量但包含音频的组合流: ${bestLowQuality.formatId}');
+                
+                _currentVideoStream = bestLowQuality;
+                _currentAudioStream = null;
+                
+                final lowQualityHeaders = <String, String>{
+                  if (bestLowQuality.httpHeaders != null) ...bestLowQuality.httpHeaders!,
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+                };
+
+                final audioInfo = bestLowQuality.abr != null ? ' (音频: ${bestLowQuality.abr!.toInt()}kbps)' : ' (包含音频)';
+                _showSnackDeferred(
+                  '🔊 使用较低质量组合流: ${bestLowQuality.resolutionString}${audioInfo}',
+                  bgColor: Colors.orange[700],
+                  duration: const Duration(seconds: 3),
+                );
+
+                await player.open(
+                  mk.Media(bestLowQuality.url, httpHeaders: lowQualityHeaders),
+                  play: false,
+                );
+              } else {
+                // 回退到分离流方案（目前不工作）
+                await _playWithSeparateStreams(bestVideo, bestAudio, headers);
+              }
+            } else {
+              // 回退到分离流方案（目前不工作）
+              await _playWithSeparateStreams(bestVideo, bestAudio, headers);
+            }
+          }
+          
+          await _saveSniffedVideoData(bestVideo.url, bestVideo.httpHeaders);
+          return;
+        } else {
+          // 只有视频流，没有音频
+          final best = VideoStreamSelector.selectBestStream(videoStreams) ?? videoStreams.first;
+          _currentVideoStream = best;
+          _currentAudioStream = null;
+          final headers = <String, String>{
+            if (best.httpHeaders != null) ...best.httpHeaders!,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+          };
+
+          _showSnackDeferred(
+            '⚠️ 只有视频流，无音频: ${best.resolutionString}',
+            bgColor: Colors.orange[700],
+            duration: const Duration(seconds: 3),
+          );
+
+          await player.open(
+            mk.Media(best.url, httpHeaders: headers),
+            play: false,
+          );
+          
+          await _saveSniffedVideoData(best.url, best.httpHeaders);
+          return;
+        }
+      }
+
+      // 回退：使用通用videoUrl（可能缺少必要headers）
+      await player.open(mk.Media(info.videoUrl!), play: false);
+    } catch (e) {
+      _showSnackDeferred(
+        '视频嗅探失败: $e',
+        bgColor: Colors.red[700],
+      );
+    } finally {
+      if (mounted) setState(() => _isSniffing = false);
+    }
+  }
+
+  
+
+  @override
+  void dispose() {
+    player.dispose();
+    _splitViewController.dispose();
+    _nameController.dispose();
+    _notesController.dispose();
+    _newTagController.dispose();
+    _tagFocusNode.dispose();
+    _videoFocusNode.dispose();
+    _focusNode.dispose();
+    // 清理临时的音视频合并文件
+    AudioVideoMergerService.cleanupTempFiles();
+    super.dispose();
+  }
+
+  void _resetFormToBlank() {
+    setState(() {
+      _originalEditingClip = null;
+      _formClip = OnlineVideoClip(
+        id: 'online_clip_${DateTime.now().millisecondsSinceEpoch}',
+        onlineVideoId: widget.video.id,
+        name: '',
+        startTime: Duration.zero,
+        endTime: Duration.zero,
+        coverFrameTime: Duration.zero,
+      );
+      _updateTextFieldsAndPreview();
+    });
+
+    _updateEndTimeToVideoDuration();
+  }
+
+  Future<void> _updateEndTimeToVideoDuration() async {
+    int attempts = 0;
+    const maxAttempts = 30;
+
+    while (attempts < maxAttempts && mounted) {
+      if (player.state.duration > Duration.zero) {
+        setState(() {
+          _formClip = _formClip.copyWith(endTime: player.state.duration);
+        });
+        return;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 100));
+      attempts++;
+    }
+
+    if (mounted && widget.video.duration != null) {
+      setState(() {
+        _formClip = _formClip.copyWith(endTime: widget.video.duration!);
+      });
+    }
+  }
+
+  void _startEditing(OnlineVideoClip clipToEdit, {bool fromInit = false}) {
+    setState(() {
+      _originalEditingClip = clipToEdit;
+      _formClip = clipToEdit.copyWith();
+      _updateTextFieldsAndPreview();
+      player.seek(clipToEdit.startTime);
+    });
+
+    if (!fromInit) {
+      _scrollToClip(clipToEdit.id);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Now editing: "${clipToEdit.name}"'),
+          backgroundColor: Colors.orange.shade800,
+        ),
+      );
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToClip(clipToEdit.id);
+      });
+    }
+  }
+
+  void _scrollToClip(String clipId) {
+    final appState = context.read<AppState>();
+    final clipsForThisVideo = appState.onlineVideoClips
+        .where((c) => c.onlineVideoId == widget.video.id)
+        .toList();
+    final index = clipsForThisVideo.indexWhere((c) => c.id == clipId);
+    if (index != -1) {
+      _itemScrollController.scrollTo(
+        index: index,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _updateTextFieldsAndPreview() {
+    if (_nameController.text != _formClip.name) {
+      _nameController.text = _formClip.name;
+    }
+    if (_notesController.text != (_formClip.notes ?? '')) {
+      _notesController.text = _formClip.notes ?? '';
+    }
+
+    final thumbnailService = context.read<ThumbnailService>();
+    final appState = context.read<AppState>();
+    final dbPath = appState.currentDbPath;
+
+    if (dbPath != null && _formClip.thumbnailPath != null) {
+      final thumbnailPath = thumbnailService.buildThumbnailPath(
+        dbPath,
+        _formClip.thumbnailPath!,
+      );
+      if (File(thumbnailPath).existsSync()) {
+        _coverPreviewFullPath = thumbnailPath;
+      }
+    }
+  }
+
+  Future<void> _saveOrUpdateClip() async {
+    if (_formClip.name.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a name for the clip'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    final appState = context.read<AppState>();
+    final dbPath = appState.currentDbPath;
+
+    if (dbPath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Save failed: Database path not found.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      setState(() => _isSaving = false);
+      return;
+    }
+
+    try {
+      String? finalThumbnailPath = _tempThumbnailPath;
+
+      if (finalThumbnailPath != null) {
+        final thumbnailService = context.read<ThumbnailService>();
+        final tempPath = thumbnailService.buildThumbnailPath(
+          dbPath,
+          finalThumbnailPath,
+        );
+        final finalFileName = thumbnailService.getThumbnailFileName(
+          _formClip.id,
+        );
+        final finalPath = thumbnailService.buildThumbnailPath(
+          dbPath,
+          finalFileName,
+        );
+
+        final tempFile = File(tempPath);
+        if (tempFile.existsSync()) {
+          tempFile.renameSync(finalPath);
+          finalThumbnailPath = finalFileName;
+        }
+      } else {
+        final bool needsThumbUpdate =
+            _formClip.thumbnailPath == null ||
+            (_originalEditingClip != null &&
+                _formClip.coverFrameTime !=
+                    _originalEditingClip!.coverFrameTime);
+
+        if (needsThumbUpdate) {
+          final thumbnailService = context.read<ThumbnailService>();
+          final coverTime = _formClip.coverFrameTime == Duration.zero
+              ? _formClip.startTime
+              : _formClip.coverFrameTime;
+
+          // 对于在线视频，我们需要特殊处理缩略图生成
+          // 这里暂时使用在线视频的缩略图URL
+          if (widget.video.thumbnailUrl != null) {
+            finalThumbnailPath = await _downloadAndSaveThumbnail(
+              widget.video.thumbnailUrl!,
+              _formClip.id,
+              dbPath,
+            );
+          }
+        }
+      }
+
+      if (finalThumbnailPath != null) {
+        setState(() {
+          _formClip = _formClip.copyWith(thumbnailPath: finalThumbnailPath);
+        });
+      }
+
+      if (_originalEditingClip == null) {
+        await appState.addOnlineVideoClip(_formClip);
+      } else {
+        await appState.updateOnlineVideoClip(_formClip);
+        _originalEditingClip = _formClip.copyWith();
+      }
+
+      if (mounted) {
+        _tempThumbnailPath = null;
+        final thumbnailService = context.read<ThumbnailService>();
+        thumbnailService.cleanupTempThumbnails(dbPath, _formClip.id);
+        _clipsListTimestamp = DateTime.now().millisecondsSinceEpoch;
+        setState(() {});
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Online clip "${_formClip.name}" saved!'),
+            backgroundColor: Colors.green[700],
+          ),
+        );
+        if (_originalEditingClip == null) {
+          _resetFormToBlank();
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<String?> _downloadAndSaveThumbnail(
+    String thumbnailUrl,
+    String clipId,
+    String dbPath,
+  ) async {
+    try {
+      final response = await http.get(
+        Uri.parse(thumbnailUrl),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        final thumbnailService = context.read<ThumbnailService>();
+        final fileName = thumbnailService.getThumbnailFileName(clipId);
+        final filePath = thumbnailService.buildThumbnailPath(dbPath, fileName);
+        
+        final file = File(filePath);
+        await file.writeAsBytes(response.bodyBytes);
+        
+        return fileName;
+      } else {
+        print('Failed to download thumbnail: HTTP ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Failed to download thumbnail: $e');
+    }
+    return null;
+  }
+
+  void _deleteClip(OnlineVideoClip clip) {
+    final appState = context.read<AppState>();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Online Clip'),
+        content: Text('Are you sure you want to delete "${clip.name}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              appState.deleteOnlineVideoClip(clip.id);
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Online clip "${clip.name}" deleted'),
+                  backgroundColor: Colors.red[700],
+                ),
+              );
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _resetFormChanges() {
+    if (_originalEditingClip != null) {
+      setState(() {
+        _formClip = _originalEditingClip!.copyWith();
+        _updateTextFieldsAndPreview();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Changes discarded'),
+          backgroundColor: Colors.orange[700],
+        ),
+      );
+    }
+  }
+
+  void _setStartTimeFromPlayer() {
+    final currentTime = player.state.position;
+    setState(() {
+      _formClip = _formClip.copyWith(startTime: currentTime);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Start time set to ${formatDuration(currentTime)}'),
+        backgroundColor: Colors.blue[700],
+      ),
+    );
+  }
+
+  void _setEndTimeFromPlayer() {
+    final currentTime = player.state.position;
+    setState(() {
+      _formClip = _formClip.copyWith(endTime: currentTime);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('End time set to ${formatDuration(currentTime)}'),
+        backgroundColor: Colors.blue[700],
+      ),
+    );
+  }
+
+  Future<void> _generateCoverAtTime(Duration time) async {
+    if (_isSettingCover) return;
+
+    setState(() => _isSettingCover = true);
+
+    try {
+      // 对于在线视频，暂时只设置封面时间，不生成缩略图
+      setState(() {
+        _formClip = _formClip.copyWith(coverFrameTime: time);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Cover time set to ${formatDuration(time)} (thumbnail will be downloaded when saved)',
+          ),
+          backgroundColor: Colors.green[700],
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSettingCover = false);
+    }
+  }
+
+  void _handleKeyPress(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      switch (event.logicalKey.keyLabel) {
+        case ' ':
+          _togglePlayPause();
+          break;
+        case 'S':
+        case 's':
+          _toggleMute();
+          break;
+        case 'F1':
+          setState(() {
+            _showHints = !_showHints;
+          });
+          break;
+        case '1':
+          _setStartTimeFromPlayer();
+          break;
+        case '2':
+          _setEndTimeFromPlayer();
+          break;
+        case 'C':
+        case 'c':
+          _generateCoverAtTime(player.state.position);
+          break;
+      }
+    }
+  }
+
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+    });
+
+    if (_isMuted) {
+      player.setVolume(0);
+    } else {
+      player.setVolume(100);
+    }
+  }
+
+  void _togglePlayPause() {
+    if (player.state.playing) {
+      player.pause();
+    } else {
+      player.play();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final thumbnailService = context.read<ThumbnailService>();
+    final isEditing = _originalEditingClip != null;
+
+    if (isEditing) {
+      final latestClipInState = appState.onlineVideoClips.where(
+        (c) => c.id == _originalEditingClip!.id,
+      ).firstOrNull;
+      if (latestClipInState == null) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _resetFormToBlank(),
+        );
+      } else if (latestClipInState != _originalEditingClip) {
+        _originalEditingClip = latestClipInState;
+      }
+    }
+
+    final bool hasChanges = isEditing && _formClip != _originalEditingClip;
+    final saveShortcut = LogicalKeySet(
+      Platform.isMacOS ? LogicalKeyboardKey.meta : LogicalKeyboardKey.control,
+      LogicalKeyboardKey.keyS,
+    );
+
+    return RawKeyboardListener(
+      focusNode: _focusNode,
+      onKey: _handleKeyPress,
+      child: Shortcuts(
+        shortcuts: <LogicalKeySet, Intent>{saveShortcut: const SaveIntent()},
+        child: Actions(
+          actions: <Type, Action<Intent>>{
+            SaveIntent: CallbackAction<SaveIntent>(
+              onInvoke: (i) => _saveOrUpdateClip(),
+            ),
+          },
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text(isEditing ? 'Edit Online Clip' : 'Create New Online Clip'),
+              actions: [
+                if (_isSniffing)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                IconButton(
+                  icon: Icon(
+                    _showHints ? Icons.keyboard : Icons.keyboard_outlined,
+                    color: _showHints ? Colors.blue : Colors.grey,
+                  ),
+                  tooltip: 'Toggle Keyboard Shortcuts (F1)',
+                  onPressed: () {
+                    setState(() {
+                      _showHints = !_showHints;
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                if (isEditing)
+                  TextButton.icon(
+                    icon: const Icon(Icons.add_circle_outline),
+                    label: const Text('New Clip'),
+                    onPressed: _resetFormToBlank,
+                  ),
+                const SizedBox(width: 8),
+                if (isEditing)
+                  TextButton.icon(
+                    icon: const Icon(Icons.undo),
+                    label: const Text('Discard Changes'),
+                    onPressed: hasChanges ? _resetFormChanges : null,
+                    style: TextButton.styleFrom(
+                      foregroundColor: hasChanges
+                          ? Colors.orange.shade700
+                          : Colors.grey,
+                    ),
+                  ),
+                const SizedBox(width: 16),
+                ElevatedButton.icon(
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          isEditing ? Icons.check_circle_outline : Icons.save,
+                        ),
+                  label: Text(isEditing ? 'Update Clip' : 'Save New Clip'),
+                  onPressed: (_isSaving || (isEditing && !hasChanges))
+                      ? null
+                      : _saveOrUpdateClip,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isEditing
+                        ? (hasChanges ? Colors.orange.shade800 : Colors.grey)
+                        : Colors.green.shade700,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 16),
+              ],
+            ),
+            body: MultiSplitView(
+              controller: _splitViewController,
+              builder: (context, area) {
+                if (area.data == 'editor') {
+                  return _buildEditorPanel(appState);
+                }
+                return _buildClipList(appState, thumbnailService);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+    Widget _buildEditorPanel(AppState appState) {
+    return Column(
+      children: [
+        // 视频播放器
+        Expanded(
+          flex: 4,
+          child: Card(
+            elevation: 4.0,
+            margin: const EdgeInsets.all(8.0),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              children: [
+                // 视频播放器
+                Focus(
+                  focusNode: _videoFocusNode,
+                  child: Shortcuts(
+                    shortcuts: <LogicalKeySet, Intent>{
+                      LogicalKeySet(LogicalKeyboardKey.space):
+                          const TogglePlayPauseIntent(),
+                    },
+                    child: Actions(
+                      actions: <Type, Action<Intent>>{
+                        TogglePlayPauseIntent:
+                            CallbackAction<TogglePlayPauseIntent>(
+                              onInvoke: (Intent intent) => player.playOrPause(),
+                            ),
+                      },
+                      child: GestureDetector(
+                        onTap: () {
+                          if (!_videoFocusNode.hasFocus) {
+                            FocusScope.of(context).requestFocus(_videoFocusNode);
+                          }
+                          player.playOrPause();
+                        },
+                        child: Video(controller: controller),
+                      ),
+                    ),
+                  ),
+                ),
+                // 质量选择按钮
+                if (_qualityOptions.isNotEmpty)
+                  Positioned(
+                    top: 16,
+                    left: 16,
+                    child: Material(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(8),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: _showQualitySelector,
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.high_quality,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _currentVideoStream?.resolutionString ?? 'Auto',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                // 快捷键提示悬浮窗
+                if (_showHints)
+                  Positioned(
+                    top: 16,
+                    right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black87,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Keyboard Shortcuts',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildShortcutHint('Space', 'Play/Pause'),
+                          _buildShortcutHint('S', 'Toggle Mute'),
+                          _buildShortcutHint('1', 'Set Start Time'),
+                          _buildShortcutHint('2', 'Set End Time'),
+                          _buildShortcutHint('C', 'Set Cover'),
+                          _buildShortcutHint('F1', 'Toggle Hints'),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+
+        // 进度条
+        StreamBuilder<Duration>(
+          stream: player.stream.duration,
+          initialData: player.state.duration,
+          builder: (context, snapshot) {
+            final isReady = (snapshot.data ?? Duration.zero) > Duration.zero;
+            if (!isReady) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20.0),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+              child: CustomProgressBar(
+                player: player,
+                startTime: _formClip.startTime,
+                endTime: _formClip.endTime,
+                coverTime: _formClip.coverFrameTime,
+                onSetStart: (time) => setState(
+                  () => _formClip = _formClip.copyWith(startTime: time),
+                ),
+                onSetEnd: (time) => setState(
+                  () => _formClip = _formClip.copyWith(endTime: time),
+                ),
+                onSetCover: (time) => _generateCoverAtTime(time),
+                showThumbnailPreview: false, // 在线视频禁用缩略图预览
+                videoPath: widget.video.url, // 使用在线视频URL
+              ),
+            );
+          },
+        ),
+
+        // 剪辑控制
+        _buildClippingControls(),
+
+        // 表单
+        Expanded(
+          flex: 3,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_originalEditingClip != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12.0),
+                    child: Chip(
+                      label: Text('Editing: ${_originalEditingClip!.name}'),
+                      backgroundColor: Colors.orange.shade100,
+                      onDeleted: _resetFormToBlank,
+                      deleteIcon: const Icon(Icons.cancel),
+                    ),
+                  ),
+                TextField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Clip Name',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _formClip = _formClip.copyWith(name: value);
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                _buildTagsSection(appState),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _notesController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _formClip = _formClip.copyWith(notes: value);
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildCoverControls(),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+
+
+  Widget _buildTagsSection(AppState appState) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Tags',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ..._formClip.tags.map((tag) => Chip(
+              label: Text(tag),
+              onDeleted: () {
+                setState(() {
+                  final newTags = List<String>.from(_formClip.tags)
+                    ..remove(tag);
+                  _formClip = _formClip.copyWith(tags: newTags);
+                });
+              },
+            )),
+            ActionChip(
+              label: const Text('Add Tag'),
+              onPressed: () => _showAddTagDialog(),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _showAddTagDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Tag'),
+        content: TextField(
+          controller: _newTagController,
+          decoration: const InputDecoration(
+            labelText: 'Tag Name',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) {
+              setState(() {
+                final newTags = List<String>.from(_formClip.tags)
+                  ..add(value.trim());
+                _formClip = _formClip.copyWith(tags: newTags);
+              });
+              _newTagController.clear();
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final value = _newTagController.text.trim();
+              if (value.isNotEmpty) {
+                setState(() {
+                  final newTags = List<String>.from(_formClip.tags)
+                    ..add(value);
+                  _formClip = _formClip.copyWith(tags: newTags);
+                });
+                _newTagController.clear();
+                Navigator.of(context).pop();
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
+  Widget _buildCoverPlaceholder() {
+    return Container(
+      color: Colors.grey[300],
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.image_not_supported, size: 40),
+            const SizedBox(height: 8),
+            Text(
+              'Online Video\nCover will be downloaded when saved',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShortcutHint(String key, String action) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              key,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            action,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClippingControls() {
+    final theme = Theme.of(context);
+    final clipDuration = _formClip.endTime > _formClip.startTime
+        ? _formClip.endTime - _formClip.startTime
+        : Duration.zero;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildTimeDisplay(
+                'Start',
+                _formClip.startTime,
+                theme.primaryColor,
+              ),
+              _buildTimeDisplay('End', _formClip.endTime, Colors.redAccent),
+              _buildTimeDisplay('Duration', clipDuration, null),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            alignment: WrapAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                icon: const Icon(Icons.flag_circle_outlined),
+                onPressed: _setStartTimeFromPlayer,
+                label: const Text("Set Start"),
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.flag_circle),
+                onPressed: _setEndTimeFromPlayer,
+                label: const Text("Set End"),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.colorScheme.secondaryContainer,
+                ),
+                icon: const Icon(Icons.slideshow),
+                onPressed: () =>
+                    _previewClip(_formClip.startTime, _formClip.endTime),
+                label: const Text("Preview Clip"),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimeDisplay(String label, Duration time, Color? color) {
+    return Text.rich(
+      TextSpan(
+        text: '$label: ',
+        style: Theme.of(context).textTheme.bodyMedium,
+        children: <TextSpan>[
+          TextSpan(
+            text: formatDuration(time),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: color ?? Theme.of(context).colorScheme.onSurface,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoverControls() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _buildTimeDisplay(
+                  'Cover At',
+                  _formClip.coverFrameTime,
+                  Colors.teal,
+                ),
+                const Spacer(),
+                ElevatedButton(
+                  onPressed: _isSettingCover
+                      ? null
+                      : () => _generateCoverAtTime(player.state.position),
+                  child: _isSettingCover
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Set Cover'),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.settings_backup_restore),
+                  tooltip: 'Reset cover to start time',
+                  onPressed: _isSettingCover
+                      ? null
+                      : () {
+                          // 先更新 coverFrameTime 为 startTime
+                          setState(() {
+                            _formClip = _formClip.copyWith(
+                              coverFrameTime: _formClip.startTime,
+                            );
+                          });
+                          // 然后生成封面图
+                          _generateCoverAtTime(_formClip.startTime);
+                        },
+                ),
+              ],
+            ),
+            if (_coverPreviewFullPath != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12.0),
+                child: Column(
+                  children: [
+                    const Divider(),
+                    const Text(
+                      "Cover Preview",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Image.file(
+                      File(_coverPreviewFullPath!),
+                      key: ValueKey(
+                        '${_coverPreviewFullPath}_$_coverPreviewTimestamp',
+                      ),
+                      height: 120,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return _buildCoverPlaceholder();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _previewClip(Duration startTime, Duration endTime) {
+    if (startTime >= endTime) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid clip duration'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    player.seek(startTime);
+    player.play();
+
+    // 在结束时间停止播放
+    Timer(Duration(milliseconds: (endTime - startTime).inMilliseconds), () {
+      if (mounted) {
+        player.pause();
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Previewing clip: ${formatDuration(startTime)} - ${formatDuration(endTime)}'),
+        backgroundColor: Colors.blue[700],
+        duration: Duration(seconds: (endTime - startTime).inSeconds + 1),
+      ),
+    );
+  }
+
+  Widget _buildClipList(AppState appState, ThumbnailService thumbnailService) {
+    final clipsForThisVideo = appState.onlineVideoClips
+        .where((c) => c.onlineVideoId == widget.video.id)
+        .toList();
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Icon(Icons.list),
+              const SizedBox(width: 8),
+              Text(
+                'Clips (${clipsForThisVideo.length})',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: clipsForThisVideo.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No clips yet.\nCreate your first clip!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey,
+                    ),
+                  ),
+                )
+              : ScrollablePositionedList.builder(
+                  itemCount: clipsForThisVideo.length,
+                  itemScrollController: _itemScrollController,
+                  itemBuilder: (context, index) {
+                    final clip = clipsForThisVideo[index];
+                    final isSelected = _originalEditingClip?.id == clip.id;
+                    
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      color: isSelected
+                          ? Theme.of(context).primaryColor.withOpacity(0.1)
+                          : null,
+                      child: ListTile(
+                        leading: SizedBox(
+                          width: 60,
+                          height: 40,
+                          child: clip.thumbnailPath != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: Image.file(
+                                    File(thumbnailService.buildThumbnailPath(
+                                      appState.currentDbPath!,
+                                      clip.thumbnailPath!,
+                                    )),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        color: Colors.grey[300],
+                                        child: const Icon(
+                                          Icons.image_not_supported,
+                                          size: 20,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              : Container(
+                                  color: Colors.grey[300],
+                                  child: const Icon(
+                                    Icons.image_not_supported,
+                                    size: 20,
+                                  ),
+                                ),
+                        ),
+                        title: Text(
+                          clip.name.isEmpty ? 'Untitled Clip' : clip.name,
+                          style: TextStyle(
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${formatDuration(clip.startTime)} - ${formatDuration(clip.endTime)}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            if (clip.tags.isNotEmpty)
+                              Wrap(
+                                spacing: 4,
+                                children: clip.tags.take(3).map((tag) => Chip(
+                                  label: Text(
+                                    tag,
+                                    style: const TextStyle(fontSize: 10),
+                                  ),
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                )).toList(),
+                              ),
+                          ],
+                        ),
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (value) {
+                            switch (value) {
+                              case 'edit':
+                                _startEditing(clip);
+                                break;
+                              case 'delete':
+                                _deleteClip(clip);
+                                break;
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit),
+                                  SizedBox(width: 8),
+                                  Text('Edit'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Text('Delete', style: TextStyle(color: Colors.red)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  /// 尝试为当前视频添加单独的音频轨道
+  Future<void> _tryAddSeparateAudioTrack(VideoStream? audioStream, Map<String, String> headers) async {
+    if (audioStream == null) {
+      print('❌ 没有可用的音频流');
+      _showSnackDeferred(
+        '⚠️ 仅播放视频（无音频流）',
+        bgColor: Colors.orange[700],
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+    
+    print('🎵 检测到音频流，但 MediaKit 暂不支持 HLS+音频同时播放');
+    print('   音频流: [${audioStream.formatId}] ${audioStream.acodec} ${audioStream.abr?.toInt() ?? 0}kbps');
+    
+    _showSnackDeferred(
+      '⚠️ 仅播放视频（音频需单独处理）',
+      bgColor: Colors.orange[700],
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  /// 尝试使用分离流播放的多种策略
+  Future<void> _playWithSeparateStreams(VideoStream bestVideo, VideoStream bestAudio, Map<String, String> headers) async {
+    final videoInfo = '视频${bestVideo.resolutionString}';
+    final audioInfo = bestAudio.abr != null ? 
+        '音频${bestAudio.abr!.toInt()}kbps' : 
+        '音频${bestAudio.formatNote ?? 'Unknown'}';
+    
+    print('🔧 尝试分离流播放策略...');
+    print('   视频流: ${bestVideo.url}');
+    print('   音频流: ${bestAudio.url}');
+    
+    _showSnackDeferred(
+      '🔧 正在合并音视频流...',
+      bgColor: Colors.blue[700],
+      duration: const Duration(seconds: 2),
+    );
+    
+    // 策略 1: 使用音视频合并服务
+    try {
+      final audioHeaders = <String, String>{
+        if (bestAudio.httpHeaders != null) ...bestAudio.httpHeaders!,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      };
+      
+      final mergedUrl = await AudioVideoMergerService.createMergedStreamUrl(
+        bestVideo, 
+        bestAudio,
+        videoHeaders: headers,
+        audioHeaders: audioHeaders,
+      );
+      
+      if (mergedUrl != null) {
+        print('✅ 成功创建合并流: $mergedUrl');
+        
+        _showSnackDeferred(
+          '✅ 音视频合并成功: ${videoInfo} + ${audioInfo}',
+          bgColor: Colors.green[700],
+          duration: const Duration(seconds: 3),
+        );
+        
+        await player.open(
+          mk.Media(mergedUrl, httpHeaders: headers),
+          play: false,
+        );
+        
+        return;
+      }
+    } catch (e) {
+      print('❌ 音视频合并失败: $e');
+    }
+    
+    // 策略 2: 尝试 MediaKit Playlist（可能不工作，但值得一试）
+    try {
+      _showSnackDeferred(
+        '🔧 尝试策略2: MediaKit Playlist',
+        bgColor: Colors.purple[700],
+        duration: const Duration(seconds: 2),
+      );
+      
+      final audioHeaders = <String, String>{
+        if (bestAudio.httpHeaders != null) ...bestAudio.httpHeaders!,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      };
+      
+      await player.open(
+        mk.Playlist([
+          mk.Media(bestVideo.url, httpHeaders: headers),
+          mk.Media(bestAudio.url, httpHeaders: audioHeaders),
+        ]),
+        play: false,
+      );
+      
+      _showSnackDeferred(
+        '✅ Playlist 播放: ${videoInfo} + ${audioInfo}',
+        bgColor: Colors.green[700],
+        duration: const Duration(seconds: 3),
+      );
+      
+      return;
+      
+    } catch (e) {
+      print('❌ MediaKit Playlist 失败: $e');
+    }
+    
+    // 策略 3: 回退到只播放视频
+    print('⚠️ 所有音视频合并策略都失败，回退到仅视频播放');
+    
+    _showSnackDeferred(
+      '⚠️ 音视频合并失败，仅播放视频: ${videoInfo}',
+      bgColor: Colors.orange[700],
+      duration: const Duration(seconds: 3),
+    );
+    
+    await player.open(
+      mk.Media(bestVideo.url, httpHeaders: headers),
+      play: false,
+    );
+    
+    // 显示详细的音频流信息给用户
+    _showSnackDeferred(
+      '💡 检测到音频流 ${audioInfo}，但无法与视频合并播放',
+      bgColor: Colors.grey[600],
+      duration: const Duration(seconds: 4),
+    );
+  }
+}
+

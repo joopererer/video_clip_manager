@@ -9,14 +9,10 @@ import 'package:path/path.dart' as p;
 
 import '../../data/models.dart';
 import '../../data/app_state.dart';
-import 'clip_editor_screen.dart';
 import '../tabs/clips_tab.dart';
 import '../../utils/tag_utils.dart';
 import '../../widgets/custom_progress_bar.dart'; // 添加自定义进度条导入
 import '../../services/preview_service.dart'; // 添加预览服务导入
-import '../../services/video_metadata_service.dart';
-import '../../services/screenshot_service.dart';
-
 
 class ClipPlaybackScreen extends StatefulWidget {
   final VideoClip clip;
@@ -25,10 +21,11 @@ class ClipPlaybackScreen extends StatefulWidget {
   final List<String> selectedTags; // 当前选中的标签
   final int? selectedRating; // 当前选中的星级
   final bool? selectedFavorite; // 当前选中的收藏状态
-  final SortOption currentSortOption; // 当前排序选项
+  final SortOption currentSortOption;
+  final Duration? initialSeekTime; // 当前排序选项
 
   const ClipPlaybackScreen({
-    super.key, 
+    super.key,
     required this.clip,
     this.allClips,
     this.searchQuery = '',
@@ -36,6 +33,7 @@ class ClipPlaybackScreen extends StatefulWidget {
     this.selectedRating,
     this.selectedFavorite,
     this.currentSortOption = SortOption.dateAddedDesc,
+      this.initialSeekTime,
   });
 
   @override
@@ -43,17 +41,16 @@ class ClipPlaybackScreen extends StatefulWidget {
 }
 
 class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
-  // 播放器状态管理（在 screenshot host 停用并 idle 后再创建）
-  Player? mainPlayer;
-  VideoController? mainController;
-  bool _playersCreated = false;
-  
+  // 播放器状态管理
+  late Player mainPlayer;
+  late VideoController mainController;
+
   // 播放器状态管理
   bool _isPlayerReady = false;
   bool _isInitializing = false;
   Timer? _recoveryTimer;
   bool _disposed = false;
-  bool _isClosing = false;
+  bool _isPlayerDisposed = false;
   bool _isSeeking = false; // 新增：seek锁定标志
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<bool>? _playingSubscription;
@@ -63,16 +60,18 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   bool _showCustomProgressBar = true; // 控制是否显示自定义进度条
   bool _showClipRelativeProgress = true; // 控制是否显示clip相对进度
   bool _isMuted = false; // 静音状态
-  
+
   // 新增：全局焦点节点
   late final FocusNode _focusNode;
-  
+
   @override
   void initState() {
     super.initState();
     _currentClip = widget.clip; // 初始化当前clip
+    mainPlayer = Player();
+    mainController = VideoController(mainPlayer);
     _focusNode = FocusNode(); // 初始化焦点节点
-    unawaited(_bootPlaybackPlayers());
+    _initializePlayers();
 
     // 延迟请求焦点，确保组件完全初始化
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -82,25 +81,11 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     });
   }
 
-  Future<void> _bootPlaybackPlayers() async {
-    PreviewService().pauseGlobalPreGeneration();
-    await ScreenshotService().prepareForPlayback();
-    if (!mounted || _disposed) return;
-
-    final player = Player();
-    mainPlayer = player;
-    mainController = VideoController(player);
-    if (mounted) {
-      setState(() => _playersCreated = true);
-    }
-    await _initializePlayers();
-  }
-
   Future<void> _initializePlayers() async {
-    if (_isInitializing || _disposed || mainPlayer == null) return;
-    
+    if (_isInitializing || _disposed) return;
+
     print('Initializing players for clip: ${_currentClip.name}'); // 调试信息
-    
+
     setState(() {
       _isInitializing = true;
       _isPlayerReady = false;
@@ -109,102 +94,54 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     try {
       // 确保播放器处于干净状态
       await _resetPlayers();
-      
+
       // 初始化主播放器
       print('Opening main player with: ${_currentClip.videoPath}'); // 调试信息
-      // Check file existence to avoid blocking the player on invalid paths
-      try {
-        final file = File(_currentClip.videoPath);
-        final exists = await file.exists();
-        if (!exists) {
-          print('ClipPlayback: file not found: ${_currentClip.videoPath}, aborting initialization');
-          if (mounted && !_disposed) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('文件不存在: ${_currentClip.videoPath.split('\\').last}'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ));
-            setState(() {
-              _isInitializing = false;
-              _isPlayerReady = false;
-            });
-            _scheduleRecovery();
-          }
-          return;
-        }
-      } catch (e) {
-        print('ClipPlayback: error checking file existence: $e');
-      }
+      await mainPlayer.open(Media(_currentClip.videoPath), play: false);
 
-      try {
-        await mainPlayer!.open(Media(_currentClip.videoPath), play: false).timeout(Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10));
-      } on TimeoutException catch (te) {
-        print('ClipPlayback: open timed out for ${_currentClip.videoPath}: $te');
-        if (mounted && !_disposed) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('打开媒体超时: ${_currentClip.videoPath.split('\\').last}'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ));
-          setState(() {
-            _isInitializing = false;
-            _isPlayerReady = false;
-          });
-          _scheduleRecovery();
-        }
-        return;
-      } catch (e) {
-        print('ClipPlayback: open failed for ${_currentClip.videoPath}: $e');
-        if (mounted && !_disposed) {
-          _scheduleRecovery();
-        }
-        return;
-      }
-      
       if (!mounted || _disposed) {
         print('Widget disposed during initialization, aborting'); // 调试信息
         return;
       }
-      
-      // 等待一下确保媒体加载完成
-      await Future.delayed(Duration(milliseconds: 300));
-      
-      // 检查播放器状态
-      if (mainPlayer!.state.duration == Duration.zero) {
-        print('Main player failed to load media after open, scheduling recovery');
-        _scheduleRecovery();
-        return;
+
+      // 等待媒体加载完成（网络流/HLS 需要建立网络连接并解析分片，通常耗时 1~6 秒）
+      Duration loadedDuration = mainPlayer.state.duration;
+      if (loadedDuration == Duration.zero) {
+        try {
+          final isNetwork = _currentClip.videoPath.startsWith('http://') ||
+              _currentClip.videoPath.startsWith('https://');
+          final timeout = isNetwork
+              ? const Duration(seconds: 12)
+              : const Duration(seconds: 2);
+          loadedDuration = await mainPlayer.stream.duration
+              .firstWhere((d) => d > Duration.zero)
+              .timeout(timeout);
+        } catch (_) {
+          loadedDuration = mainPlayer.state.duration;
+        }
       }
-      
-      // 主播放器跳转到开始时间并开始播放
-      print('Seeking main player to: ${_currentClip.startTime}'); // 调试信息
-      try {
-        await mainPlayer!.seek(_currentClip.startTime).timeout(Duration(seconds: AppState.instance?.seekTimeoutSeconds ?? 10));
-      } on TimeoutException catch (te) {
-        print('ClipPlayback: seek timed out: $te');
-        _scheduleRecovery();
-        return;
-      } catch (e) {
-        print('ClipPlayback: seek failed: $e');
-        _scheduleRecovery();
+
+      if (!mounted || _disposed) {
+        print('Widget disposed during initialization, aborting'); // 调试信息
         return;
       }
 
-      await Future.delayed(Duration(milliseconds: 100));
-      
-      print('Starting main player playback'); // 调试信息
-      try {
-        await mainPlayer!.play().timeout(Duration(seconds: AppState.instance?.playTimeoutSeconds ?? 5));
-      } on TimeoutException catch (te) {
-        print('ClipPlayback: play timed out: $te');
-        _scheduleRecovery();
-        return;
-      } catch (e) {
-        print('ClipPlayback: play failed: $e');
-        _scheduleRecovery();
-        return;
+      // 如果依然未能获取时长但已经有缓冲数据，也可以继续尝试
+      if (loadedDuration == Duration.zero && mainPlayer.state.buffer == Duration.zero) {
+        throw Exception('Main player failed to load media');
       }
-      
+
+      // 主播放器跳转到开始时间并开始播放
+      print('Seeking main player to: ${_currentClip.startTime}'); // 调试信息
+      final targetSeek = widget.initialSeekTime ?? _currentClip.startTime;
+      if (targetSeek > Duration.zero) {
+        await mainPlayer.seek(targetSeek);
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+
+      print('Starting main player playback'); // 调试信息
+      await mainPlayer.play();
+
       if (mounted && !_disposed) {
         setState(() {
           _isPlaying = true;
@@ -220,24 +157,28 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
 
       // 设置主播放器位置监听器
       _positionSubscription?.cancel();
-      _positionSubscription = mainPlayer!.stream.position.listen((position) {
-        if (mounted && !_disposed && !_isSeeking && _currentClip.endTime > Duration.zero &&
+      _positionSubscription = mainPlayer.stream.position.listen((position) {
+        if (mounted &&
+            !_disposed &&
+            !_isSeeking &&
+            _currentClip.endTime > Duration.zero &&
             position >= _currentClip.endTime) {
-          print('ClipPlaybackScreen: Position reached end time, pausing'); // 调试信息
+          print(
+            'ClipPlaybackScreen: Position reached end time, pausing',
+          ); // 调试信息
           _safePause();
         }
       });
 
       // 监听主播放器播放状态
       _playingSubscription?.cancel();
-      _playingSubscription = mainPlayer!.stream.playing.listen((playing) {
+      _playingSubscription = mainPlayer.stream.playing.listen((playing) {
         if (mounted && !_disposed) {
           setState(() {
             _isPlaying = playing;
           });
         }
       });
-
     } catch (e) {
       print('Error during player initialization: $e'); // 调试信息
       if (mounted && !_disposed) {
@@ -254,10 +195,10 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   Future<void> _resetPlayers() async {
     try {
       // 如果播放器已经打开，先暂停
-      if (mainPlayer!.state.playing) {
-        await mainPlayer!.pause();
+      if (mainPlayer.state.playing) {
+        await mainPlayer.pause();
       }
-      
+
       // 等待一下确保暂停完成
       await Future.delayed(Duration(milliseconds: 100));
     } catch (e) {
@@ -275,65 +216,74 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       }
     });
   }
-  
+
   /// 智能预生成逻辑
   Future<void> _smartPreGenerate() async {
     if (widget.clip.videoPath == null) return;
-    
+    if (_currentClip.videoPath.startsWith('http://') ||
+        _currentClip.videoPath.startsWith('https://')) {
+      // 网络流/在线视频不执行本地关键帧提取，避免播放与抓帧在同一播放器上冲突
+      return;
+    }
+
     try {
       // 检查当前进度
-      final progress = await PreviewService().getVideoProgress(widget.clip.videoPath!);
+      final progress = await PreviewService().getVideoProgress(
+        widget.clip.videoPath!,
+      );
       final remainingPercentage = 1.0 - progress;
-      
-      print('ClipPlayback: Current progress: ${(progress * 100).toStringAsFixed(1)}%, remaining: ${(remainingPercentage * 100).toStringAsFixed(1)}%');
-      
-      if (remainingPercentage <= 0.3) {
-        // 剩余少于30%，继续生成并显示loading
-        print('ClipPlayback: Less than 30% remaining, continuing generation...');
+
+      print(
+        'ClipPlayback: Current progress: ${(progress * 100).toStringAsFixed(1)}%, remaining: ${(remainingPercentage * 100).toStringAsFixed(1)}%',
+      );
+
+      if (remainingPercentage > 0.05 && remainingPercentage <= 0.3) {
+        // 剩余少于30%且未完成，继续生成并显示loading
+        print(
+          'ClipPlayback: Less than 30% remaining, continuing generation...',
+        );
         await _continuePreGeneration();
       } else {
-        print('ClipPlayback: More than 30% remaining, skipping generation');
+        print('ClipPlayback: Cache complete or more than 30% remaining, skipping generation');
       }
     } catch (e) {
       print('ClipPlayback: Error in smart pre-generation: $e');
     }
   }
-  
+
   /// 继续预生成并显示loading
   Future<void> _continuePreGeneration() async {
-    final videoPath = widget.clip.videoPath;
-    if (videoPath == null || videoPath.trim().isEmpty) return;
+    if (widget.clip.videoPath == null) return;
 
     try {
+      // 暂停全局预生成
       PreviewService().pauseGlobalPreGeneration();
+
+      // 显示loading状态
       _showLoadingPreview();
 
-      final file = File(videoPath);
-      if (!await file.exists()) {
-        print('ClipPlayback: Video file missing during pre-generation: $videoPath');
+      // 获取视频时长
+      final duration = mainPlayer.state.duration;
+      if (duration == Duration.zero) {
+        print('ClipPlayback: Cannot get video duration');
         return;
       }
 
-      final duration = mainPlayer!.state.duration;
-      if (duration == Duration.zero) {
-        final fallbackDuration = await VideoMetadataService().getVideoDuration(videoPath);
-        if (fallbackDuration == null || fallbackDuration == Duration.zero) {
-          print('ClipPlayback: Cannot get video duration');
-          return;
-        }
-        await PreviewService().preGenerateKeyFramesFromPath(videoPath, fallbackDuration);
-      } else {
-        await PreviewService().preGenerateKeyFramesFromPath(videoPath, duration);
-      }
+      // 继续预生成
+      await PreviewService().preGenerateKeyFrames(
+        mainPlayer,
+        widget.clip.videoPath!,
+        duration,
+      );
 
       print('ClipPlayback: Pre-generation completed');
     } catch (e) {
       print('ClipPlayback: Error continuing pre-generation: $e');
     } finally {
-      PreviewService().resumeGlobalPreGeneration();
+      // 在播放界面内不恢复全局预生成，避免后台抓帧争抢 Direct3D 纹理
     }
   }
-  
+
   /// 显示loading预览状态
   void _showLoadingPreview() {
     if (mounted) {
@@ -347,11 +297,11 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   }
 
   Future<void> _safePause() async {
-    if (!_isPlayerReady || _disposed || _isClosing) return;
-    
+    if (!_isPlayerReady || _disposed) return;
+
     try {
-      await mainPlayer!.pause();
-      if (mounted && !_disposed && !_isClosing) {
+      await mainPlayer.pause();
+      if (mounted && !_disposed) {
         setState(() {
           _isPlaying = false;
         });
@@ -363,18 +313,15 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   }
 
   Future<void> _safePlay() async {
-    if (!_isPlayerReady || _disposed || _isClosing) return;
-    
+    if (!_isPlayerReady || _disposed) return;
+
     try {
-      await mainPlayer!.play().timeout(Duration(seconds: AppState.instance?.playTimeoutSeconds ?? 5));
-      if (mounted && !_disposed && !_isClosing) {
+      await mainPlayer.play();
+      if (mounted && !_disposed) {
         setState(() {
           _isPlaying = true;
         });
       }
-    } on TimeoutException catch (te) {
-      print('ClipPlaybackScreen: play timed out: $te');
-      _scheduleRecovery();
     } catch (e) {
       print('Error during play: $e'); // 调试信息
       _scheduleRecovery();
@@ -382,51 +329,52 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   }
 
   Future<void> _safeSeek(Duration position) async {
-    if (!_isPlayerReady || _disposed || _isClosing) {
-      print('ClipPlaybackScreen: Cannot seek - player not ready, closing, or disposed'); // 调试信息
+    if (!_isPlayerReady || _disposed) {
+      print(
+        'ClipPlaybackScreen: Cannot seek - player not ready or disposed',
+      ); // 调试信息
       return;
     }
-    
+
     if (_isSeeking) {
       print('ClipPlaybackScreen: Seek already in progress, ignoring'); // 调试信息
       return;
     }
-    
+
     try {
       _isSeeking = true; // 设置seek锁定
-      await _suspendBackgroundMediaWork();
-      print('ClipPlaybackScreen: Attempting to seek main player to $position'); // 调试信息
-      print('ClipPlaybackScreen: Main player state - duration: ${mainPlayer!.state.duration}, position: ${mainPlayer!.state.position}, playing: ${mainPlayer!.state.playing}'); // 调试信息
-      
+      print(
+        'ClipPlaybackScreen: Attempting to seek main player to $position',
+      ); // 调试信息
+      print(
+        'ClipPlaybackScreen: Main player state - duration: ${mainPlayer.state.duration}, position: ${mainPlayer.state.position}, playing: ${mainPlayer.state.playing}',
+      ); // 调试信息
+
       // 确保播放器处于可用状态
-      if (mainPlayer!.state.duration == Duration.zero) {
-        print('ClipPlaybackScreen: Main player duration is zero, attempting to recover...'); // 调试信息
+      if (mainPlayer.state.duration == Duration.zero) {
+        print(
+          'ClipPlaybackScreen: Main player duration is zero, attempting to recover...',
+        ); // 调试信息
         await _initializePlayers();
         return;
       }
-      
+
       // 执行seek操作
-      try {
-        await mainPlayer!.seek(position).timeout(const Duration(seconds: 10));
-      } on TimeoutException catch (te) {
-        print('ClipPlaybackScreen: seek timed out: $te');
-        _scheduleRecovery();
-        return;
-      } catch (e) {
-        print('ClipPlaybackScreen: seek failed: $e');
-        _scheduleRecovery();
-        return;
-      }
-    
+      await mainPlayer.seek(position);
+
       // 验证seek是否成功
       await Future.delayed(Duration(milliseconds: 200)); // 增加延迟确保seek完成
-      final newPosition = mainPlayer!.state.position;
-      print('ClipPlaybackScreen: Seek completed. New position: $newPosition, Target: $position'); // 调试信息
-      
+      final newPosition = mainPlayer.state.position;
+      print(
+        'ClipPlaybackScreen: Seek completed. New position: $newPosition, Target: $position',
+      ); // 调试信息
+
       if ((newPosition - position).abs() < Duration(seconds: 1)) {
         print('ClipPlaybackScreen: Seek successful to: $position'); // 调试信息
       } else {
-        print('ClipPlaybackScreen: Seek may have failed. Expected: $position, Actual: $newPosition'); // 调试信息
+        print(
+          'ClipPlaybackScreen: Seek may have failed. Expected: $position, Actual: $newPosition',
+        ); // 调试信息
       }
     } catch (e) {
       print('ClipPlaybackScreen: Error during seek: $e'); // 调试信息
@@ -442,41 +390,10 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     }
   }
 
-  Future<void> _suspendBackgroundMediaWork() async {
-    if (_disposed || _isClosing) return;
-    PreviewService().pauseGlobalPreGeneration();
-    await ScreenshotService().whenIdle();
-  }
-
-  Future<void> _closePlayback() async {
-    if (_disposed || _isClosing) return;
-    _isClosing = true;
-    print('ClipPlaybackScreen: closing playback dialog');
-
-    await _suspendBackgroundMediaWork();
-    _recoveryTimer?.cancel();
-    _positionSubscription?.cancel();
-    _playingSubscription?.cancel();
-
-    try {
-      if (mainPlayer!.state.playing) {
-        await mainPlayer!.pause();
-      }
-    } catch (_) {}
-
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
-  }
-
   @override
   void dispose() {
     print('ClipPlaybackScreen disposing...'); // 调试信息
     _disposed = true;
-    _isClosing = true;
-
-    // Stop any stale preview generation before disposing the native player.
-    PreviewService().pauseGlobalPreGeneration();
 
     // 取消所有定时器和订阅
     _recoveryTimer?.cancel();
@@ -487,43 +404,24 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     _focusNode.dispose();
 
     // 安全地停止和释放播放器
-    // Schedule actual disposal after ScreenshotService queue is idle to avoid
-    // racing with screenshot/open/seek tasks which can trigger native callbacks.
-    final playerToDispose = mainPlayer;
-    ScreenshotService().whenIdle().then((_) async {
-      if (playerToDispose == null) {
-        try {
-          ScreenshotService().markReady();
-        } catch (_) {}
-        return;
-      }
-      try {
-        if (playerToDispose.state.playing) {
-          await playerToDispose.pause();
-        }
-        await Future.delayed(const Duration(milliseconds: 100));
-        await playerToDispose.dispose();
-        print('Players disposed successfully (delayed)');
-        try {
-          ScreenshotService().markReady();
-        } catch (_) {}
-      } catch (e) {
-        print('Error during delayed player disposal: $e');
-        try {
-          await playerToDispose.dispose();
-        } catch (e2) {
-          print('Force disposal also failed: $e2');
-        }
-      }
-    });
+    _disposePlayers();
 
     super.dispose();
   }
 
   // 新增：安全的播放器释放方法
   Future<void> _disposePlayers() async {
-    // Deprecated: actual disposal scheduled in dispose() to wait for screenshot queue.
-    return Future.value();
+    if (_isPlayerDisposed) return;
+    _isPlayerDisposed = true;
+    try {
+      if (mainPlayer.state.playing) {
+        await mainPlayer.pause();
+      }
+      await mainPlayer.dispose();
+      print('Players disposed successfully'); // 调试信息
+    } catch (e) {
+      print('Error during player disposal: $e'); // 调试信息
+    }
   }
 
   void _replay() async {
@@ -541,25 +439,23 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     }
   }
 
-
-
   // 修改导航逻辑，在同一窗口中切换clip
   void _navigateToClip(VideoClip? targetClip) async {
     if (targetClip != null && !_disposed) {
       // 取消之前的订阅
       await _positionSubscription?.cancel();
       await _playingSubscription?.cancel();
-      
+
       // 暂停当前播放
       await _safePause();
-      
+
       // 更新当前clip
       setState(() {
         _currentClip = targetClip;
         _isPlaying = false;
         _isPlayerReady = false;
       });
-      
+
       // 重新初始化播放器
       await _initializePlayers();
     }
@@ -568,13 +464,17 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   // 排序逻辑（与ClipsTab保持一致）
   List<VideoClip> _sortClips(List<VideoClip> clips) {
     final sortedClips = List<VideoClip>.from(clips);
-    
+
     switch (widget.currentSortOption) {
       case SortOption.nameAsc:
-        sortedClips.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        sortedClips.sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
         break;
       case SortOption.nameDesc:
-        sortedClips.sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()));
+        sortedClips.sort(
+          (a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()),
+        );
         break;
       case SortOption.dateAddedAsc:
         sortedClips.sort((a, b) => a.id.compareTo(b.id)); // 假设ID按时间顺序
@@ -603,7 +503,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
         });
         break;
     }
-    
+
     return sortedClips;
   }
 
@@ -616,10 +516,10 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       selectedRating: widget.selectedRating,
       selectedFavorite: widget.selectedFavorite,
     );
-    
+
     // 应用与ClipsTab相同的排序
     final sortedClips = _sortClips(filteredClips);
-    
+
     final currentIndex = sortedClips.indexWhere((c) => c.id == _currentClip.id);
     if (currentIndex > 0) {
       return sortedClips[currentIndex - 1];
@@ -636,10 +536,10 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       selectedRating: widget.selectedRating,
       selectedFavorite: widget.selectedFavorite,
     );
-    
+
     // 应用与ClipsTab相同的排序
     final sortedClips = _sortClips(filteredClips);
-    
+
     final currentIndex = sortedClips.indexWhere((c) => c.id == _currentClip.id);
     if (currentIndex >= 0 && currentIndex < sortedClips.length - 1) {
       return sortedClips[currentIndex + 1];
@@ -647,36 +547,30 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     return null;
   }
 
-  void _editClip() {
-    final appState = context.read<AppState>();
-    final video = appState.originalVideos.firstWhere(
-      (v) => v.path == _currentClip.videoPath,
-      orElse: () => OriginalVideo(
-        id: 'temp_${_currentClip.videoPath.hashCode}',
-        path: _currentClip.videoPath,
-        name: _currentClip.videoPath.split('/').last,
-      ),
-    );
+  Future<void> _editClip() async {
+    if (_disposed) return;
+    _disposed = true;
 
-    _closePlayback();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ClipEditorScreen(
-          video: video,
-          clipToEdit: _currentClip,
-        ),
-      ),
-    );
+    // 取消所有定时器和订阅
+    _recoveryTimer?.cancel();
+    _positionSubscription?.cancel();
+    _playingSubscription?.cancel();
+
+    await _disposePlayers();
+
+    if (mounted) {
+      // 关闭播放弹窗，并将当前 clip 作为结果回传给 ClipsTab 调用方
+      Navigator.of(context).pop(_currentClip);
+    }
   }
 
   void _filterByTag(String tag) {
     // 获取AppState并设置标签过滤
     final appState = context.read<AppState>();
     appState.setSelectedTags([tag]); // 设置为只过滤这个标签
-    
+
     // 关闭播放器并返回到clips_tab
-    _closePlayback();
+    Navigator.of(context).pop();
 
     // 显示过滤成功的提示
     ScaffoldMessenger.of(context).showSnackBar(
@@ -696,12 +590,17 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       final file = File(_currentClip.videoPath);
       if (await file.exists()) {
         // 在Windows上直接打开文件所在文件夹并选中文件
-        final result = await Process.run('explorer', ['/select,', _currentClip.videoPath]);
-        
+        final result = await Process.run('explorer', [
+          '/select,',
+          _currentClip.videoPath,
+        ]);
+
         if (result.exitCode == 0) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Opened file location: ${p.basename(_currentClip.videoPath)}'),
+              content: Text(
+                'Opened file location: ${p.basename(_currentClip.videoPath)}',
+              ),
               duration: const Duration(seconds: 2),
             ),
           );
@@ -718,7 +617,9 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('File not found: ${p.basename(_currentClip.videoPath)}'),
+            content: Text(
+              'File not found: ${p.basename(_currentClip.videoPath)}',
+            ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
           ),
@@ -741,12 +642,11 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       _isMuted = !_isMuted;
     });
 
-    if (mainPlayer == null) return;
     if (_isMuted) {
-      mainPlayer!.setVolume(0);
+      mainPlayer.setVolume(0);
       print('ClipPlayback: Audio muted');
     } else {
-      mainPlayer!.setVolume(100);
+      mainPlayer.setVolume(100);
       print('ClipPlayback: Audio unmuted');
     }
   }
@@ -871,8 +771,12 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                         });
                       },
                       icon: Icon(
-                        _showCustomProgressBar ? Icons.timeline : Icons.timeline_outlined,
-                        color: _showCustomProgressBar ? Colors.green : Colors.grey,
+                        _showCustomProgressBar
+                            ? Icons.timeline
+                            : Icons.timeline_outlined,
+                        color: _showCustomProgressBar
+                            ? Colors.green
+                            : Colors.grey,
                       ),
                       tooltip: 'Toggle Custom Progress Bar (P)',
                     ),
@@ -880,12 +784,17 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                     IconButton(
                       onPressed: () {
                         setState(() {
-                          _showClipRelativeProgress = !_showClipRelativeProgress;
+                          _showClipRelativeProgress =
+                              !_showClipRelativeProgress;
                         });
                       },
                       icon: Icon(
-                        _showClipRelativeProgress ? Icons.crop_square : Icons.crop_square_outlined,
-                        color: _showClipRelativeProgress ? Colors.purple : Colors.grey,
+                        _showClipRelativeProgress
+                            ? Icons.crop_square
+                            : Icons.crop_square_outlined,
+                        color: _showClipRelativeProgress
+                            ? Colors.purple
+                            : Colors.grey,
                       ),
                       tooltip: 'Toggle Clip Relative Progress (T)',
                     ),
@@ -897,24 +806,21 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
-                      onPressed: _closePlayback,
+                      onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            
+
             // 视频播放区域
             Expanded(
               child: Card(
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
                   children: [
-                    if (_playersCreated && mainController != null)
-                      Video(controller: mainController!)
-                    else
-                      const Center(child: CircularProgressIndicator()),
+                    Video(controller: mainController),
                     // 重播按钮
                     Positioned(
                       bottom: 8, // 恢复原来的位置
@@ -986,7 +892,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            
+
             // 自定义进度条 - 显示起始和终止标记
             if (_showCustomProgressBar)
               Column(
@@ -994,7 +900,10 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                   // 简化的Clip信息
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 8),
-                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4,
+                      horizontal: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.blue.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(4),
@@ -1006,7 +915,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                         Icon(Icons.timer, size: 16, color: Colors.blue),
                         const SizedBox(width: 4),
                         Text(
-                          _showClipRelativeProgress 
+                          _showClipRelativeProgress
                               ? 'Clip: ${formatDuration(currentClip.endTime - currentClip.startTime)}'
                               : 'Video: ${formatDuration(currentClip.startTime)} - ${formatDuration(currentClip.endTime)}',
                           style: TextStyle(
@@ -1020,20 +929,19 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                   ),
                   const SizedBox(height: 4),
                   // 进度条
-                  if (_playersCreated && mainPlayer != null)
-                    StreamBuilder<Duration>(
-                    stream: mainPlayer!.stream.duration,
-                    initialData: mainPlayer!.state.duration,
+                  StreamBuilder<Duration>(
+                    stream: mainPlayer.stream.duration,
+                    initialData: mainPlayer.state.duration,
                     builder: (context, snapshot) {
                       final totalDuration = snapshot.data ?? Duration.zero;
                       if (totalDuration == Duration.zero) {
                         return const SizedBox(height: 48);
                       }
-                      
+
                       return Container(
                         margin: const EdgeInsets.symmetric(horizontal: 8),
                         child: CustomProgressBar(
-                          player: mainPlayer!,
+                          player: mainPlayer,
                           startTime: currentClip.startTime,
                           endTime: currentClip.endTime,
                           onSetStart: (time) {},
@@ -1049,26 +957,30 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
                 ],
               ),
             const SizedBox(height: 8),
-            
+
             // 导航按钮行 - 前一个和下一个按钮放在一起
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // 上一个按钮
                 IconButton(
-                  onPressed: previousClip != null ? () => _navigateToClip(previousClip) : null,
+                  onPressed: previousClip != null
+                      ? () => _navigateToClip(previousClip)
+                      : null,
                   icon: Icon(
                     Icons.skip_previous,
                     color: previousClip != null ? Colors.blue : Colors.grey,
                   ),
                   tooltip: 'Previous Clip (← / A)',
                 ),
-                
+
                 const SizedBox(width: 20),
-                
+
                 // 下一个按钮
                 IconButton(
-                  onPressed: nextClip != null ? () => _navigateToClip(nextClip) : null,
+                  onPressed: nextClip != null
+                      ? () => _navigateToClip(nextClip)
+                      : null,
                   icon: Icon(
                     Icons.skip_next,
                     color: nextClip != null ? Colors.blue : Colors.grey,
@@ -1078,7 +990,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // 信息显示区域 - 按原始顺序排列
             // 1. 时间标记信息
             _buildInfoRow(
@@ -1087,7 +999,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
               '${formatDuration(currentClip.startTime)} - ${formatDuration(currentClip.endTime)} (${formatDuration(currentClip.endTime - currentClip.startTime)})',
             ),
             const SizedBox(height: 8),
-            
+
             // 2. 文件路径信息
             _buildClickableInfoRow(
               Icons.video_file,
@@ -1096,59 +1008,78 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
               onTap: _openVideoFile,
             ),
             const SizedBox(height: 8),
-            
+
             // 3. 标签信息 - 可点击过滤
             _buildTagInfoRow(currentClip.tags),
             const SizedBox(height: 8),
-            
+
             // 4. 备注信息
             _buildInfoRow(
-              Icons.notes, 
-              'Notes', 
-              currentClip.notes != null && currentClip.notes!.isNotEmpty ? currentClip.notes! : 'No notes',
+              Icons.notes,
+              'Notes',
+              currentClip.notes != null && currentClip.notes!.isNotEmpty
+                  ? currentClip.notes!
+                  : 'No notes',
             ),
             const SizedBox(height: 8),
-            
-                         // 5. 星级评分 - 可点击修改
-             Container(
-               // 固定高度，确保布局一致性
-               height: 32,
-               child: Row(
-                 children: [
-                   const Icon(Icons.star, size: 18, color: Colors.amber),
-                   const SizedBox(width: 8),
-                   const Text('Rating: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                   const SizedBox(width: 8),
-                   ...List.generate(5, (starIndex) {
-                     return GestureDetector(
-                       onTap: () {
-                         final newRating = currentClip.rating == starIndex + 1 ? 0 : starIndex + 1;
-                         final updatedClip = currentClip.copyWith(rating: newRating);
-                         appState.updateClipSilently(updatedClip);
-                       },
-                       child: Icon(
-                         starIndex < currentClip.rating ? Icons.star : Icons.star_border,
-                         color: starIndex < currentClip.rating ? Colors.amber : Colors.grey,
-                         size: 20,
-                       ),
-                     );
-                   }),
-                   const Spacer(),
-                   // 收藏按钮 - 可点击修改
-                   GestureDetector(
-                     onTap: () {
-                       final updatedClip = currentClip.copyWith(isFavorite: !currentClip.isFavorite);
-                       appState.updateClipSilently(updatedClip);
-                     },
-                     child: Icon(
-                       currentClip.isFavorite ? Icons.favorite : Icons.favorite_border,
-                       color: currentClip.isFavorite ? Colors.redAccent : Colors.grey,
-                       size: 24,
-                     ),
-                   ),
-                 ],
-               ),
-             ),
+
+            // 5. 星级评分 - 可点击修改
+            Container(
+              // 固定高度，确保布局一致性
+              height: 32,
+              child: Row(
+                children: [
+                  const Icon(Icons.star, size: 18, color: Colors.amber),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Rating: ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 8),
+                  ...List.generate(5, (starIndex) {
+                    return GestureDetector(
+                      onTap: () {
+                        final newRating = currentClip.rating == starIndex + 1
+                            ? 0
+                            : starIndex + 1;
+                        final updatedClip = currentClip.copyWith(
+                          rating: newRating,
+                        );
+                        appState.updateClipSilently(updatedClip);
+                      },
+                      child: Icon(
+                        starIndex < currentClip.rating
+                            ? Icons.star
+                            : Icons.star_border,
+                        color: starIndex < currentClip.rating
+                            ? Colors.amber
+                            : Colors.grey,
+                        size: 20,
+                      ),
+                    );
+                  }),
+                  const Spacer(),
+                  // 收藏按钮 - 可点击修改
+                  GestureDetector(
+                    onTap: () {
+                      final updatedClip = currentClip.copyWith(
+                        isFavorite: !currentClip.isFavorite,
+                      );
+                      appState.updateClipSilently(updatedClip);
+                    },
+                    child: Icon(
+                      currentClip.isFavorite
+                          ? Icons.favorite
+                          : Icons.favorite_border,
+                      color: currentClip.isFavorite
+                          ? Colors.redAccent
+                          : Colors.grey,
+                      size: 24,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -1177,13 +1108,7 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            action,
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-            ),
-          ),
+          Text(action, style: TextStyle(color: Colors.white70, fontSize: 12)),
         ],
       ),
     );
@@ -1214,7 +1139,12 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
     );
   }
 
-  Widget _buildClickableInfoRow(IconData icon, String label, String value, {VoidCallback? onTap}) {
+  Widget _buildClickableInfoRow(
+    IconData icon,
+    String label,
+    String value, {
+    VoidCallback? onTap,
+  }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1291,7 +1221,7 @@ String formatDuration(Duration duration) {
   final hours = duration.inHours;
   final minutes = duration.inMinutes.remainder(60);
   final seconds = duration.inSeconds.remainder(60);
-  
+
   if (hours > 0) {
     return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   } else {

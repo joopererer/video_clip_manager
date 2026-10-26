@@ -14,7 +14,9 @@ import '../services/thumbnail_service.dart';
 import '../services/video_metadata_service.dart';
 import 'data_service.dart';
 import 'models.dart';
-import '../services/screenshot_service.dart';
+import '../services/ai_service.dart';
+import '../services/delta_engine.dart';
+import '../services/frame_embedding_pool.dart';
 
 const String _prefsKeyDbPath = 'db_path';
 
@@ -27,10 +29,57 @@ class AppState extends ChangeNotifier {
   final ThumbnailService _thumbnailService;
   late final DataService _dataService;
   late final VideoMetadataService _videoMetadataService;
+  late final AiService _aiService;
+  late final FrameEmbeddingPool _framePool;
+  late final DeltaEngine _deltaEngine;
+
+  AiService get aiService => _aiService;
+  FrameEmbeddingPool get framePool => _framePool;
+  DeltaEngine get deltaEngine => _deltaEngine;
+
+  final Map<String, MaxSimResult> _semanticScores = {};
+  bool _isSemanticSearching = false;
+  bool get isSemanticSearching => _isSemanticSearching;
+  String? _searchStatus;
+  String? get searchStatus => _searchStatus;
+  Map<String, MaxSimResult> get semanticScores => Map.unmodifiable(_semanticScores);
+  String? _lastSemanticError;
+  String? get lastSemanticError => _lastSemanticError;
+
+  // 全局特征索引库状态
+  bool _isIndexingEmbeddings = false;
+  bool get isIndexingEmbeddings => _isIndexingEmbeddings;
+  double _indexingProgress = 0.0;
+  double get indexingProgress => _indexingProgress;
+  String? _indexingStatus;
+  String? get indexingStatus => _indexingStatus;
+
+  // VLM 视觉大模型配置
+  String get vlmMode => _prefs.getString('vlm_mode') ?? 'ollama';
+  String get vlmApiUrl => _prefs.getString('vlm_api_url') ?? 'http://localhost:11434/v1';
+  String get vlmApiKey => _prefs.getString('vlm_api_key') ?? '';
+  String get vlmModel => _prefs.getString('vlm_model') ?? 'qwen2-vl:2b';
+
+  Future<void> saveVlmConfig({
+    required String mode,
+    required String apiUrl,
+    required String apiKey,
+    required String model,
+  }) async {
+    await _prefs.setString('vlm_mode', mode);
+    await _prefs.setString('vlm_api_url', apiUrl);
+    await _prefs.setString('vlm_api_key', apiKey);
+    await _prefs.setString('vlm_model', model);
+    notifyListeners();
+  }
 
   List<VideoClip> _clips = [];
   List<OriginalVideo> _originalVideos = [];
   List<Playlist> _playlists = [];
+  
+  // 新增：在线视频相关状态
+  List<OnlineVideo> _onlineVideos = [];
+  List<OnlineVideoClip> _onlineVideoClips = [];
 
   String? _currentDbPath;
   bool _isLoading = false;
@@ -54,6 +103,12 @@ class AppState extends ChangeNotifier {
       UnmodifiableListView(_originalVideos);
   UnmodifiableListView<Playlist> get playlists =>
       UnmodifiableListView(_playlists);
+  
+  // 新增：在线视频相关的getter
+  UnmodifiableListView<OnlineVideo> get onlineVideos => 
+      UnmodifiableListView(_onlineVideos);
+  UnmodifiableListView<OnlineVideoClip> get onlineVideoClips => 
+      UnmodifiableListView(_onlineVideoClips);
 
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
@@ -79,20 +134,14 @@ class AppState extends ChangeNotifier {
        _thumbnailService = thumbnailService {
     _dataService = DataService(pathService: _pathService);
     _videoMetadataService = VideoMetadataService();
+    _aiService = AiService();
+    _framePool = FrameEmbeddingPool();
+    _deltaEngine = DeltaEngine(pool: _framePool, aiService: _aiService);
     _clipsIsGridView = _prefs.getBool('clipsIsGridView') ?? false;
     _videosIsGridView = _prefs.getBool('videosIsGridView') ?? false;
     _playlistsIsGridView = _prefs.getBool('playlistsIsGridView') ?? false;
     _playlistsSortBy = _prefs.getString('playlistsSortBy') ?? 'name';
 
-    // Timeouts and other tunables (persisted)
-    _openTimeoutSeconds = _prefs.getInt('timeout_open_seconds') ?? 10;
-    _seekTimeoutSeconds = _prefs.getInt('timeout_seek_seconds') ?? 10;
-    _playTimeoutSeconds = _prefs.getInt('timeout_play_seconds') ?? 5;
-    // Increase defaults to be more tolerant on Windows/native races
-    _screenshotTimeoutSeconds = _prefs.getInt('timeout_screenshot_seconds') ?? 30;
-    // Single hidden-host model is more stable on Windows; keep a longer delay to reduce native race windows.
-    _markReadyDelayMs = _prefs.getInt('mark_ready_delay_ms') ?? 3000;
-    
     // 设置静态实例
     _instance = this;
   }
@@ -100,56 +149,6 @@ class AppState extends ChangeNotifier {
   void _setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
-  }
-
-  // --- Tunable timeouts (persisted) ---
-  late int _openTimeoutSeconds;
-  late int _seekTimeoutSeconds;
-  late int _playTimeoutSeconds;
-  late int _screenshotTimeoutSeconds;
-  late int _markReadyDelayMs;
-
-  int get openTimeoutSeconds => _openTimeoutSeconds;
-  int get seekTimeoutSeconds => _seekTimeoutSeconds;
-  int get playTimeoutSeconds => _playTimeoutSeconds;
-  int get screenshotTimeoutSeconds => _screenshotTimeoutSeconds;
-  int get markReadyDelayMs => _markReadyDelayMs;
-
-  void setOpenTimeoutSeconds(int secs) {
-    _openTimeoutSeconds = secs;
-    _prefs.setInt('timeout_open_seconds', secs);
-    notifyListeners();
-  }
-
-  void setSeekTimeoutSeconds(int secs) {
-    _seekTimeoutSeconds = secs;
-    _prefs.setInt('timeout_seek_seconds', secs);
-    notifyListeners();
-  }
-
-  void setPlayTimeoutSeconds(int secs) {
-    _playTimeoutSeconds = secs;
-    _prefs.setInt('timeout_play_seconds', secs);
-    notifyListeners();
-  }
-
-  void setScreenshotTimeoutSeconds(int secs) {
-    _screenshotTimeoutSeconds = secs;
-    _prefs.setInt('timeout_screenshot_seconds', secs);
-    notifyListeners();
-  }
-
-  void setMarkReadyDelayMs(int ms) {
-    _markReadyDelayMs = ms;
-    _prefs.setInt('mark_ready_delay_ms', ms);
-    notifyListeners();
-    // Inform ScreenshotService so any pending markReady uses the new delay
-    try {
-      ScreenshotService().updateMarkReadyDelay();
-    } catch (e) {
-      // ignore: avoid_print
-      print('AppState: Failed to notify ScreenshotService about markReady delay change: $e');
-    }
   }
 
   // --- UI State Methods ---
@@ -243,24 +242,28 @@ class AppState extends ChangeNotifier {
       _clips = result.clips ?? [];
       _originalVideos = result.videos ?? [];
       _playlists = result.playlists ?? [];
+      _onlineVideos = result.onlineVideos ?? [];
+      _onlineVideoClips = result.onlineVideoClips ?? [];
 
       _generateOriginalVideosIfNeeded();
       notifyListeners();
+
+      // 异步预加载母视频已有的关键帧向量缓存
+      for (final video in _originalVideos) {
+        unawaited(_framePool.loadFromDisk(video.path));
+      }
+
+      await _populateMissingMetadataAndThumbnails();
     } catch (e) {
       debugPrint("Error during initial load: $e");
     } finally {
       _setLoading(false);
     }
-
-    // Populate missing metadata and thumbnails in background without blocking UI
-    _populateMissingMetadataAndThumbnails();
   }
 
-  Future<void> _populateMissingMetadataAndThumbnails({bool showModal = false}) async {
-    if (showModal) {
-      _isGeneratingThumbnails = true;
-      notifyListeners();
-    }
+  Future<void> _populateMissingMetadataAndThumbnails() async {
+    _isGeneratingThumbnails = true;
+    notifyListeners();
 
     try {
       // 处理缺少元数据的视频
@@ -271,11 +274,9 @@ class AppState extends ChangeNotifier {
         debugPrint(
           'Populating metadata for ${videosNeedingMetadata.length} videos...',
         );
-        for (final v in videosNeedingMetadata) {
-          await updateVideoMetadata(v.id);
-          await ScreenshotService().whenIdle();
-          await Future.delayed(const Duration(milliseconds: 250));
-        }
+        await Future.wait(
+          videosNeedingMetadata.map((v) => updateVideoMetadata(v.id)),
+        );
       }
 
       // 处理缺少缩略图的视频（有duration但没有缩略图或缩略图文件不存在）
@@ -284,7 +285,7 @@ class AppState extends ChangeNotifier {
         for (final video in _originalVideos) {
           if (video.duration != null) {
             bool needsThumbnail = false;
-            
+
             if (video.thumbnailPath == null) {
               // 没有缩略图路径
               needsThumbnail = true;
@@ -299,7 +300,7 @@ class AppState extends ChangeNotifier {
                 needsThumbnail = true;
               }
             }
-            
+
             if (needsThumbnail) {
               videosNeedingThumbnails.add(video);
             }
@@ -311,8 +312,7 @@ class AppState extends ChangeNotifier {
         debugPrint(
           'Populating thumbnails for ${videosNeedingThumbnails.length} videos...',
         );
-        for (final video in videosNeedingThumbnails) {
-          await ScreenshotService().awaitHostReady();
+        final futures = videosNeedingThumbnails.map((video) async {
           final thumbnailFileName = await _thumbnailService.generateThumbnail(
             video.path,
             Duration(milliseconds: video.duration!.inMilliseconds ~/ 2),
@@ -322,12 +322,13 @@ class AppState extends ChangeNotifier {
           if (thumbnailFileName != null) {
             final index = _originalVideos.indexWhere((v) => v.id == video.id);
             if (index != -1) {
-              _originalVideos[index] = video.copyWith(thumbnailPath: thumbnailFileName);
+              _originalVideos[index] = video.copyWith(
+                thumbnailPath: thumbnailFileName,
+              );
             }
           }
-          await ScreenshotService().whenIdle();
-          await Future.delayed(const Duration(milliseconds: 250));
-        }
+        });
+        await Future.wait(futures);
       }
 
       // 处理缺少缩略图的clips
@@ -335,7 +336,7 @@ class AppState extends ChangeNotifier {
       if (currentDbFullPath != null) {
         for (final clip in _clips) {
           bool needsThumbnail = false;
-          
+
           if (clip.thumbnailPath == null) {
             // 没有缩略图路径
             needsThumbnail = true;
@@ -350,7 +351,7 @@ class AppState extends ChangeNotifier {
               needsThumbnail = true;
             }
           }
-          
+
           if (needsThumbnail) {
             clipsNeedingThumbnails.add(clip);
           }
@@ -361,8 +362,7 @@ class AppState extends ChangeNotifier {
         debugPrint(
           'Populating thumbnails for ${clipsNeedingThumbnails.length} clips...',
         );
-        for (final clip in clipsNeedingThumbnails) {
-          await ScreenshotService().awaitHostReady();
+        final futures = clipsNeedingThumbnails.map((clip) async {
           final thumbnailFileName = await _thumbnailService.generateThumbnail(
             clip.videoPath,
             clip.coverFrameTime,
@@ -372,16 +372,13 @@ class AppState extends ChangeNotifier {
           if (thumbnailFileName != null) {
             updateClipThumbnail(clip.id, thumbnailFileName);
           }
-          await ScreenshotService().whenIdle();
-          await Future.delayed(const Duration(milliseconds: 250));
-        }
+        });
+        await Future.wait(futures);
       }
     } catch (e) {
       debugPrint("Error populating metadata and thumbnails: $e");
     } finally {
-      if (showModal) {
-        _isGeneratingThumbnails = false;
-      }
+      _isGeneratingThumbnails = false;
       notifyListeners();
       _scheduleSave();
     }
@@ -474,34 +471,13 @@ class AppState extends ChangeNotifier {
         final dir = Directory(thumbDir);
         if (await dir.exists()) {
           try {
-            // Delete files individually to avoid OS-level directory lock errors
-            final files = dir.listSync(recursive: true);
-            for (final f in files) {
-              if (f is File) {
-                try {
-                  await f.delete();
-                } catch (e) {
-                  debugPrint('Warning: Could not delete thumbnail file ${f.path}: $e');
-                }
-              }
-            }
-            // Attempt to remove the directory if empty
-            try {
-              if ((await dir.list().toList()).isEmpty) {
-                await dir.delete();
-              }
-            } catch (e) {
-              debugPrint('Warning: Could not remove thumbnail directory: $e');
-            }
+            await dir.delete(recursive: true);
           } catch (e) {
-            debugPrint('Warning: Could not enumerate/delete thumbnail directory: $e');
-            // Continue anyway, we'll overwrite existing thumbnails when possible
+            debugPrint('Warning: Could not delete thumbnail directory: $e');
+            // Continue anyway, we'll overwrite existing thumbnails
           }
         }
       }
-
-      // Ensure the screenshot host is ready before regeneration starts
-      await ScreenshotService().awaitHostReady();
 
       for (int i = 0; i < _clips.length; i++) {
         _clips[i] = _clips[i].copyWith(thumbnailPath: null);
@@ -517,8 +493,7 @@ class AppState extends ChangeNotifier {
       // Regenerate thumbnails for clips
       if (_clips.isNotEmpty) {
         debugPrint('Regenerating thumbnails for ${_clips.length} clips...');
-        for (final clip in _clips) {
-          await ScreenshotService().awaitHostReady();
+        final futures = _clips.map((clip) async {
           final thumbnailFileName = await _thumbnailService.generateThumbnail(
             clip.videoPath,
             clip.coverFrameTime,
@@ -528,9 +503,8 @@ class AppState extends ChangeNotifier {
           if (thumbnailFileName != null) {
             updateClipThumbnail(clip.id, thumbnailFileName);
           }
-          await ScreenshotService().whenIdle();
-          await Future.delayed(const Duration(milliseconds: 300));
-        }
+        });
+        await Future.wait(futures);
       }
 
       // Regenerate metadata and thumbnails for videos
@@ -538,12 +512,10 @@ class AppState extends ChangeNotifier {
         debugPrint(
           'Regenerating metadata and thumbnails for ${_originalVideos.length} videos...',
         );
-        for (final video in _originalVideos) {
-          await ScreenshotService().awaitHostReady();
-          await updateVideoMetadata(video.id);
-          await ScreenshotService().whenIdle();
-          await Future.delayed(const Duration(milliseconds: 300));
-        }
+        final futures = _originalVideos.map(
+          (video) => updateVideoMetadata(video.id),
+        );
+        await Future.wait(futures);
       }
     } catch (e) {
       debugPrint('Error in forceRefreshThumbnails: $e');
@@ -563,6 +535,8 @@ class AppState extends ChangeNotifier {
         _clips,
         _originalVideos,
         _playlists,
+        _onlineVideos,
+        _onlineVideoClips,
         _currentDbPath!,
       );
       _hasUnsavedChanges = false;
@@ -599,6 +573,14 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  void deleteOriginalVideo(String videoId) {
+    _originalVideos.removeWhere((v) => v.id == videoId);
+    // 同时删除相关的片段
+    _clips.removeWhere((c) => c.videoPath == _originalVideos.firstWhereOrNull((v) => v.id == videoId)?.path);
+    notifyListeners();
+    _scheduleSave();
+  }
+
   Future<void> updateVideoMetadata(String videoId) async {
     final index = _originalVideos.indexWhere((v) => v.id == videoId);
     if (index == -1) return;
@@ -611,14 +593,12 @@ class AppState extends ChangeNotifier {
       // Generate thumbnail for video
       String? thumbnailPath;
       if (_currentDbPath != null) {
-        await ScreenshotService().awaitHostReady();
         thumbnailPath = await _thumbnailService.generateThumbnail(
           video.path,
           Duration(milliseconds: duration.inMilliseconds ~/ 2),
           video.id,
           dbPath: _currentDbPath!,
         );
-        await ScreenshotService().whenIdle();
       }
 
       _originalVideos[index] = video.copyWith(
@@ -770,12 +750,175 @@ class AppState extends ChangeNotifier {
     await _save();
   }
 
-  UnmodifiableListView<String> get allTags {
-    final allTagsSet = <String>{};
-    for (var clip in _clips) {
-      allTagsSet.addAll(clip.tags);
+
+
+  /// 执行跨片段语义检索
+  Future<void> performSemanticSearch({
+    required String query,
+    required String modelDir,
+    String? ortLib,
+    double minScore = 0.28,
+  }) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      _semanticScores.clear();
+      _lastSemanticError = null;
+      _searchStatus = null;
+      notifyListeners();
+      return;
     }
-    return UnmodifiableListView(allTagsSet.toList()..sort());
+
+    _lastSemanticError = null;
+    _isSemanticSearching = true;
+    _searchStatus = '正在将查询词转化为 768 维语义向量...';
+    notifyListeners();
+
+    try {
+      final queryVec = await _aiService.embedText(
+        text: trimmed,
+        prefix: 'search_query: ',
+        modelDir: modelDir,
+        ortLib: ortLib,
+      );
+
+      _semanticScores.clear();
+
+      for (int i = 0; i < _clips.length; i++) {
+        final clip = _clips[i];
+
+        // 1. 优先加载磁盘中的母视频帧池缓存
+        if (_framePool.getCachedTimestamps(clip.videoPath).isEmpty) {
+          await _framePool.loadFromDisk(clip.videoPath);
+        }
+
+        var frames = _framePool.getFramesInRange(
+          clip.videoPath,
+          clip.startTime.inMilliseconds,
+          clip.endTime.inMilliseconds,
+        );
+
+        // 2. 若本地片段尚未抽取过帧嵌入，按需自动补全抽取并计算
+        if (frames.isEmpty &&
+            !clip.videoPath.startsWith('http://') &&
+            !clip.videoPath.startsWith('https://') &&
+            File(clip.videoPath).existsSync()) {
+          _searchStatus = '正在提取未索引片段的画面特征 (${i + 1}/${_clips.length})...';
+          notifyListeners();
+
+          try {
+            frames = await _deltaEngine.syncClipRange(
+              videoPathOrUrl: clip.videoPath,
+              startMs: clip.startTime.inMilliseconds,
+              endMs: clip.endTime.inMilliseconds,
+              modelDir: modelDir,
+              ortLib: ortLib,
+            );
+          } catch (syncErr) {
+            debugPrint('[AppState] Auto-sync clip frames on search error: $syncErr');
+          }
+        }
+
+        // 3. 计算 MaxSim 相似度
+        if (frames.isNotEmpty) {
+          final maxSim = _deltaEngine.computeMaxSim(
+            queryVector: queryVec,
+            frames: frames,
+          );
+          if (maxSim.score >= minScore) {
+            _semanticScores[clip.id] = maxSim;
+          }
+        }
+      }
+    } catch (e) {
+      _lastSemanticError = e.toString().replaceFirst('Exception: ', '');
+      debugPrint('[AppState] performSemanticSearch error: $e');
+    } finally {
+      _isSemanticSearching = false;
+      _searchStatus = null;
+      notifyListeners();
+    }
+  }
+
+  /// 获取已完成语义特征构建的片段数量统计 (已索引数, 总片段数, 总缓存帧数)
+  Map<String, int> getEmbeddingStats() {
+    int indexed = 0;
+    int totalFrames = 0;
+    for (final clip in _clips) {
+      final frames = _framePool.getFramesInRange(
+        clip.videoPath,
+        clip.startTime.inMilliseconds,
+        clip.endTime.inMilliseconds,
+      );
+      if (frames.isNotEmpty) {
+        indexed++;
+        totalFrames += frames.length;
+      }
+    }
+    return {
+      'indexed': indexed,
+      'total': _clips.length,
+      'totalFrames': totalFrames,
+    };
+  }
+
+  /// 全局一键为所有本地片段扫描并增量构建向量索引
+  Future<void> indexAllClips({
+    void Function(int current, int total, String clipName)? onProgress,
+  }) async {
+    if (_isIndexingEmbeddings) return;
+    _isIndexingEmbeddings = true;
+    _indexingProgress = 0.0;
+    _indexingStatus = '准备构建语义特征向量库...';
+    notifyListeners();
+
+    try {
+      final modelDir = await _aiService.resolveEmbeddingModelDir() ?? 'models';
+      final localClips = _clips.where((c) =>
+          !c.videoPath.startsWith('http://') &&
+          !c.videoPath.startsWith('https://') &&
+          File(c.videoPath).existsSync()).toList();
+
+      if (localClips.isEmpty) {
+        _indexingStatus = '暂无需要索引的本地片段。';
+        return;
+      }
+
+      for (int i = 0; i < localClips.length; i++) {
+        final clip = localClips[i];
+        _indexingProgress = (i + 1) / localClips.length;
+        _indexingStatus = '正在提取关键帧特征 (${i + 1}/${localClips.length}): ${clip.name}';
+        notifyListeners();
+        onProgress?.call(i + 1, localClips.length, clip.name);
+
+        // 先载入磁盘已有记录
+        if (_framePool.getCachedTimestamps(clip.videoPath).isEmpty) {
+          await _framePool.loadFromDisk(clip.videoPath);
+        }
+
+        // 增量规划与同步
+        await _deltaEngine.syncClipRange(
+          videoPathOrUrl: clip.videoPath,
+          startMs: clip.startTime.inMilliseconds,
+          endMs: clip.endTime.inMilliseconds,
+          modelDir: modelDir,
+        );
+      }
+      _indexingStatus = '所有本地片段语义向量构建完成！';
+    } catch (e) {
+      _indexingStatus = '索引构建中断: $e';
+    } finally {
+      _isIndexingEmbeddings = false;
+      notifyListeners();
+    }
+  }
+
+  /// 清除语义检索结果
+  void clearSemanticSearch() {
+    if (_semanticScores.isNotEmpty) {
+      _semanticScores.clear();
+      _searchStatus = null;
+      notifyListeners();
+    }
   }
 
   // --- Getters with Filtering ---
@@ -788,19 +931,45 @@ class AppState extends ChangeNotifier {
     final tags = selectedTags ?? _selectedTags;
     final rating = selectedRating ?? _selectedRating;
     final favorite = selectedFavorite ?? _selectedFavorite;
+    final query = searchQuery.toLowerCase().trim();
 
-    return _clips.where((clip) {
-      final query = searchQuery.toLowerCase();
-      final textMatch =
-          query.isEmpty ||
+    final filtered = <VideoClip>[];
+
+    for (final clip in _clips) {
+      final textMatch = query.isEmpty ||
           clip.name.toLowerCase().contains(query) ||
-          (clip.notes?.toLowerCase().contains(query) ?? false);
+          (clip.notes?.toLowerCase().contains(query) ?? false) ||
+          (clip.aiSummary?.toLowerCase().contains(query) ?? false) ||
+          (clip.aiScene?.toLowerCase().contains(query) ?? false) ||
+          clip.aiActions.any((a) => a.toLowerCase().contains(query));
+
+      final semHit = _semanticScores[clip.id];
+      final semanticMatch = semHit != null;
+
+      final isMatch = textMatch || semanticMatch;
       final tagMatch =
           tags.isEmpty || tags.every((tag) => clip.tags.contains(tag));
       final ratingMatch = rating == null || clip.rating == rating;
       final favoriteMatch = favorite == null || clip.isFavorite == favorite;
-      return textMatch && tagMatch && ratingMatch && favoriteMatch;
-    }).toList();
+
+      if (isMatch && tagMatch && ratingMatch && favoriteMatch) {
+        if (semHit != null) {
+          filtered.add(clip.copyWith(hitTimestampMs: semHit.hitTimestampMs));
+        } else {
+          filtered.add(clip);
+        }
+      }
+    }
+
+    if (_semanticScores.isNotEmpty) {
+      filtered.sort((a, b) {
+        final scoreA = _semanticScores[a.id]?.score ?? 0.0;
+        final scoreB = _semanticScores[b.id]?.score ?? 0.0;
+        return scoreB.compareTo(scoreA);
+      });
+    }
+
+    return filtered;
   }
 
   List<OriginalVideo> getFilteredVideos({String searchQuery = ''}) {
@@ -922,6 +1091,155 @@ class AppState extends ChangeNotifier {
     _playlists.add(playlist);
     notifyListeners();
     _scheduleSave();
+  }
+
+  // --- 在线视频管理方法 ---
+  
+  /// 添加在线视频
+  Future<void> addOnlineVideo(OnlineVideo video) async {
+    if (_onlineVideos.any((v) => v.id == video.id)) {
+      throw Exception('Online video with ID ${video.id} already exists');
+    }
+    
+    _onlineVideos.add(video);
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// 更新在线视频
+  Future<void> updateOnlineVideo(OnlineVideo video) async {
+    final index = _onlineVideos.indexWhere((v) => v.id == video.id);
+    if (index != -1) {
+      _onlineVideos[index] = video;
+      notifyListeners();
+      _scheduleSave();
+    }
+  }
+
+  /// 删除在线视频
+  Future<void> deleteOnlineVideo(String videoId) async {
+    _onlineVideos.removeWhere((v) => v.id == videoId);
+    // 同时删除相关的在线片段
+    _onlineVideoClips.removeWhere((c) => c.onlineVideoId == videoId);
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// 获取在线视频
+  OnlineVideo? getOnlineVideo(String videoId) {
+    return _onlineVideos.firstWhereOrNull((v) => v.id == videoId);
+  }
+
+  /// 添加在线视频片段
+  Future<void> addOnlineVideoClip(OnlineVideoClip clip) async {
+    if (_onlineVideoClips.any((c) => c.id == clip.id)) {
+      throw Exception('Online video clip with ID ${clip.id} already exists');
+    }
+    
+    _onlineVideoClips.add(clip);
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// 更新在线视频片段
+  Future<void> updateOnlineVideoClip(OnlineVideoClip clip) async {
+    final index = _onlineVideoClips.indexWhere((c) => c.id == clip.id);
+    if (index != -1) {
+      _onlineVideoClips[index] = clip;
+      notifyListeners();
+      _scheduleSave();
+    }
+  }
+
+  /// 删除在线视频片段
+  Future<void> deleteOnlineVideoClip(String clipId) async {
+    _onlineVideoClips.removeWhere((c) => c.id == clipId);
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// 获取在线视频片段
+  OnlineVideoClip? getOnlineVideoClip(String clipId) {
+    return _onlineVideoClips.firstWhereOrNull((c) => c.id == clipId);
+  }
+
+  /// 获取指定在线视频的所有片段
+  List<OnlineVideoClip> getOnlineVideoClips(String onlineVideoId) {
+    return _onlineVideoClips
+        .where((c) => c.onlineVideoId == onlineVideoId)
+        .toList();
+  }
+
+  /// 获取所有标签（包括在线片段的标签）
+  UnmodifiableListView<String> get allTags {
+    final allTagsSet = <String>{};
+    
+    // 添加本地片段标签
+    for (final clip in _clips) {
+      allTagsSet.addAll(clip.tags);
+    }
+    
+    // 添加在线片段标签
+    for (final clip in _onlineVideoClips) {
+      allTagsSet.addAll(clip.tags);
+    }
+    
+    return UnmodifiableListView(allTagsSet.toList()..sort());
+  }
+
+  /// 获取混合片段列表（本地片段 + 在线片段）
+  List<dynamic> getMixedClips() {
+    final List<dynamic> mixedClips = [];
+    
+    // 添加本地片段
+    for (final clip in _clips) {
+      mixedClips.add({
+        'type': 'local',
+        'clip': clip,
+        'video': _originalVideos.firstWhereOrNull((v) => v.path == clip.videoPath),
+      });
+    }
+    
+    // 添加在线片段
+    for (final clip in _onlineVideoClips) {
+      mixedClips.add({
+        'type': 'online',
+        'clip': clip,
+        'video': _onlineVideos.firstWhereOrNull((v) => v.id == clip.onlineVideoId),
+      });
+    }
+    
+    return mixedClips;
+  }
+
+  /// 获取混合视频列表（本地视频 + 在线视频）
+  List<dynamic> getMixedVideos({String? searchQuery}) {
+    final List<dynamic> mixedVideos = [];
+    
+    // 添加本地视频
+    for (final video in _originalVideos) {
+      if (searchQuery == null || searchQuery.isEmpty || 
+          video.name.toLowerCase().contains(searchQuery.toLowerCase())) {
+        mixedVideos.add({
+          'type': 'local',
+          'video': video,
+        });
+      }
+    }
+    
+    // 添加在线视频
+    for (final video in _onlineVideos) {
+      if (searchQuery == null || searchQuery.isEmpty || 
+          video.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
+          (video.description?.toLowerCase().contains(searchQuery.toLowerCase()) ?? false)) {
+        mixedVideos.add({
+          'type': 'online',
+          'video': video,
+        });
+      }
+    }
+    
+    return mixedVideos;
   }
 
   @override

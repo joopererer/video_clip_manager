@@ -2,24 +2,22 @@ import 'package:flutter/material.dart';
 import '../data/models.dart';
 
 enum VideoImportOption {
-  wholeVideo,    // 整个视频作为clip
-  createClips,   // 创建片段
+  wholeVideo, // 整个视频作为clip
+  createClips, // 创建片段
 }
 
 class VideoImportDialog extends StatelessWidget {
   final OriginalVideo video;
 
-  const VideoImportDialog({
-    super.key,
-    required this.video,
-  });
+  const VideoImportDialog({super.key, required this.video});
 
   @override
   Widget build(BuildContext context) {
-    final hasMetadata = video.duration != null && 
-                       video.duration != Duration.zero && 
-                       video.thumbnailPath != null;
-    
+    final hasMetadata =
+        video.duration != null &&
+        video.duration != Duration.zero &&
+        video.thumbnailPath != null;
+
     return AlertDialog(
       title: const Text('导入视频'),
       content: Column(
@@ -103,18 +101,12 @@ class VideoImportDialog extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, color: color),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     description,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                 ],
               ),
@@ -124,4 +116,4 @@ class VideoImportDialog extends StatelessWidget {
       ),
     );
   }
-} 
+}

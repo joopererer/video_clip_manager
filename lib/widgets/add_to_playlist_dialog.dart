@@ -6,10 +6,7 @@ import '../data/models.dart';
 class AddToPlaylistDialog extends StatefulWidget {
   final VideoClip clip;
 
-  const AddToPlaylistDialog({
-    super.key,
-    required this.clip,
-  });
+  const AddToPlaylistDialog({super.key, required this.clip});
 
   @override
   State<AddToPlaylistDialog> createState() => _AddToPlaylistDialogState();
@@ -99,7 +96,7 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // 选择方式
             Row(
               children: [
@@ -131,9 +128,9 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // 现有播放列表选择
             if (!_isCreatingNew) ...[
               Text(
@@ -177,16 +174,20 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
                     itemBuilder: (context, index) {
                       final playlist = playlists[index];
                       final isSelected = _selectedPlaylist?.id == playlist.id;
-                      
+
                       return ListTile(
                         leading: Icon(
                           Icons.playlist_play,
-                          color: isSelected ? Colors.blue.shade600 : Colors.grey.shade600,
+                          color: isSelected
+                              ? Colors.blue.shade600
+                              : Colors.grey.shade600,
                         ),
                         title: Text(
                           playlist.name,
                           style: TextStyle(
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                             color: isSelected ? Colors.blue.shade600 : null,
                           ),
                         ),
@@ -194,9 +195,12 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
                           '${playlist.clipCount} 个片段 • ${_formatDuration(playlist.totalDuration)}',
                           style: TextStyle(fontSize: 12),
                         ),
-                        trailing: isSelected 
-                          ? Icon(Icons.check_circle, color: Colors.blue.shade600)
-                          : null,
+                        trailing: isSelected
+                            ? Icon(
+                                Icons.check_circle,
+                                color: Colors.blue.shade600,
+                              )
+                            : null,
                         onTap: () {
                           setState(() {
                             _selectedPlaylist = playlist;
@@ -207,7 +211,7 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
                   ),
                 ),
             ],
-            
+
             // 创建新播放列表
             if (_isCreatingNew) ...[
               Text(
@@ -267,7 +271,7 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
 
   void _addToPlaylist() {
     final appState = context.read<AppState>();
-    
+
     if (_isCreatingNew) {
       // 创建新播放列表并添加 clip
       appState.createPlaylist(
@@ -281,16 +285,16 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
       // 添加到现有播放列表
       appState.addClipToPlaylist(_selectedPlaylist!.id, widget.clip.id);
     }
-    
+
     Navigator.of(context).pop();
-    
+
     // 显示成功消息
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          _isCreatingNew 
-            ? '已创建新播放列表并添加片段'
-            : '已添加到播放列表 "${_selectedPlaylist!.name}"',
+          _isCreatingNew
+              ? '已创建新播放列表并添加片段'
+              : '已添加到播放列表 "${_selectedPlaylist!.name}"',
         ),
         backgroundColor: Colors.green.shade600,
         duration: const Duration(seconds: 2),
@@ -303,4 +307,4 @@ class _AddToPlaylistDialogState extends State<AddToPlaylistDialog> {
     final seconds = duration.inSeconds.remainder(60);
     return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
-} 
+}

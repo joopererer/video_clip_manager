@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/gestures.dart';
@@ -61,15 +60,16 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   bool _isDraggingStart = false;
   bool _isDraggingEnd = false;
   bool _isDragging = false;
-  
+
   // 新增：拖拽起始位置记录
   double? _dragStartDx;
   Duration? _dragStartTime;
 
   // 新增：设备检测
   bool get isTouchDevice {
-    return Platform.isAndroid || Platform.isIOS || 
-           MediaQuery.of(context).size.shortestSide < 600;
+    return Platform.isAndroid ||
+        Platform.isIOS ||
+        MediaQuery.of(context).size.shortestSide < 600;
   }
 
   // --- Fonctions utilitaires ---
@@ -187,7 +187,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     Duration totalDuration,
   ) {
     Duration tapTime;
-    
+
     if (widget.showClipRelativeProgress && widget.isPlaybackMode) {
       // 相对进度模式：基于clip时长计算点击时间
       final clipDuration = widget.endTime - widget.startTime;
@@ -209,7 +209,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     } else {
       // 编辑模式：检查是否按住了 Shift 键
       final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
-      
+
       if (isShiftPressed) {
         // Shift + 左键：设置开始时间
         widget.onSetStart(tapTime);
@@ -234,9 +234,9 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
         maxWidth,
         totalDuration,
       );
-      
+
       final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
-      
+
       if (isShiftPressed) {
         // Shift + 右键：设置结束时间
         widget.onSetEnd(tapTime);
@@ -255,7 +255,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     Duration totalDuration,
   ) {
     Duration tapTime;
-    
+
     if (widget.showClipRelativeProgress && widget.isPlaybackMode) {
       // 相对进度模式：基于clip时长计算点击时间
       final clipDuration = widget.endTime - widget.startTime;
@@ -292,7 +292,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       maxWidth,
       totalDuration,
     );
-    
+
     _showContextMenu(context, tapTime);
   }
 
@@ -303,18 +303,18 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       builder: (context) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-                      ListTile(
-              leading: const Icon(Icons.flag_outlined, color: Colors.blue),
-              title: const Text('设置开始时间'),
+          ListTile(
+            leading: const Icon(Icons.flag_outlined, color: Colors.blue),
+            title: const Text('设置开始时间'),
             onTap: () {
               widget.onSetStart(time);
               _safeSeek(time);
               Navigator.of(context).pop();
             },
           ),
-                      ListTile(
-              leading: const Icon(Icons.flag, color: Colors.red),
-              title: const Text('设置结束时间'),
+          ListTile(
+            leading: const Icon(Icons.flag, color: Colors.red),
+            title: const Text('设置结束时间'),
             onTap: () {
               widget.onSetEnd(time);
               _safeSeek(time);
@@ -341,7 +341,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     final currentTime = isStartMarker ? widget.startTime : widget.endTime;
     _dragStartTime = currentTime;
     _dragStartDx = details.localPosition.dx;
-    
+
     setState(() {
       if (isStartMarker) {
         _isDraggingStart = true;
@@ -360,23 +360,21 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     Duration totalDuration,
   ) {
     if (_dragStartDx == null || _dragStartTime == null) return;
-    
+
     // 计算拖曳偏移量
     final dragOffset = details.localPosition.dx - _dragStartDx!;
-    
+
     // 计算起始位置在进度条上的坐标
-    final startDx = (_dragStartTime!.inMilliseconds / totalDuration.inMilliseconds) * maxWidth;
-    
+    final startDx =
+        (_dragStartTime!.inMilliseconds / totalDuration.inMilliseconds) *
+        maxWidth;
+
     // 计算新的位置
     final newDx = startDx + dragOffset;
-    
+
     // 确保位置在有效范围内
     final clampedX = newDx.clamp(0.0, maxWidth);
-    final newTime = _getTimeFromDx(
-      clampedX,
-      maxWidth,
-      totalDuration,
-    );
+    final newTime = _getTimeFromDx(clampedX, maxWidth, totalDuration);
 
     if (isStartMarker) {
       widget.onSetStart(newTime);
@@ -387,7 +385,9 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     // 拖曳过程中不 seek，只更新 UI
     // 如果需要预览图，可以在这里触发预览图更新
     if (widget.showThumbnailPreview) {
-      print('CustomProgressBar: Drag update - showThumbnailPreview: true, clampedX: $clampedX, newTime: $newTime');
+      print(
+        'CustomProgressBar: Drag update - showThumbnailPreview: true, clampedX: $clampedX, newTime: $newTime',
+      );
       // 更新预览图位置
       setState(() {
         _hoverDx = clampedX;
@@ -404,7 +404,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     // 拖曳结束后执行精确 seek
     final currentTime = _isDraggingStart ? widget.startTime : widget.endTime;
     _safeSeek(currentTime);
-    
+
     setState(() {
       _isDraggingStart = false;
       _isDraggingEnd = false;
@@ -443,8 +443,6 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
     }
   }
 
-
-
   // 新增：安全的seek方法
   Future<void> _safeSeek(Duration position) async {
     try {
@@ -480,8 +478,11 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   void initState() {
     super.initState();
 
-    // 只在需要时启动进度更新定时器
-    if (widget.showThumbnailPreview && widget.videoPath != null) {
+    // 只在需要时启动进度更新定时器（在线网络流跳过）
+    final isOnline = widget.videoPath != null &&
+        (widget.videoPath!.startsWith('http://') ||
+            widget.videoPath!.startsWith('https://'));
+    if (widget.showThumbnailPreview && widget.videoPath != null && !isOnline) {
       _progressTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
         if (mounted && _previewProgress < 1.0) {
           _updatePreviewProgress();
@@ -579,12 +580,13 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
                             constraints.maxWidth,
                             totalDuration,
                           ),
-                          onLongPressStart: isTouchDevice ? (details) => 
-                              _handleMobileLongPress(
-                                details,
-                                constraints.maxWidth,
-                                totalDuration,
-                              ) : null,
+                          onLongPressStart: isTouchDevice
+                              ? (details) => _handleMobileLongPress(
+                                  details,
+                                  constraints.maxWidth,
+                                  totalDuration,
+                                )
+                              : null,
                           child: Tooltip(
                             message: _getTooltipMessage(),
                             child: Stack(
@@ -688,12 +690,18 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
                                     ),
                                 ],
                                 // 悬停预览
-                                if ((_isHovering && _hoverDx != null) || 
+                                if ((_isHovering && _hoverDx != null) ||
                                     (_isDragging && _thumbnailData != null))
                                   Positioned(
-                                    left: _isDragging 
-                                        ? (_hoverDx ?? 0) - (widget.showThumbnailPreview ? 50 : 28)
-                                        : _hoverDx! - (widget.showThumbnailPreview ? 50 : 28),
+                                    left: _isDragging
+                                        ? (_hoverDx ?? 0) -
+                                              (widget.showThumbnailPreview
+                                                  ? 50
+                                                  : 28)
+                                        : _hoverDx! -
+                                              (widget.showThumbnailPreview
+                                                  ? 50
+                                                  : 28),
                                     bottom: 20,
                                     child: widget.showThumbnailPreview
                                         ? _buildThumbnailPreview()
@@ -792,32 +800,29 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       left: dx.clamp(0.0, maxWidth) - 10,
       child: GestureDetector(
         onPanStart: (details) => _handleDragStart(details, isStartMarker),
-        onPanUpdate: (details) => _handleDragUpdate(
-          details,
-          isStartMarker,
-          maxWidth,
-          total,
-        ),
+        onPanUpdate: (details) =>
+            _handleDragUpdate(details, isStartMarker, maxWidth, total),
         onPanEnd: _handleDragEnd,
         child: Container(
           width: 20,
           height: 20,
-                     decoration: BoxDecoration(
-             color: color,
-             shape: BoxShape.circle,
-             border: Border.all(color: Colors.white, width: 2),
-             boxShadow: _isDragging && 
-                 ((isStartMarker && _isDraggingStart) || 
-                  (!isStartMarker && _isDraggingEnd))
-                 ? [
-                     BoxShadow(
-                       color: color.withValues(alpha: 0.7),
-                       blurRadius: 12,
-                       spreadRadius: 3,
-                     ),
-                   ]
-                 : null,
-           ),
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow:
+                _isDragging &&
+                    ((isStartMarker && _isDraggingStart) ||
+                        (!isStartMarker && _isDraggingEnd))
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.7),
+                      blurRadius: 12,
+                      spreadRadius: 3,
+                    ),
+                  ]
+                : null,
+          ),
           child: Icon(
             isStartMarker ? Icons.flag_outlined : Icons.flag,
             color: Colors.white,
@@ -829,11 +834,7 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   }
 
   // 新增：封面标记
-  Widget _buildCoverMarker(
-    double maxWidth,
-    Duration total,
-    Duration time,
-  ) {
+  Widget _buildCoverMarker(double maxWidth, Duration total, Duration time) {
     final dx = (time.inMilliseconds / total.inMilliseconds) * maxWidth;
     return Positioned(
       left: dx.clamp(0.0, maxWidth) - 1,
@@ -854,8 +855,6 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
       ),
     );
   }
-
-
 
   Widget _buildThumbnailPreview() {
     // 在相对进度模式下显示相对时间，否则显示绝对时间

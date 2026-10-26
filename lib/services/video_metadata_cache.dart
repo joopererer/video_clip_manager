@@ -38,7 +38,7 @@ class VideoMetadataStatus {
       isSuccess: json['isSuccess'] ?? false,
       error: json['error'],
       retryCount: json['retryCount'] ?? 0,
-      duration: json['duration'] != null 
+      duration: json['duration'] != null
           ? Duration(milliseconds: json['duration'])
           : null,
       thumbnailPath: json['thumbnailPath'],
@@ -77,28 +77,36 @@ class VideoMetadataCache {
   /// 检查视频是否需要处理
   bool shouldProcessVideo(String videoId, String videoPath) {
     _ensureLoaded();
-    
+
     final status = _cache[videoId];
     if (status == null) {
-      debugPrint('VideoMetadataCache: No cache entry for $videoId, should process');
+      debugPrint(
+        'VideoMetadataCache: No cache entry for $videoId, should process',
+      );
       return true;
     }
 
     // 如果上次成功，且时间间隔足够，跳过
     if (status.isSuccess && _isRecentEnough(status.lastAttempt)) {
-      debugPrint('VideoMetadataCache: $videoId recently processed successfully, skipping');
+      debugPrint(
+        'VideoMetadataCache: $videoId recently processed successfully, skipping',
+      );
       return false;
     }
 
     // 如果上次失败，检查重试间隔
     if (!status.isSuccess && _shouldRetry(status)) {
-      debugPrint('VideoMetadataCache: $videoId should retry (attempt ${status.retryCount + 1})');
+      debugPrint(
+        'VideoMetadataCache: $videoId should retry (attempt ${status.retryCount + 1})',
+      );
       return true;
     }
 
     // 如果重试次数过多，跳过
     if (status.retryCount >= _maxRetryCount) {
-      debugPrint('VideoMetadataCache: $videoId exceeded max retry count, skipping');
+      debugPrint(
+        'VideoMetadataCache: $videoId exceeded max retry count, skipping',
+      );
       return false;
     }
 
@@ -108,15 +116,17 @@ class VideoMetadataCache {
 
   /// 记录处理结果
   Future<void> recordResult(
-    String videoId, 
-    bool success, 
-    {String? error, Duration? duration, String? thumbnailPath}
-  ) async {
+    String videoId,
+    bool success, {
+    String? error,
+    Duration? duration,
+    String? thumbnailPath,
+  }) async {
     _ensureLoaded();
-    
+
     final currentStatus = _cache[videoId];
     final newRetryCount = success ? 0 : (currentStatus?.retryCount ?? 0) + 1;
-    
+
     _cache[videoId] = VideoMetadataStatus(
       lastAttempt: DateTime.now(),
       isSuccess: success,
@@ -127,8 +137,10 @@ class VideoMetadataCache {
     );
 
     await _saveCache();
-    
-    debugPrint('VideoMetadataCache: Recorded result for $videoId - success: $success, retryCount: $newRetryCount');
+
+    debugPrint(
+      'VideoMetadataCache: Recorded result for $videoId - success: $success, retryCount: $newRetryCount',
+    );
   }
 
   /// 获取视频的处理状态
@@ -165,13 +177,17 @@ class VideoMetadataCache {
   /// 强制重新处理所有视频
   Future<void> forceReprocessAll() async {
     _ensureLoaded();
-    debugPrint('VideoMetadataCache: Force reprocess all videos - clearing cache entries');
-    
+    debugPrint(
+      'VideoMetadataCache: Force reprocess all videos - clearing cache entries',
+    );
+
     // 清除所有缓存条目，强制重新处理
     _cache.clear();
     await _saveCache();
-    
-    debugPrint('VideoMetadataCache: Force reprocess all videos - cache cleared');
+
+    debugPrint(
+      'VideoMetadataCache: Force reprocess all videos - cache cleared',
+    );
   }
 
   /// 强制重新处理失败的视频
@@ -192,10 +208,10 @@ class VideoMetadataCache {
   /// 检查是否应该重试
   bool _shouldRetry(VideoMetadataStatus status) {
     if (status.retryCount >= _maxRetryCount) return false;
-    
+
     final delay = _getRetryDelay(status.retryCount);
     final timeSinceLastAttempt = DateTime.now().difference(status.lastAttempt);
-    
+
     return timeSinceLastAttempt >= delay;
   }
 
@@ -227,11 +243,15 @@ class VideoMetadataCache {
         final cacheJson = prefs.getString(_cacheKey);
         if (cacheJson != null) {
           final cacheMap = json.decode(cacheJson) as Map<String, dynamic>;
-          _cache = cacheMap.map((key, value) => MapEntry(
-            key, 
-            VideoMetadataStatus.fromJson(value as Map<String, dynamic>)
-          ));
-          debugPrint('VideoMetadataCache: Loaded ${_cache.length} cache entries');
+          _cache = cacheMap.map(
+            (key, value) => MapEntry(
+              key,
+              VideoMetadataStatus.fromJson(value as Map<String, dynamic>),
+            ),
+          );
+          debugPrint(
+            'VideoMetadataCache: Loaded ${_cache.length} cache entries',
+          );
         }
         _isLoaded = true;
       });
@@ -246,11 +266,13 @@ class VideoMetadataCache {
   Future<void> _saveCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final cacheJson = json.encode(_cache.map((key, value) => MapEntry(key, value.toJson())));
+      final cacheJson = json.encode(
+        _cache.map((key, value) => MapEntry(key, value.toJson())),
+      );
       await prefs.setString(_cacheKey, cacheJson);
       debugPrint('VideoMetadataCache: Saved ${_cache.length} cache entries');
     } catch (e) {
       debugPrint('VideoMetadataCache: Error saving cache: $e');
     }
   }
-} 
+}

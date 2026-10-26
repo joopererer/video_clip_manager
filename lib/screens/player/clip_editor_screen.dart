@@ -1,6 +1,7 @@
+import '../../widgets/ai_settings_dialog.dart';
 import 'dart:async';
 import 'dart:io';
-import '../../data/app_state.dart';
+import '../../services/frame_embedding_pool.dart';
 
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
@@ -14,10 +15,9 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../services/thumbnail_service.dart';
+import '../../services/preview_service.dart';
 import '../../utils/tag_utils.dart';
 import '../../widgets/custom_progress_bar.dart';
-import '../../services/screenshot_service.dart';
-import '../../services/preview_service.dart';
 
 String formatDuration(Duration d) {
   final parts = d.toString().split('.').first.padLeft(8, '0').split(':');
@@ -61,7 +61,8 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
   bool _isSettingCover = false;
   int _coverPreviewTimestamp = 0; // 用于强制刷新封面预览
   int _clipsListTimestamp = 0; // 用于强制刷新clips列表
-  String? _tempThumbnailPath; // 临时封面路径，只有保存后才同步到clip
+  String? _tempThumbnailPath;
+  bool _isGeneratingAiCaption = false; // 临时封面路径，只有保存后才同步到clip
 
   final _nameController = TextEditingController();
   final _notesController = TextEditingController();
@@ -70,16 +71,17 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
   final _videoFocusNode = FocusNode();
   final ItemScrollController _itemScrollController = ItemScrollController();
   bool _isMuted = false; // 静音状态
-  
+
   // 新增：快捷键提示控制
   bool _showHints = false; // 控制快捷键提示显示
   late final FocusNode _focusNode; // 全局焦点节点
 
-  bool _playerCreated = false;
-
   @override
   void initState() {
     super.initState();
+    PreviewService().pauseGlobalPreGeneration();
+    player = Player();
+    controller = VideoController(player);
     _focusNode = FocusNode(); // 初始化焦点节点
 
     if (widget.clipToEdit != null) {
@@ -88,7 +90,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
       _resetFormToBlank();
     }
 
-    unawaited(_bootEditorPlayer());
+    player.open(Media(widget.video.path), play: false);
 
     // 延迟请求焦点，确保组件完全初始化
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -98,74 +100,10 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     });
   }
 
-  Future<void> _bootEditorPlayer() async {
-    PreviewService().pauseGlobalPreGeneration();
-    await ScreenshotService().prepareForPlayback();
-    if (!mounted) return;
-
-    player = Player();
-    controller = VideoController(player);
-    if (mounted) {
-      setState(() => _playerCreated = true);
-    }
-    await _openPlayerAsync();
-    if (widget.clipToEdit != null && mounted) {
-      try {
-        await player.seek(widget.clipToEdit!.startTime);
-      } catch (_) {}
-    }
-  }
-
-  Future<void> _openPlayerAsync() async {
-    try {
-      final file = File(widget.video.path);
-      final exists = await file.exists();
-      if (!exists) {
-        print('ClipEditor: file not found: ${widget.video.path}');
-        return;
-      }
-
-      await player.open(Media(widget.video.path), play: false).timeout(Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10));
-    } on TimeoutException catch (te) {
-      print('ClipEditor: open timed out for ${widget.video.path}: $te');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('打开媒体超时: ${widget.video.path.split('\\').last}'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 3),
-        ));
-      }
-    } catch (e) {
-      print('ClipEditor: open failed for ${widget.video.path}: $e');
-    }
-  }
-
   @override
   void dispose() {
-    if (_playerCreated) {
-      final playerToDispose = player;
-      ScreenshotService().whenIdle().then((_) async {
-        try {
-          if (playerToDispose.state.playing) {
-            await playerToDispose.pause();
-          }
-          await Future.delayed(const Duration(milliseconds: 100));
-          await playerToDispose.dispose();
-          print('player disposed (delayed)');
-        } catch (e) {
-          print('Error disposing player after idle: $e');
-          try {
-            await playerToDispose.dispose();
-          } catch (e2) {
-            print('Force dispose failed: $e2');
-          }
-        } finally {
-          try {
-            ScreenshotService().markReady();
-          } catch (_) {}
-        }
-      });
-    }
+    PreviewService().resumeGlobalPreGeneration();
+    player.dispose();
     _splitViewController.dispose();
     _nameController.dispose();
     _notesController.dispose();
@@ -189,37 +127,33 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
       );
       _updateTextFieldsAndPreview();
     });
-    
+
     // 等待播放器准备好后设置 endTime 为视频总时长
     _updateEndTimeToVideoDuration();
   }
-  
+
   // 新增：更新 endTime 为视频总时长
   Future<void> _updateEndTimeToVideoDuration() async {
     // 等待播放器加载完成，最多等待3秒
     int attempts = 0;
     const maxAttempts = 30; // 30次 * 100ms = 3秒
-    
+
     while (attempts < maxAttempts && mounted) {
-      if (_playerCreated && player.state.duration > Duration.zero) {
+      if (player.state.duration > Duration.zero) {
         setState(() {
-          _formClip = _formClip.copyWith(
-            endTime: player.state.duration,
-          );
+          _formClip = _formClip.copyWith(endTime: player.state.duration);
         });
         return;
       }
-      
+
       await Future.delayed(const Duration(milliseconds: 100));
       attempts++;
     }
-    
+
     // 如果超时，尝试使用 widget.video.duration（如果可用）
     if (mounted && widget.video.duration != null) {
       setState(() {
-        _formClip = _formClip.copyWith(
-          endTime: widget.video.duration!,
-        );
+        _formClip = _formClip.copyWith(endTime: widget.video.duration!);
       });
     }
   }
@@ -229,7 +163,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
       _originalEditingClip = clipToEdit;
       _formClip = clipToEdit.copyWith();
       _updateTextFieldsAndPreview();
-      if (_playerCreated) {
+      if (!fromInit) {
         player.seek(clipToEdit.startTime);
       }
     });
@@ -243,8 +177,20 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
         ),
       );
     } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         _scrollToClip(clipToEdit.id);
+        if (clipToEdit.startTime > Duration.zero) {
+          try {
+            if (player.state.duration == Duration.zero) {
+              await player.stream.duration
+                  .firstWhere((d) => d > Duration.zero)
+                  .timeout(const Duration(seconds: 8));
+            }
+          } catch (_) {}
+          if (mounted) {
+            player.seek(clipToEdit.startTime);
+          }
+        }
       });
     }
   }
@@ -274,7 +220,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
 
     final thumbnailService = context.read<ThumbnailService>();
     final dbPath = context.read<AppState>().currentDbFullPath;
-    
+
     // 优先使用临时封面路径，如果没有则使用clip的封面路径
     final thumbnailPath = _tempThumbnailPath ?? _formClip.thumbnailPath;
     if (thumbnailPath != null && dbPath != null) {
@@ -289,21 +235,21 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
 
   void _resetFormChanges() {
     if (_originalEditingClip == null) return;
-    
+
     // 清理临时封面文件
     final thumbnailService = context.read<ThumbnailService>();
     final dbPath = context.read<AppState>().currentDbFullPath;
     if (dbPath != null) {
       thumbnailService.cleanupTempThumbnails(dbPath, _formClip.id);
     }
-    
+
     // 先重置所有状态
     setState(() {
       _formClip = _originalEditingClip!.copyWith();
       _tempThumbnailPath = null; // 重置临时封面路径
       _updateTextFieldsAndPreview();
     });
-    
+
     // 重新生成封面图以匹配原始状态
     if (_originalEditingClip!.coverFrameTime > Duration.zero) {
       // 立即更新 coverFrameTime，确保进度条和 Cover At 显示正确
@@ -334,7 +280,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
         _coverPreviewTimestamp = DateTime.now().millisecondsSinceEpoch;
       });
     }
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Changes discarded.'),
@@ -343,7 +289,113 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     );
   }
 
-  Future<void> _saveOrUpdateClip() async {
+    Future<void> _generateAiCaption(AppState appState) async {
+    final startMs = _formClip.startTime.inMilliseconds;
+    final endMs = _formClip.endTime.inMilliseconds;
+    if (endMs <= startMs) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('片段起止时间无效，请先调整区间')),
+      );
+      return;
+    }
+
+    setState(() => _isGeneratingAiCaption = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('正在抽帧并由 Qwen2-VL 进行智能解构，请稍候...'),
+        duration: Duration(seconds: 4),
+      ),
+    );
+
+    try {
+      final frames = await appState.aiService.extractClipFrames(
+        videoPathOrUrl: widget.video.path,
+        startMs: startMs,
+        endMs: endMs,
+        strategy: 'interval',
+        everyMs: 2000,
+        maxFrames: 6,
+      );
+
+      if (frames.isEmpty) {
+        throw Exception('未能从视频片段中抽取到有效画面');
+      }
+
+      final caption = await appState.aiService.generateCaption(
+        frames: frames,
+        framePaths: frames.map((f) => f.path).toList(),
+        apiUrl: appState.vlmApiUrl,
+        apiKey: appState.vlmApiKey,
+        model: appState.vlmModel,
+      );
+
+      if (!mounted) return;
+
+      final newNotes = caption.summary.isNotEmpty
+          ? '${caption.summary}\n[场景]: ${caption.scene}\n[主体]: ${caption.mainSubject}'
+          : caption.scene;
+
+      _notesController.text = newNotes;
+
+      final currentTags = Set<String>.from(_formClip.tags);
+      for (final tag in caption.keyActions) {
+        final clean = tag.trim();
+        if (clean.isNotEmpty &&
+            clean.length <= 10 &&
+            !clean.contains(RegExp(r'[,，、;；。!！?？]'))) {
+          currentTags.add(clean);
+        }
+      }
+      if (caption.scene.isNotEmpty &&
+          caption.scene.length <= 6 &&
+          !caption.scene.contains(RegExp(r'[,，、;；。!！?？]'))) {
+        currentTags.add(caption.scene.trim());
+      }
+
+      setState(() {
+        _formClip = _formClip.copyWith(
+          notes: newNotes,
+          tags: currentTags.toList(),
+          aiSummary: caption.summary,
+          aiScene: caption.scene,
+          aiActions: caption.keyActions,
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✨ AI 解构成功！已自动填充剧情描述与推荐标签'),
+          backgroundColor: Colors.green,
+        ),
+      );
+        } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('AI 解构失败: $e'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 8),
+            action: SnackBarAction(
+              label: '配置引擎',
+              textColor: Colors.amberAccent,
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (context) => const AiSettingsDialog(),
+                );
+              },
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingAiCaption = false);
+      }
+    }
+  }
+
+Future<void> _saveOrUpdateClip() async {
     if (_isSaving) return;
 
     final name = _nameController.text.trim();
@@ -382,84 +434,106 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
     }
 
     try {
-                     // 如果有临时封面路径，将其转换为正式封面；否则检查是否需要生成封面
-        String? finalThumbnailPath = _tempThumbnailPath;
-        
-        if (finalThumbnailPath != null) {
-          // 将临时封面转换为正式封面
-          final thumbnailService = context.read<ThumbnailService>();
-          final tempPath = thumbnailService.buildThumbnailPath(dbPath, finalThumbnailPath);
-          final finalFileName = thumbnailService.getThumbnailFileName(_formClip.id);
-          final finalPath = thumbnailService.buildThumbnailPath(dbPath, finalFileName);
-          
-          // 重命名临时文件为正式文件
-          final tempFile = File(tempPath);
-          if (tempFile.existsSync()) {
-            tempFile.renameSync(finalPath);
-            finalThumbnailPath = finalFileName;
-          }
-        } else {
-          final bool needsThumbUpdate =
-              _formClip.thumbnailPath == null ||
-              (_originalEditingClip != null &&
-                  _formClip.coverFrameTime != _originalEditingClip!.coverFrameTime);
+      // 如果有临时封面路径，将其转换为正式封面；否则检查是否需要生成封面
+      String? finalThumbnailPath = _tempThumbnailPath;
 
-          if (needsThumbUpdate) {
-            final thumbnailService = context.read<ThumbnailService>();
-            final coverTime = _formClip.coverFrameTime == Duration.zero
-                ? _formClip.startTime
-                : _formClip.coverFrameTime;
+      if (finalThumbnailPath != null) {
+        // 将临时封面转换为正式封面
+        final thumbnailService = context.read<ThumbnailService>();
+        final tempPath = thumbnailService.buildThumbnailPath(
+          dbPath,
+          finalThumbnailPath,
+        );
+        final finalFileName = thumbnailService.getThumbnailFileName(
+          _formClip.id,
+        );
+        final finalPath = thumbnailService.buildThumbnailPath(
+          dbPath,
+          finalFileName,
+        );
 
-            finalThumbnailPath = await thumbnailService.generateThumbnail(
-              widget.video.path,
-              coverTime,
-              _formClip.id,
-              dbPath: dbPath,
-            );
-          }
+        // 重命名临时文件为正式文件
+        final tempFile = File(tempPath);
+        if (tempFile.existsSync()) {
+          tempFile.renameSync(finalPath);
+          finalThumbnailPath = finalFileName;
         }
-       
-       // 更新clip的thumbnailPath
-       if (finalThumbnailPath != null) {
-         setState(() {
-           _formClip = _formClip.copyWith(
-             thumbnailPath: finalThumbnailPath,
-           );
-         });
-       }
+      } else {
+        final bool needsThumbUpdate =
+            _formClip.thumbnailPath == null ||
+            (_originalEditingClip != null &&
+                _formClip.coverFrameTime !=
+                    _originalEditingClip!.coverFrameTime);
 
-             if (_originalEditingClip == null) {
-         await appState.addClip(_formClip);
-       } else {
-         await appState.updateClip(_formClip);
-         // 更新 _originalEditingClip 为当前保存的状态
-         _originalEditingClip = _formClip.copyWith();
-       }
-
-               if (mounted) {
-          // 清除临时封面路径
-          _tempThumbnailPath = null;
-          
-          // 清理所有临时封面文件
+        if (needsThumbUpdate) {
           final thumbnailService = context.read<ThumbnailService>();
-          thumbnailService.cleanupTempThumbnails(dbPath, _formClip.id);
-          
-          // 更新时间戳，强制刷新clips列表
-          _clipsListTimestamp = DateTime.now().millisecondsSinceEpoch;
-          
-          // 强制刷新UI，确保clips列表更新
-          setState(() {});
-          
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Clip "${_formClip.name}" saved!'),
-              backgroundColor: Colors.green[700],
-            ),
+          final coverTime = _formClip.coverFrameTime == Duration.zero
+              ? _formClip.startTime
+              : _formClip.coverFrameTime;
+
+          finalThumbnailPath = await thumbnailService.generateThumbnail(
+            widget.video.path,
+            coverTime,
+            _formClip.id,
+            dbPath: dbPath,
           );
-          if (_originalEditingClip == null) {
-            _resetFormToBlank();
-          }
         }
+      }
+
+      // 更新clip的thumbnailPath
+      if (finalThumbnailPath != null) {
+        setState(() {
+          _formClip = _formClip.copyWith(thumbnailPath: finalThumbnailPath);
+        });
+      }
+
+      if (_originalEditingClip == null) {
+        await appState.addClip(_formClip);
+      } else {
+        await appState.updateClip(_formClip);
+        // 更新 _originalEditingClip 为当前保存的状态
+        _originalEditingClip = _formClip.copyWith();
+      }
+
+            // 增量同步母视频帧池（后台异步运行，不阻塞当前保存流程）
+      unawaited(
+        appState.deltaEngine
+            .syncClipRange(
+              videoPathOrUrl: widget.video.path,
+              startMs: _formClip.startTime.inMilliseconds,
+              endMs: _formClip.endTime.inMilliseconds,
+              modelDir: 'models',
+            )
+            .catchError((err) {
+              debugPrint('[ClipEditorScreen] Background delta sync error: $err');
+              return <VideoFrameEmbeddingRecord>[];
+            }),
+      );
+
+if (mounted) {
+        // 清除临时封面路径
+        _tempThumbnailPath = null;
+
+        // 清理所有临时封面文件
+        final thumbnailService = context.read<ThumbnailService>();
+        thumbnailService.cleanupTempThumbnails(dbPath, _formClip.id);
+
+        // 更新时间戳，强制刷新clips列表
+        _clipsListTimestamp = DateTime.now().millisecondsSinceEpoch;
+
+        // 强制刷新UI，确保clips列表更新
+        setState(() {});
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Clip "${_formClip.name}" saved!'),
+            backgroundColor: Colors.green[700],
+          ),
+        );
+        if (_originalEditingClip == null) {
+          _resetFormToBlank();
+        }
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -559,7 +633,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
           dbPath,
           newThumbFileName,
         );
-        
+
         // 清除所有相关图片缓存
         FileImage(File(newFullPath)).evict();
         if (_coverPreviewFullPath != null) {
@@ -569,19 +643,20 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
         // 强制触发UI更新
         if (mounted) {
           setState(() {
-            _formClip = _formClip.copyWith(
-              coverFrameTime: time,
-            );
+            _formClip = _formClip.copyWith(coverFrameTime: time);
             // 只更新临时封面路径，不更新clip的thumbnailPath
             _tempThumbnailPath = newThumbFileName;
             _coverPreviewFullPath = newFullPath;
-            _coverPreviewTimestamp = DateTime.now().millisecondsSinceEpoch; // 更新时间戳
+            _coverPreviewTimestamp =
+                DateTime.now().millisecondsSinceEpoch; // 更新时间戳
           });
-          
+
           // 显示成功提示
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Cover set at ${formatDuration(time)} (will be saved when you update the clip)'),
+              content: Text(
+                'Cover set at ${formatDuration(time)} (will be saved when you update the clip)',
+              ),
               backgroundColor: Colors.green[700],
               duration: const Duration(seconds: 2),
             ),
@@ -655,12 +730,6 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_playerCreated) {
-      return Scaffold(
-        appBar: AppBar(title: Text(widget.video.name)),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
     final appState = context.watch<AppState>();
     final thumbnailService = context.read<ThumbnailService>();
     final isEditing = _originalEditingClip != null;
@@ -799,7 +868,9 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                       child: GestureDetector(
                         onTap: () {
                           if (!_videoFocusNode.hasFocus) {
-                            FocusScope.of(context).requestFocus(_videoFocusNode);
+                            FocusScope.of(
+                              context,
+                            ).requestFocus(_videoFocusNode);
                           }
                           player.playOrPause();
                         },
@@ -905,6 +976,40 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                 const SizedBox(height: 12),
                 _buildTagEditor(appState),
                 const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Text(
+                      'Notes & AI 智能解构',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.settings, size: 16),
+                      tooltip: '配置 VLM 视觉大模型引擎',
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => const AiSettingsDialog(),
+                        );
+                      },
+                    ),
+                    _isGeneratingAiCaption
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : TextButton.icon(
+                            icon: const Icon(Icons.auto_awesome, size: 14),
+                            label: const Text(
+                              '✨ AI 智能解构',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            onPressed: () => _generateAiCaption(appState),
+                          ),
+                  ],
+                ),
+                const SizedBox(height: 6),
                 TextField(
                   controller: _notesController,
                   maxLines: 2,
@@ -1066,7 +1171,9 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                     const SizedBox(height: 8),
                     Image.file(
                       File(_coverPreviewFullPath!),
-                      key: ValueKey('${_coverPreviewFullPath}_$_coverPreviewTimestamp'),
+                      key: ValueKey(
+                        '${_coverPreviewFullPath}_$_coverPreviewTimestamp',
+                      ),
                       height: 100,
                       fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) =>
@@ -1254,18 +1361,18 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
           : ScrollablePositionedList.builder(
               itemCount: clipsForThisVideo.length,
               itemScrollController: _itemScrollController,
-                             itemBuilder: (context, index) {
-                 final clip = clipsForThisVideo[index];
-                 final isEditingThis = _originalEditingClip?.id == clip.id;
-                 final duration = clip.endTime - clip.startTime;
+              itemBuilder: (context, index) {
+                final clip = clipsForThisVideo[index];
+                final isEditingThis = _originalEditingClip?.id == clip.id;
+                final duration = clip.endTime - clip.startTime;
 
-                 String? thumbFullPath;
-                 if (clip.thumbnailPath != null && dbPath != null) {
-                   thumbFullPath = thumbnailService.buildThumbnailPath(
-                     dbPath,
-                     clip.thumbnailPath!,
-                   );
-                 }
+                String? thumbFullPath;
+                if (clip.thumbnailPath != null && dbPath != null) {
+                  thumbFullPath = thumbnailService.buildThumbnailPath(
+                    dbPath,
+                    clip.thumbnailPath!,
+                  );
+                }
 
                 return Card(
                   elevation: isEditingThis ? 6 : 2,
@@ -1301,7 +1408,9 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                                   child: thumbFullPath != null
                                       ? Image.file(
                                           File(thumbFullPath),
-                                          key: ValueKey('${thumbFullPath}_$_clipsListTimestamp'),
+                                          key: ValueKey(
+                                            '${thumbFullPath}_$_clipsListTimestamp',
+                                          ),
                                           fit: BoxFit.cover,
                                           errorBuilder: (c, e, s) =>
                                               const Icon(Icons.error_outline),
@@ -1324,17 +1433,17 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                                     // 标题和时间信息
                                     Row(
                                       children: [
-                                                                                 Expanded(
-                                           child: Text(
-                                             clip.name,
-                                             style: const TextStyle(
-                                               fontWeight: FontWeight.bold,
-                                               fontSize: 15,
-                                             ),
-                                             maxLines: 1,
-                                             overflow: TextOverflow.ellipsis,
-                                           ),
-                                         ),
+                                        Expanded(
+                                          child: Text(
+                                            clip.name,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
                                         const SizedBox(width: 8),
                                         Text(
                                           formatDuration(duration),
@@ -1348,82 +1457,86 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                                       ],
                                     ),
                                     const SizedBox(height: 4),
-                                                                         // 时间范围
-                                     Text(
-                                       '${formatDuration(clip.startTime)} - ${formatDuration(clip.endTime)}',
-                                       style: TextStyle(
-                                         fontFamily: 'monospace',
-                                         fontSize: 12,
-                                         color: Colors.grey.shade600,
-                                       ),
-                                     ),
+                                    // 时间范围
+                                    Text(
+                                      '${formatDuration(clip.startTime)} - ${formatDuration(clip.endTime)}',
+                                      style: TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
-                                                                         // 标签显示
-                                     if (clip.tags.isNotEmpty)
-                                       Wrap(
-                                         spacing: 4,
-                                         runSpacing: 2,
-                                         children: clip.tags.take(3).map((tag) {
-                                           final color = generateTagColor(tag);
-                                           return Container(
-                                             padding: const EdgeInsets.symmetric(
-                                               horizontal: 6,
-                                               vertical: 2,
-                                             ),
-                                             decoration: BoxDecoration(
-                                               color: color.withValues(alpha: 0.2),
-                                               borderRadius:
-                                                   BorderRadius.circular(10),
-                                               border: Border.all(
-                                                 color: color.withValues(alpha: 0.6),
-                                                 width: 1,
-                                               ),
-                                             ),
-                                             child: Text(
-                                               tag,
-                                               style: TextStyle(
-                                                 fontSize: 12,
-                                                 color: color,
-                                                 fontWeight: FontWeight.w500,
-                                               ),
-                                             ),
-                                           );
-                                         }).toList(),
-                                       ),
-                                                                         if (clip.tags.length > 3)
-                                       Text(
-                                         '+${clip.tags.length - 3} more',
-                                         style: TextStyle(
-                                           fontSize: 10,
-                                           color: Colors.grey.shade500,
-                                         ),
-                                       ),
+                                    // 标签显示
+                                    if (clip.tags.isNotEmpty)
+                                      Wrap(
+                                        spacing: 4,
+                                        runSpacing: 2,
+                                        children: clip.tags.take(3).map((tag) {
+                                          final color = generateTagColor(tag);
+                                          return Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: color.withValues(
+                                                alpha: 0.2,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: color.withValues(
+                                                  alpha: 0.6,
+                                                ),
+                                                width: 1,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              tag,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: color,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ),
+                                    if (clip.tags.length > 3)
+                                      Text(
+                                        '+${clip.tags.length - 3} more',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                      ),
                                     const SizedBox(height: 4),
-                                                                         // 评分和收藏状态
-                                     Row(
-                                       children: [
-                                         if (clip.isFavorite)
-                                           const Icon(
-                                             Icons.favorite,
-                                             color: Colors.redAccent,
-                                             size: 16,
-                                           ),
-                                         if (clip.rating > 0) ...[
-                                           if (clip.isFavorite)
-                                             const SizedBox(width: 4),
-                                           Row(
-                                             children: List.generate(
-                                               clip.rating,
-                                               (i) => const Icon(
-                                                 Icons.star,
-                                                 color: Colors.amber,
-                                                 size: 16,
-                                               ),
-                                             ),
-                                           ),
-                                         ],
-                                       ],
-                                     ),
+                                    // 评分和收藏状态
+                                    Row(
+                                      children: [
+                                        if (clip.isFavorite)
+                                          const Icon(
+                                            Icons.favorite,
+                                            color: Colors.redAccent,
+                                            size: 16,
+                                          ),
+                                        if (clip.rating > 0) ...[
+                                          if (clip.isFavorite)
+                                            const SizedBox(width: 4),
+                                          Row(
+                                            children: List.generate(
+                                              clip.rating,
+                                              (i) => const Icon(
+                                                Icons.star,
+                                                color: Colors.amber,
+                                                size: 16,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1442,8 +1555,8 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                                 color: Colors.green,
                                 iconSize: 20,
                                 tooltip: 'Play Clip',
-                                                                 onPressed: () =>
-                                     _previewClip(clip.startTime, clip.endTime),
+                                onPressed: () =>
+                                    _previewClip(clip.startTime, clip.endTime),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.delete_forever_outlined),
@@ -1463,7 +1576,7 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
             ),
     );
   }
-  
+
   // 新增：构建快捷键提示
   Widget _buildShortcutHint(String key, String action) {
     return Padding(

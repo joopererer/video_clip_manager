@@ -136,12 +136,15 @@ class ThumbnailService {
       for (final file in files) {
         if (file is File) {
           final fileName = p.basename(file.path);
-          if (fileName.startsWith('${clipId}_temp_') && fileName.endsWith('.jpg')) {
+          if (fileName.startsWith('${clipId}_temp_') &&
+              fileName.endsWith('.jpg')) {
             try {
               file.deleteSync();
               debugPrint('ThumbnailService: Cleaned up temp file $fileName');
             } catch (e) {
-              debugPrint('ThumbnailService: Failed to delete temp file $fileName: $e');
+              debugPrint(
+                'ThumbnailService: Failed to delete temp file $fileName: $e',
+              );
             }
           }
         }

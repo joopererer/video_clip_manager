@@ -9,7 +9,6 @@ import '../../widgets/clip_thumbnail.dart';
 import '../../widgets/add_to_playlist_dialog.dart';
 import '../../utils/tag_utils.dart';
 import '../../services/preview_service.dart';
-import '../../services/screenshot_service.dart';
 
 // 排序选项枚举
 enum SortOption {
@@ -27,14 +26,12 @@ enum SortOption {
   final IconData icon;
 }
 
-
-
 class ClipsTab extends StatefulWidget {
   final String searchQuery;
   final List<String> selectedTags;
   final int? selectedRating;
   final bool? selectedFavorite;
-  
+
   const ClipsTab({
     super.key,
     required this.searchQuery,
@@ -53,8 +50,10 @@ class _ClipsTabState extends State<ClipsTab> {
   @override
   Widget build(BuildContext context) {
     // 只监听视图模式变化，不监听clips数据变化
-    final viewMode = context.select<AppState, bool>((appState) => appState.clipsIsGridView);
-    
+    final viewMode = context.select<AppState, bool>(
+      (appState) => appState.clipsIsGridView,
+    );
+
     // 直接获取clips数据，不通过watch
     final appState = context.read<AppState>();
     final clips = appState.clips;
@@ -91,10 +90,7 @@ class _ClipsTabState extends State<ClipsTab> {
           child: Row(
             children: [
               // 排序下拉菜单
-              Expanded(
-                flex: 2,
-                child: _buildSortDropdown(),
-              ),
+              Expanded(flex: 2, child: _buildSortDropdown()),
               const SizedBox(width: 16),
               // 统计信息
               _buildStatistics(sortedClips.length, clips.length),
@@ -186,7 +182,10 @@ class _ClipsTabState extends State<ClipsTab> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green.shade600,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -238,16 +237,16 @@ class _ClipsTabState extends State<ClipsTab> {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: _currentSortOption == option 
-                          ? Colors.blue.shade50 
+                      color: _currentSortOption == option
+                          ? Colors.blue.shade50
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Icon(
-                      option.icon, 
+                      option.icon,
                       size: 16,
-                      color: _currentSortOption == option 
-                          ? Colors.blue.shade700 
+                      color: _currentSortOption == option
+                          ? Colors.blue.shade700
                           : Colors.grey.shade600,
                     ),
                   ),
@@ -257,11 +256,11 @@ class _ClipsTabState extends State<ClipsTab> {
                       option.label,
                       style: TextStyle(
                         fontSize: 14,
-                        fontWeight: _currentSortOption == option 
-                            ? FontWeight.w600 
+                        fontWeight: _currentSortOption == option
+                            ? FontWeight.w600
                             : FontWeight.normal,
-                        color: _currentSortOption == option 
-                            ? Colors.blue.shade700 
+                        color: _currentSortOption == option
+                            ? Colors.blue.shade700
                             : Colors.grey.shade700,
                       ),
                     ),
@@ -312,11 +311,7 @@ class _ClipsTabState extends State<ClipsTab> {
               color: Colors.blue.shade600,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              Icons.video_library, 
-              size: 14, 
-              color: Colors.white,
-            ),
+            child: Icon(Icons.video_library, size: 14, color: Colors.white),
           ),
           const SizedBox(width: 8),
           Text(
@@ -336,13 +331,17 @@ class _ClipsTabState extends State<ClipsTab> {
   // 排序逻辑
   List<VideoClip> _sortClips(List<VideoClip> clips) {
     final sortedClips = List<VideoClip>.from(clips);
-    
+
     switch (_currentSortOption) {
       case SortOption.nameAsc:
-        sortedClips.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        sortedClips.sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
         break;
       case SortOption.nameDesc:
-        sortedClips.sort((a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()));
+        sortedClips.sort(
+          (a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()),
+        );
         break;
       case SortOption.dateAddedAsc:
         sortedClips.sort((a, b) => a.id.compareTo(b.id)); // 假设ID按时间顺序
@@ -371,7 +370,7 @@ class _ClipsTabState extends State<ClipsTab> {
         });
         break;
     }
-    
+
     return sortedClips;
   }
 
@@ -381,7 +380,7 @@ class _ClipsTabState extends State<ClipsTab> {
       itemCount: clips.length,
       itemBuilder: (context, index) {
         final clip = clips[index];
-        
+
         return ClipListItem(
           clip: clip,
           onPlay: () => _playClip(context, clip),
@@ -406,7 +405,7 @@ class _ClipsTabState extends State<ClipsTab> {
       itemBuilder: (context, index) {
         final clip = clips[index];
         final duration = clip.endTime - clip.startTime;
-        
+
         return Card(
           clipBehavior: Clip.antiAlias,
           child: InkWell(
@@ -425,7 +424,8 @@ class _ClipsTabState extends State<ClipsTab> {
                           color: Colors.green,
                           size: 18,
                         ),
-                        onPressed: () => _showAddToPlaylistDialog(context, clip),
+                        onPressed: () =>
+                            _showAddToPlaylistDialog(context, clip),
                       ),
                       IconButton(
                         icon: const Icon(
@@ -447,9 +447,7 @@ class _ClipsTabState extends State<ClipsTab> {
                   ),
                 ),
                 // Thumbnail
-                Expanded(
-                  child: ClipThumbnail(clip: clip),
-                ),
+                Expanded(child: ClipThumbnail(clip: clip)),
                 // Footer with info and controls
                 Container(
                   color: Colors.black45,
@@ -478,6 +476,43 @@ class _ClipsTabState extends State<ClipsTab> {
                           fontFamily: 'monospace',
                         ),
                       ),
+                      if (clip.hitTimestampMs != null)
+                        Container(
+                          margin: const EdgeInsets.only(top: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade700,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.location_searching, size: 11, color: Colors.white),
+                              const SizedBox(width: 4),
+                              Text(
+                                '命中时刻: ${formatDuration(Duration(milliseconds: clip.hitTimestampMs!))}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (clip.aiSummary != null && clip.aiSummary!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2.0),
+                          child: Text(
+                            '✨ ${clip.aiSummary!}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.tealAccent.shade100,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       const SizedBox(height: 6),
                       // Rating stars and favorite button in one row
                       Row(
@@ -486,13 +521,21 @@ class _ClipsTabState extends State<ClipsTab> {
                           ...List.generate(5, (starIndex) {
                             return GestureDetector(
                               onTap: () {
-                                final newRating = clip.rating == starIndex + 1 ? 0 : starIndex + 1;
-                                final updatedClip = clip.copyWith(rating: newRating);
+                                final newRating = clip.rating == starIndex + 1
+                                    ? 0
+                                    : starIndex + 1;
+                                final updatedClip = clip.copyWith(
+                                  rating: newRating,
+                                );
                                 appState.updateClip(updatedClip);
                               },
                               child: Icon(
-                                starIndex < clip.rating ? Icons.star : Icons.star_border,
-                                color: starIndex < clip.rating ? Colors.amber : Colors.white54,
+                                starIndex < clip.rating
+                                    ? Icons.star
+                                    : Icons.star_border,
+                                color: starIndex < clip.rating
+                                    ? Colors.amber
+                                    : Colors.white54,
                                 size: 14,
                               ),
                             );
@@ -501,12 +544,18 @@ class _ClipsTabState extends State<ClipsTab> {
                           // Favorite button
                           GestureDetector(
                             onTap: () {
-                              final updatedClip = clip.copyWith(isFavorite: !clip.isFavorite);
+                              final updatedClip = clip.copyWith(
+                                isFavorite: !clip.isFavorite,
+                              );
                               appState.updateClip(updatedClip);
                             },
                             child: Icon(
-                              clip.isFavorite ? Icons.favorite : Icons.favorite_border,
-                              color: clip.isFavorite ? Colors.redAccent : Colors.white54,
+                              clip.isFavorite
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              color: clip.isFavorite
+                                  ? Colors.redAccent
+                                  : Colors.white54,
                               size: 16,
                             ),
                           ),
@@ -533,13 +582,9 @@ class _ClipsTabState extends State<ClipsTab> {
     );
   }
 
-  Future<void> _playClip(BuildContext context, VideoClip clip) async {
-    PreviewService().pauseGlobalPreGeneration();
-    await ScreenshotService().prepareForPlayback();
-    if (!context.mounted) return;
-
+  void _playClip(BuildContext context, VideoClip clip) async {
     final appState = context.read<AppState>();
-    showDialog(
+    final clipToEdit = await showDialog<VideoClip?>(
       context: context,
       barrierDismissible: false, // 防止误关闭
       builder: (context) => Dialog(
@@ -548,27 +593,41 @@ class _ClipsTabState extends State<ClipsTab> {
           constraints: const BoxConstraints(
             maxWidth: 1200, // 最大宽度
             maxHeight: 800, // 最大高度
-            minWidth: 800,  // 最小宽度
+            minWidth: 800, // 最小宽度
             minHeight: 600, // 最小高度
           ),
-        child: ClipPlaybackScreen(
-          clip: clip,
-          allClips: appState.clips.toList(),
-          searchQuery: widget.searchQuery,
-          selectedTags: widget.selectedTags,
-          selectedRating: widget.selectedRating,
-          selectedFavorite: widget.selectedFavorite,
-          currentSortOption: _currentSortOption,
+          child: ClipPlaybackScreen(
+            clip: clip,
+            allClips: appState.clips.toList(),
+            searchQuery: widget.searchQuery,
+            selectedTags: widget.selectedTags,
+            selectedRating: widget.selectedRating,
+            selectedFavorite: widget.selectedFavorite,
+            currentSortOption: _currentSortOption,
+            initialSeekTime: clip.hitTimestampMs != null
+                ? Duration(milliseconds: clip.hitTimestampMs!)
+                : null,
           ),
         ),
       ),
     );
+
+    // 用户在播放界面点击了“编辑”，等待播放器资源与 Windows Direct3D 纹理完全释放后再进入编辑页
+    if (clipToEdit != null && context.mounted) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (context.mounted) {
+        _editClip(context, clipToEdit);
+      }
+    } else {
+      // 仅当用户关闭播放器且未进入编辑页时，才恢复后台预生成
+      PreviewService().resumeGlobalPreGeneration();
+    }
   }
 
   void _editClip(BuildContext context, VideoClip clip) {
     final appState = context.read<AppState>();
     final video = appState.originalVideos.firstWhere(
-          (v) => v.path == clip.videoPath,
+      (v) => v.path == clip.videoPath,
       // Au cas où la vidéo originale aurait été supprimée, on en crée une temporaire.
       orElse: () => OriginalVideo(
         id: 'temp_${clip.videoPath.hashCode}',
@@ -582,10 +641,7 @@ class _ClipsTabState extends State<ClipsTab> {
       MaterialPageRoute(
         // **LA CORRECTION EST ICI**
         // On passe uniquement la vidéo. ClipEditorScreen se chargera d'afficher tous les clips associés.
-        builder: (context) => ClipEditorScreen(
-          video: video,
-          clipToEdit: clip,
-        ),
+        builder: (context) => ClipEditorScreen(video: video, clipToEdit: clip),
       ),
     );
   }
@@ -626,7 +682,7 @@ String formatDuration(Duration duration) {
   final hours = duration.inHours;
   final minutes = duration.inMinutes.remainder(60);
   final seconds = duration.inSeconds.remainder(60);
-  
+
   if (hours > 0) {
     return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   } else {
@@ -692,22 +748,22 @@ class _ClipListItemState extends State<ClipListItem> {
   @override
   Widget build(BuildContext context) {
     final duration = widget.clip.endTime - widget.clip.startTime;
-    
+
     return RepaintBoundary(
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
         child: InkWell(
           onTap: widget.onPlay,
           child: Container(
-            height: 90, // 增加高度以避免溢出
+            constraints: const BoxConstraints(minHeight: 90),
             padding: const EdgeInsets.all(12.0),
             child: Row(
               children: [
                 // 1. 略缩图 - 使用RepaintBoundary隔离
                 RepaintBoundary(
                   child: Container(
-                    width: 80, // 调整略缩图宽度
-                    height: 66, // 增加略缩图高度以匹配容器
+                    width: 90, // 调整略缩图宽度
+                    height: 68, // 增加略缩图高度以匹配容器
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(6),
                       color: Colors.grey.shade200,
@@ -743,16 +799,82 @@ class _ClipListItemState extends State<ClipListItem> {
                           '${formatDuration(widget.clip.startTime)} - ${formatDuration(widget.clip.endTime)} (${formatDuration(duration)})',
                           style: const TextStyle(
                             fontFamily: 'monospace',
-                            fontSize: 11,
+                            fontSize: 13,
                             color: Colors.grey,
                           ),
                         ),
-                        if (widget.clip.tags.isNotEmpty) ...[
+                        if (widget.clip.hitTimestampMs != null) ...[
                           const SizedBox(height: 2),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade700,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.location_searching,
+                                      size: 10,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      '命中: ${formatDuration(Duration(milliseconds: widget.clip.hitTimestampMs!))}',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (widget.clip.aiSummary != null &&
+                                  widget.clip.aiSummary!.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    '✨ ${widget.clip.aiSummary!}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.teal.shade700,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ] else if (widget.clip.aiSummary != null &&
+                            widget.clip.aiSummary!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '✨ ${widget.clip.aiSummary!}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.teal.shade700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        if (widget.clip.tags.isNotEmpty) ...[
+                          const SizedBox(height: 4),
                           Wrap(
-                            spacing: 4,
+                            spacing: 6,
                             runSpacing: 2,
-                            children: widget.clip.tags.map((tag) => buildTagChip(tag)).toList(),
+                            children: widget.clip.tags
+                                .map((tag) => buildTagChip(tag))
+                                .toList(),
                           ),
                         ],
                       ],
@@ -770,13 +892,19 @@ class _ClipListItemState extends State<ClipListItem> {
                         return GestureDetector(
                           onTap: () {
                             final appState = context.read<AppState>();
-                            final newRating = rating == starIndex + 1 ? 0 : starIndex + 1;
-                            final updatedClip = widget.clip.copyWith(rating: newRating);
+                            final newRating = rating == starIndex + 1
+                                ? 0
+                                : starIndex + 1;
+                            final updatedClip = widget.clip.copyWith(
+                              rating: newRating,
+                            );
                             appState.updateClip(updatedClip);
                           },
                           child: Icon(
                             starIndex < rating ? Icons.star : Icons.star_border,
-                            color: starIndex < rating ? Colors.amber : Colors.grey,
+                            color: starIndex < rating
+                                ? Colors.amber
+                                : Colors.grey,
                             size: 16,
                           ),
                         );
@@ -792,7 +920,9 @@ class _ClipListItemState extends State<ClipListItem> {
                     return GestureDetector(
                       onTap: () {
                         final appState = context.read<AppState>();
-                        final updatedClip = widget.clip.copyWith(isFavorite: !isFavorite);
+                        final updatedClip = widget.clip.copyWith(
+                          isFavorite: !isFavorite,
+                        );
                         appState.updateClip(updatedClip);
                       },
                       child: Icon(
@@ -806,7 +936,11 @@ class _ClipListItemState extends State<ClipListItem> {
                 const SizedBox(width: 16), // 5. <空白> 区域
                 // 6. 添加到播放列表按钮
                 IconButton(
-                  icon: const Icon(Icons.playlist_add, color: Colors.green, size: 20),
+                  icon: const Icon(
+                    Icons.playlist_add,
+                    color: Colors.green,
+                    size: 20,
+                  ),
                   onPressed: () => _showAddToPlaylistDialog(context),
                   tooltip: 'Add to Playlist',
                   padding: EdgeInsets.zero,
@@ -824,7 +958,11 @@ class _ClipListItemState extends State<ClipListItem> {
                 const SizedBox(width: 4),
                 // 8. 删除按钮
                 IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                  icon: const Icon(
+                    Icons.delete,
+                    color: Colors.redAccent,
+                    size: 20,
+                  ),
                   onPressed: widget.onDelete,
                   tooltip: 'Delete Clip',
                   padding: EdgeInsets.zero,

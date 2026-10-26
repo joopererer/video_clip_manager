@@ -12,6 +12,10 @@ class VideoClip extends Equatable {
   final int rating;
   final bool isFavorite;
   final String? thumbnailPath;
+  final String? aiSummary;
+  final String? aiScene;
+  final List<String> aiActions;
+  final int? hitTimestampMs;
 
   const VideoClip({
     required this.id,
@@ -25,6 +29,10 @@ class VideoClip extends Equatable {
     this.rating = 0,
     this.isFavorite = false,
     this.thumbnailPath,
+    this.aiSummary,
+    this.aiScene,
+    this.aiActions = const [],
+    this.hitTimestampMs,
   });
 
   factory VideoClip.fromJson(Map<String, dynamic> json) {
@@ -45,6 +53,10 @@ class VideoClip extends Equatable {
       rating: json['rating'] ?? 0,
       isFavorite: json['isFavorite'] ?? false,
       thumbnailPath: json['thumbnailPath'],
+      aiSummary: json['aiSummary'] as String?,
+      aiScene: json['aiScene'] as String?,
+      aiActions: List<String>.from(json['aiActions'] ?? []),
+      hitTimestampMs: json['hitTimestampMs'] as int?,
     );
   }
 
@@ -61,6 +73,10 @@ class VideoClip extends Equatable {
       'rating': rating,
       'isFavorite': isFavorite,
       'thumbnailPath': thumbnailPath,
+      'aiSummary': aiSummary,
+      'aiScene': aiScene,
+      'aiActions': aiActions,
+      'hitTimestampMs': hitTimestampMs,
     };
   }
 
@@ -76,6 +92,10 @@ class VideoClip extends Equatable {
     int? rating,
     bool? isFavorite,
     String? thumbnailPath,
+    String? aiSummary,
+    String? aiScene,
+    List<String>? aiActions,
+    int? hitTimestampMs,
   }) {
     // Return a new instance, handling nullable values for notes and thumbnailPath
     return VideoClip(
@@ -90,6 +110,10 @@ class VideoClip extends Equatable {
       rating: rating ?? this.rating,
       isFavorite: isFavorite ?? this.isFavorite,
       thumbnailPath: thumbnailPath ?? this.thumbnailPath,
+      aiSummary: aiSummary ?? this.aiSummary,
+      aiScene: aiScene ?? this.aiScene,
+      aiActions: aiActions ?? this.aiActions,
+      hitTimestampMs: hitTimestampMs ?? this.hitTimestampMs,
     );
   }
 
@@ -106,6 +130,10 @@ class VideoClip extends Equatable {
     rating,
     isFavorite,
     thumbnailPath,
+    aiSummary,
+    aiScene,
+    aiActions,
+    hitTimestampMs,
   ];
 }
 
@@ -381,4 +409,362 @@ class PlaylistItemWithClip extends Equatable {
 
   @override
   List<Object?> get props => [item, clip];
+}
+
+class OnlineVideo extends Equatable {
+  final String id;
+  final String url;
+  final String title;
+  final String? description;
+  final Duration? duration;
+  final String? thumbnailUrl;
+  final String? localPath; // 下载后的本地路径
+  final String platform; // 'youtube', 'bilibili', 'missav', 'xvideos'
+  final Map<String, dynamic> metadata; // 平台特定的元数据
+  final DateTime? downloadedAt;
+  final bool isDownloaded;
+
+  const OnlineVideo({
+    required this.id,
+    required this.url,
+    required this.title,
+    this.description,
+    this.duration,
+    this.thumbnailUrl,
+    this.localPath,
+    required this.platform,
+    this.metadata = const {},
+    this.downloadedAt,
+    this.isDownloaded = false,
+  });
+
+  factory OnlineVideo.fromJson(Map<String, dynamic> json) {
+    return OnlineVideo(
+      id: json['id'] ?? 'online_${json['url']?.hashCode}',
+      url: json['url'] ?? '',
+      title: json['title'] ?? '',
+      description: json['description'],
+      duration: json['duration'] != null
+          ? Duration(milliseconds: json['duration'])
+          : null,
+      thumbnailUrl: json['thumbnailUrl'],
+      localPath: json['localPath'],
+      platform: json['platform'] ?? 'unknown',
+      metadata: Map<String, dynamic>.from(json['metadata'] ?? {}),
+      downloadedAt: json['downloadedAt'] != null
+          ? DateTime.parse(json['downloadedAt'])
+          : null,
+      isDownloaded: json['isDownloaded'] ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'url': url,
+      'title': title,
+      'description': description,
+      'duration': duration?.inMilliseconds,
+      'thumbnailUrl': thumbnailUrl,
+      'localPath': localPath,
+      'platform': platform,
+      'metadata': metadata,
+      'downloadedAt': downloadedAt?.toIso8601String(),
+      'isDownloaded': isDownloaded,
+    };
+  }
+
+  OnlineVideo copyWith({
+    String? id,
+    String? url,
+    String? title,
+    String? description,
+    Duration? duration,
+    String? thumbnailUrl,
+    String? localPath,
+    String? platform,
+    Map<String, dynamic>? metadata,
+    DateTime? downloadedAt,
+    bool? isDownloaded,
+  }) {
+    return OnlineVideo(
+      id: id ?? this.id,
+      url: url ?? this.url,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      duration: duration ?? this.duration,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      localPath: localPath ?? this.localPath,
+      platform: platform ?? this.platform,
+      metadata: metadata ?? this.metadata,
+      downloadedAt: downloadedAt ?? this.downloadedAt,
+      isDownloaded: isDownloaded ?? this.isDownloaded,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+    id,
+    url,
+    title,
+    description,
+    duration,
+    thumbnailUrl,
+    localPath,
+    platform,
+    metadata,
+    downloadedAt,
+    isDownloaded,
+  ];
+}
+
+class OnlineVideoClip extends Equatable {
+  final String id;
+  final String name;
+  final String onlineVideoId; // 关联的在线视频ID
+  final String? localVideoPath; // 如果已下载，本地视频路径
+  final Duration startTime;
+  final Duration endTime;
+  final Duration coverFrameTime;
+  final List<String> tags;
+  final String? notes;
+  final int rating;
+  final bool isFavorite;
+  final String? thumbnailPath;
+  final bool isDownloaded; // 是否已下载到本地
+
+  const OnlineVideoClip({
+    required this.id,
+    this.name = '',
+    required this.onlineVideoId,
+    this.localVideoPath,
+    this.startTime = Duration.zero,
+    this.endTime = Duration.zero,
+    this.coverFrameTime = Duration.zero,
+    this.tags = const [],
+    this.notes,
+    this.rating = 0,
+    this.isFavorite = false,
+    this.thumbnailPath,
+    this.isDownloaded = false,
+  });
+
+  factory OnlineVideoClip.fromJson(Map<String, dynamic> json) {
+    final startTime = Duration(milliseconds: json['start'] ?? 0);
+    return OnlineVideoClip(
+      id: json['id'] ?? 'online_clip_${DateTime.now().millisecondsSinceEpoch}',
+      name: json['label'] ?? json['name'] ?? 'Untitled Online Clip',
+      onlineVideoId: json['onlineVideoId'] ?? '',
+      localVideoPath: json['localVideoPath'],
+      startTime: startTime,
+      endTime: Duration(milliseconds: json['end'] ?? 0),
+      coverFrameTime: Duration(
+        milliseconds: json['coverFrameTime'] ?? startTime.inMilliseconds,
+      ),
+      tags: List<String>.from(json['tags'] ?? []),
+      notes: json['notes'] ?? json['note'],
+      rating: json['rating'] ?? 0,
+      isFavorite: json['isFavorite'] ?? false,
+      thumbnailPath: json['thumbnailPath'],
+      isDownloaded: json['isDownloaded'] ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'onlineVideoId': onlineVideoId,
+      'localVideoPath': localVideoPath,
+      'start': startTime.inMilliseconds,
+      'end': endTime.inMilliseconds,
+      'coverFrameTime': coverFrameTime.inMilliseconds,
+      'tags': tags,
+      'notes': notes,
+      'rating': rating,
+      'isFavorite': isFavorite,
+      'thumbnailPath': thumbnailPath,
+      'isDownloaded': isDownloaded,
+    };
+  }
+
+  OnlineVideoClip copyWith({
+    String? id,
+    String? name,
+    String? onlineVideoId,
+    String? localVideoPath,
+    Duration? startTime,
+    Duration? endTime,
+    Duration? coverFrameTime,
+    List<String>? tags,
+    String? notes,
+    int? rating,
+    bool? isFavorite,
+    String? thumbnailPath,
+    bool? isDownloaded,
+  }) {
+    return OnlineVideoClip(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      onlineVideoId: onlineVideoId ?? this.onlineVideoId,
+      localVideoPath: localVideoPath ?? this.localVideoPath,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+      coverFrameTime: coverFrameTime ?? this.coverFrameTime,
+      tags: tags ?? this.tags,
+      notes: notes ?? this.notes,
+      rating: rating ?? this.rating,
+      isFavorite: isFavorite ?? this.isFavorite,
+      thumbnailPath: thumbnailPath ?? this.thumbnailPath,
+      isDownloaded: isDownloaded ?? this.isDownloaded,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+    id,
+    name,
+    onlineVideoId,
+    localVideoPath,
+    startTime,
+    endTime,
+    coverFrameTime,
+    tags,
+    notes,
+    rating,
+    isFavorite,
+    thumbnailPath,
+    isDownloaded,
+  ];
+}
+
+/// 多源搜索结果 - 改进版本
+class EnhancedMultiSourceResult {
+  final String code;
+  final List<String> titles; // 多个标题来源
+  final List<String> thumbnailUrls; // 多个封面图来源
+  final Map<String, dynamic> metadata; // 其他元数据
+  final Map<String, double> sourceConfidence; // 每个来源的置信度
+
+  EnhancedMultiSourceResult({
+    required this.code,
+    required this.titles,
+    required this.thumbnailUrls,
+    required this.metadata,
+    required this.sourceConfidence,
+  });
+
+  /// 获取最佳标题（置信度最高的）
+  String? get bestTitle {
+    if (titles.isEmpty) return null;
+    if (titles.length == 1) return titles.first;
+    
+    // 如果有多个标题，返回第一个非空的
+    return titles.firstWhere((title) => title.isNotEmpty && title != 'Unknown Title', 
+                           orElse: () => titles.first);
+  }
+
+  /// 获取最佳封面图（置信度最高的）
+  String? get bestThumbnail {
+    if (thumbnailUrls.isEmpty) return null;
+    if (thumbnailUrls.length == 1) return thumbnailUrls.first;
+    
+    // 如果有多个封面图，返回第一个有效的
+    return thumbnailUrls.firstWhere((url) => url.isNotEmpty, 
+                                  orElse: () => thumbnailUrls.first);
+  }
+
+  /// 检查是否有多个选择
+  bool get hasMultipleChoices {
+    return titles.length > 1 || thumbnailUrls.length > 1;
+  }
+
+  /// 获取所有标题来源
+  List<String> get titleSources {
+    final sources = <String>[];
+    if (titles.isNotEmpty) {
+      sources.addAll(metadata['title_sources'] ?? []);
+    }
+    return sources;
+  }
+
+  /// 获取所有封面图来源
+  List<String> get thumbnailSources {
+    final sources = <String>[];
+    if (thumbnailUrls.isNotEmpty) {
+      sources.addAll(metadata['thumbnail_sources'] ?? []);
+    }
+    return sources;
+  }
+
+  @override
+  String toString() {
+    return 'EnhancedMultiSourceResult(code: $code, titles: $titles, thumbnails: ${thumbnailUrls.length})';
+  }
+}
+
+/// 搜索结果项
+class SearchResultItem {
+  final String value;
+  final String source;
+  final double confidence;
+  final Map<String, dynamic>? additionalData;
+
+  SearchResultItem({
+    required this.value,
+    required this.source,
+    required this.confidence,
+    this.additionalData,
+  });
+
+  @override
+  String toString() {
+    return 'SearchResultItem(value: $value, source: $source, confidence: $confidence)';
+  }
+}
+
+/// 聚合搜索结果
+class AggregatedSearchResult {
+  final String code;
+  final List<SearchResultItem> titles;
+  final List<SearchResultItem> thumbnails;
+  final Map<String, dynamic> metadata;
+
+  AggregatedSearchResult({
+    required this.code,
+    required this.titles,
+    required this.thumbnails,
+    required this.metadata,
+  });
+
+  /// 转换为增强的多源结果
+  EnhancedMultiSourceResult toEnhancedResult() {
+    final titleSources = titles.map((t) => t.source).toList();
+    final thumbnailSources = thumbnails.map((t) => t.source).toList();
+    
+    final sourceConfidence = <String, double>{};
+    for (final title in titles) {
+      sourceConfidence['${title.source}_title'] = title.confidence;
+    }
+    for (final thumbnail in thumbnails) {
+      sourceConfidence['${thumbnail.source}_thumbnail'] = thumbnail.confidence;
+    }
+
+    return EnhancedMultiSourceResult(
+      code: code,
+      titles: titles.map((t) => t.value).toList(),
+      thumbnailUrls: thumbnails.map((t) => t.value).toList(),
+      metadata: {
+        ...metadata,
+        'title_sources': titleSources,
+        'thumbnail_sources': thumbnailSources,
+      },
+      sourceConfidence: sourceConfidence,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'AggregatedSearchResult(code: $code, titles: ${titles.length}, thumbnails: ${thumbnails.length})';
+  }
 }
