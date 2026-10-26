@@ -14,6 +14,7 @@ import '../utils/tag_utils.dart';
 import '../utils/toast_utils.dart';
 import '../services/preview_service.dart'; // 添加预览服务导入
 import '../services/thumbnail_service.dart'; // 添加缩略图服务导入
+import '../services/screenshot_service.dart';
 import 'tabs/videos_tab.dart';
 import 'tabs/clips_tab.dart';
 import 'tabs/playlists_tab.dart';
@@ -877,27 +878,15 @@ class _MainScreenState extends State<MainScreen>
               ),
             ),
           ),
-          // This is the global, 1x1 pixel "drawing board" for screenshots
+          // Off-screen Video used by ScreenshotService for all screenshot tasks.
           Positioned(
-            left: -1, // Use -1 instead of 0 to ensure it's fully off-screen
-            top: -1,
-            width: 1,
-            height: 1,
-            child: Opacity(
-              opacity: 0.0, // Fully transparent
-              child: Video(controller: thumbnailService.videoController),
-            ),
-          ),
-          // This is the global, 1x1 pixel "drawing board" for preview screenshots
-          Positioned(
-            left:
-                -2, // Use -2 to ensure it's fully off-screen and separate from thumbnail widget
+            left: -2,
             top: -2,
             width: 1,
             height: 1,
             child: Opacity(
-              opacity: 0.0, // Fully transparent
-              child: Video(controller: PreviewService().videoController),
+              opacity: 0.0,
+              child: Video(controller: ScreenshotService().videoController),
             ),
           ),
         ],

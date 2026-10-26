@@ -17,6 +17,7 @@ import 'models.dart';
 import '../services/ai_service.dart';
 import '../services/delta_engine.dart';
 import '../services/frame_embedding_pool.dart';
+import '../services/screenshot_service.dart';
 
 const String _prefsKeyDbPath = 'db_path';
 
@@ -142,8 +143,59 @@ class AppState extends ChangeNotifier {
     _playlistsIsGridView = _prefs.getBool('playlistsIsGridView') ?? false;
     _playlistsSortBy = _prefs.getString('playlistsSortBy') ?? 'name';
 
+    // Timeouts and other tunables (persisted)
+    _openTimeoutSeconds = _prefs.getInt('timeout_open_seconds') ?? 10;
+    _seekTimeoutSeconds = _prefs.getInt('timeout_seek_seconds') ?? 10;
+    _playTimeoutSeconds = _prefs.getInt('timeout_play_seconds') ?? 5;
+    _screenshotTimeoutSeconds = _prefs.getInt('timeout_screenshot_seconds') ?? 15;
+    _markReadyDelayMs = _prefs.getInt('mark_ready_delay_ms') ?? 300;
+
     // 设置静态实例
     _instance = this;
+  }
+
+  // --- Tunable timeouts (persisted) ---
+  late int _openTimeoutSeconds;
+  late int _seekTimeoutSeconds;
+  late int _playTimeoutSeconds;
+  late int _screenshotTimeoutSeconds;
+  late int _markReadyDelayMs;
+
+  int get openTimeoutSeconds => _openTimeoutSeconds;
+  int get seekTimeoutSeconds => _seekTimeoutSeconds;
+  int get playTimeoutSeconds => _playTimeoutSeconds;
+  int get screenshotTimeoutSeconds => _screenshotTimeoutSeconds;
+  int get markReadyDelayMs => _markReadyDelayMs;
+
+  void setOpenTimeoutSeconds(int secs) {
+    _openTimeoutSeconds = secs;
+    _prefs.setInt('timeout_open_seconds', secs);
+    notifyListeners();
+  }
+
+  void setSeekTimeoutSeconds(int secs) {
+    _seekTimeoutSeconds = secs;
+    _prefs.setInt('timeout_seek_seconds', secs);
+    notifyListeners();
+  }
+
+  void setPlayTimeoutSeconds(int secs) {
+    _playTimeoutSeconds = secs;
+    _prefs.setInt('timeout_play_seconds', secs);
+    notifyListeners();
+  }
+
+  void setScreenshotTimeoutSeconds(int secs) {
+    _screenshotTimeoutSeconds = secs;
+    _prefs.setInt('timeout_screenshot_seconds', secs);
+    notifyListeners();
+  }
+
+  void setMarkReadyDelayMs(int ms) {
+    _markReadyDelayMs = ms;
+    _prefs.setInt('mark_ready_delay_ms', ms);
+    ScreenshotService().markReady();
+    notifyListeners();
   }
 
   void _setLoading(bool value) {
