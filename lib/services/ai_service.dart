@@ -210,6 +210,21 @@ class AiService {
         .toList();
   }
 
+  /// 自动探测并解析 ONNX Runtime 动态链接库路径 (Windows: onnxruntime.dll)
+  Future<String?> resolveOrtLibPath() async {
+    final candidates = [
+      'onnxruntime.dll',
+      'runtime/ort/onnxruntime.dll',
+      r'D:\workspace\FlutterProjects\file_organizer\temp\ort_extracted\onnxruntime-win-x64-1.30.0\lib\onnxruntime.dll',
+      r'D:\workspace\local-media-ai\target\release\onnxruntime.dll',
+      r'D:\workspace\local-media-ai\runtime\ort\onnxruntime.dll',
+    ];
+    for (final c in candidates) {
+      if (File(c).existsSync()) return File(c).absolute.path;
+    }
+    return null;
+  }
+
   /// 文本向量提取 (768 维)
   Future<List<double>> embedText({
     required String text,
@@ -227,13 +242,23 @@ class AiService {
       '--model-dir',
       modelDir,
     ];
-    if (ortLib != null && ortLib.isNotEmpty) {
-      args.addAll(['--ort-lib', ortLib]);
+    final resolvedOrt = ortLib ?? await resolveOrtLibPath();
+    if (resolvedOrt != null && resolvedOrt.isNotEmpty) {
+      args.addAll(['--ort-lib', resolvedOrt]);
     }
 
     final res = await Process.run(cli ?? 'local-media-ai', args);
     if (res.exitCode != 0) {
-      throw Exception('文本向量生成失败: ${res.stderr}');
+      String errMsg = (res.stderr as String).trim();
+      if (errMsg.isEmpty && (res.stdout as String).isNotEmpty) {
+        try {
+          final j = jsonDecode(res.stdout as String);
+          errMsg = j['error'] ?? res.stdout;
+        } catch (_) {
+          errMsg = res.stdout;
+        }
+      }
+      throw Exception('文本向量生成失败: $errMsg');
     }
 
     final json = jsonDecode(res.stdout as String) as Map<String, dynamic>;
@@ -266,13 +291,23 @@ class AiService {
       '--soft-tokens',
       softTokens.toString(),
     ];
-    if (ortLib != null && ortLib.isNotEmpty) {
-      args.addAll(['--ort-lib', ortLib]);
+    final resolvedOrt = ortLib ?? await resolveOrtLibPath();
+    if (resolvedOrt != null && resolvedOrt.isNotEmpty) {
+      args.addAll(['--ort-lib', resolvedOrt]);
     }
 
     final res = await Process.run(cli ?? 'local-media-ai', args);
     if (res.exitCode != 0) {
-      throw Exception('批量帧向量生成失败: ${res.stderr}');
+      String errMsg = (res.stderr as String).trim();
+      if (errMsg.isEmpty && (res.stdout as String).isNotEmpty) {
+        try {
+          final j = jsonDecode(res.stdout as String);
+          errMsg = j['error'] ?? res.stdout;
+        } catch (_) {
+          errMsg = res.stdout;
+        }
+      }
+      throw Exception('批量帧向量生成失败: $errMsg');
     }
 
     final json = jsonDecode(res.stdout as String) as Map<String, dynamic>;
