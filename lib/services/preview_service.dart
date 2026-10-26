@@ -892,11 +892,14 @@ class PreviewService {
 
   /// 获取视频的预览生成进度
   Future<double> getVideoProgress(String videoPath) async {
+    // 在线网络流直接视为 100% 完成，不执行本地关键帧检测，避免无效的定时器轮询与磁盘IO
+    if (videoPath.startsWith('http://') || videoPath.startsWith('https://')) {
+      return 1.0;
+    }
+
     try {
-      print('PreviewService: getVideoProgress - checking for $videoPath');
       await _initCacheDir();
       final videoHash = md5.convert(utf8.encode(videoPath)).toString();
-      print('PreviewService: getVideoProgress - video hash: $videoHash');
 
       // 首先检查内存缓存
       final cacheKey = _getCacheKey(videoPath);
@@ -905,18 +908,12 @@ class PreviewService {
 
       // 然后检查文件缓存
       final files = _cacheDir!.listSync();
-      print(
-        'PreviewService: getVideoProgress - total files in cache: ${files.length}',
-      );
 
       // 计算该视频的缓存文件数量
       int fileCount = 0;
       for (final file in files) {
         if (file is File && file.path.contains(videoHash)) {
           fileCount++;
-          print(
-            'PreviewService: getVideoProgress - found cache file: ${file.path.split('/').last}',
-          );
         }
       }
 
@@ -924,10 +921,6 @@ class PreviewService {
       final actualCacheCount = memoryCount > fileCount
           ? memoryCount
           : fileCount;
-
-      print(
-        'PreviewService: getVideoProgress - memory count: $memoryCount, file count: $fileCount, using: $actualCacheCount',
-      );
 
       // 如果正在生成中，显示更高的进度
       final isGenerating = _preGenerating[cacheKey] == true;
@@ -980,10 +973,6 @@ class PreviewService {
         }
 
         final clampedProgress = progress.clamp(0.0, 1.0);
-
-        print(
-          'PreviewService: getVideoProgress - progress: ${(clampedProgress * 100).toStringAsFixed(1)}% ($actualCacheCount/$expectedKeyframes, generating: $isGenerating)',
-        );
         return clampedProgress;
       } else if (fileCount > 0) {
         // 如果内存中没有数据，但有文件缓存，基于文件数量估算
@@ -1013,18 +1002,11 @@ class PreviewService {
           );
         }
 
-        final progress = actualCacheCount / expectedKeyframes;
+        final progress = fileCount / expectedKeyframes;
         final clampedProgress = progress.clamp(0.0, 1.0);
-
-        print(
-          'PreviewService: getVideoProgress - progress: ${(clampedProgress * 100).toStringAsFixed(1)}% ($actualCacheCount/$expectedKeyframes, from file cache)',
-        );
         return clampedProgress;
       } else {
         // 如果没有任何缓存信息，返回0
-        print(
-          'PreviewService: getVideoProgress - no cache found, returning 0%',
-        );
         return 0.0;
       }
     } catch (e) {

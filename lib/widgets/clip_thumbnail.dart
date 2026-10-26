@@ -35,10 +35,15 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
   @override
   void initState() {
     super.initState();
-    _loadPreviewStatus();
+    final isOnline = widget.clip.videoPath.startsWith('http://') ||
+        widget.clip.videoPath.startsWith('https://');
 
-    // 只在进度未完成时启动定时器，减少不必要的检测
-    if (!_isProgressComplete) {
+    if (isOnline) {
+      _previewProgress = 1.0;
+      _isProgressComplete = true;
+    } else {
+      _loadPreviewStatus();
+      // 只在本地视频进度未完成时启动定时器，减少不必要的检测
       _progressTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
         if (mounted && !_isProgressComplete && _previewProgress < 1.0) {
           _loadPreviewStatus();

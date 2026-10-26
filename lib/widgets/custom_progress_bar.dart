@@ -478,8 +478,11 @@ class _CustomProgressBarState extends State<CustomProgressBar> {
   void initState() {
     super.initState();
 
-    // 只在需要时启动进度更新定时器
-    if (widget.showThumbnailPreview && widget.videoPath != null) {
+    // 只在需要时启动进度更新定时器（在线网络流跳过）
+    final isOnline = widget.videoPath != null &&
+        (widget.videoPath!.startsWith('http://') ||
+            widget.videoPath!.startsWith('https://'));
+    if (widget.showThumbnailPreview && widget.videoPath != null && !isOnline) {
       _progressTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
         if (mounted && _previewProgress < 1.0) {
           _updatePreviewProgress();
