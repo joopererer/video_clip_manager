@@ -93,7 +93,7 @@ class FrameEmbeddingPool {
   Future<File> _getFile(String videoPathOrUrl, {String? customDir}) async {
     final dir = await _getStorageDir(customDir: customDir);
     final key = computeVideoKey(videoPathOrUrl);
-    return File(p.join(dir.path, '.json'));
+    return File(p.join(dir.path, '$key.json'));
   }
 
   /// 从磁盘加载缓存

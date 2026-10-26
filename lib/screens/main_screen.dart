@@ -11,6 +11,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../data/app_state.dart';
 import '../data/models.dart';
 import '../utils/tag_utils.dart';
+import '../utils/toast_utils.dart';
 import '../services/preview_service.dart'; // 添加预览服务导入
 import '../services/thumbnail_service.dart'; // 添加缩略图服务导入
 import 'tabs/videos_tab.dart';
@@ -124,6 +125,26 @@ class _MainScreenState extends State<MainScreen>
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _executeSemanticSearch(String query) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return;
+
+    final appState = context.read<AppState>();
+    await appState.performSemanticSearch(query: trimmed, modelDir: 'models');
+
+    if (!mounted) return;
+    if (appState.lastSemanticError != null) {
+      ToastUtils.showWarning(context, 'AI 语义检索异常: ${appState.lastSemanticError}');
+    } else if (appState.semanticScores.isEmpty) {
+      ToastUtils.showInfo(context, '未匹配到相似度高于阈值的视频帧');
+    } else {
+      ToastUtils.showSuccess(
+        context,
+        '✨ 语义检索成功！命中 ${appState.semanticScores.length} 个相关片段（已高亮最佳帧）',
+      );
+    }
   }
 
   void _handleVideoDrop(List<XFile> files) {
@@ -555,9 +576,7 @@ class _MainScreenState extends State<MainScreen>
                         child: TextField(
                           controller: _searchController,
                           onSubmitted: (val) {
-                            if (val.trim().isNotEmpty) {
-                              appState.performSemanticSearch(query: val, modelDir: 'models');
-                            }
+                            _executeSemanticSearch(val);
                           },
                           decoration: InputDecoration(
                             labelText: 'Search title, notes, tags or AI semantic query...',
@@ -716,10 +735,7 @@ class _MainScreenState extends State<MainScreen>
                                               size: 20,
                                             ),
                                             tooltip: 'AI 语义多模态检索',
-                                            onPressed: () => appState.performSemanticSearch(
-                                              query: _searchQuery,
-                                              modelDir: 'models',
-                                            ),
+                                            onPressed: () => _executeSemanticSearch(_searchQuery),
                                           ),
                                   if (_searchQuery.isNotEmpty)
                                     IconButton(

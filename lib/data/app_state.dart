@@ -41,6 +41,8 @@ class AppState extends ChangeNotifier {
   bool _isSemanticSearching = false;
   bool get isSemanticSearching => _isSemanticSearching;
   Map<String, MaxSimResult> get semanticScores => Map.unmodifiable(_semanticScores);
+  String? _lastSemanticError;
+  String? get lastSemanticError => _lastSemanticError;
 
   // VLM 视觉大模型配置
   String get vlmMode => _prefs.getString('vlm_mode') ?? 'ollama';
@@ -235,6 +237,11 @@ class AppState extends ChangeNotifier {
 
       _generateOriginalVideosIfNeeded();
       notifyListeners();
+
+      // 异步预加载母视频已有的关键帧向量缓存
+      for (final video in _originalVideos) {
+        unawaited(_framePool.loadFromDisk(video.path));
+      }
 
       await _populateMissingMetadataAndThumbnails();
     } catch (e) {
@@ -740,15 +747,17 @@ class AppState extends ChangeNotifier {
     required String query,
     required String modelDir,
     String? ortLib,
-    double minScore = 0.35,
+    double minScore = 0.28,
   }) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) {
       _semanticScores.clear();
+      _lastSemanticError = null;
       notifyListeners();
       return;
     }
 
+    _lastSemanticError = null;
     _isSemanticSearching = true;
     notifyListeners();
 
@@ -763,11 +772,36 @@ class AppState extends ChangeNotifier {
       _semanticScores.clear();
 
       for (final clip in _clips) {
-        final frames = _framePool.getFramesInRange(
+        // 1. 优先加载磁盘中的母视频帧池缓存
+        if (_framePool.getCachedTimestamps(clip.videoPath).isEmpty) {
+          await _framePool.loadFromDisk(clip.videoPath);
+        }
+
+        var frames = _framePool.getFramesInRange(
           clip.videoPath,
           clip.startTime.inMilliseconds,
           clip.endTime.inMilliseconds,
         );
+
+        // 2. 若本地片段尚未抽取过帧嵌入，按需自动补全抽取并计算
+        if (frames.isEmpty &&
+            !clip.videoPath.startsWith('http://') &&
+            !clip.videoPath.startsWith('https://') &&
+            File(clip.videoPath).existsSync()) {
+          try {
+            frames = await _deltaEngine.syncClipRange(
+              videoPathOrUrl: clip.videoPath,
+              startMs: clip.startTime.inMilliseconds,
+              endMs: clip.endTime.inMilliseconds,
+              modelDir: modelDir,
+              ortLib: ortLib,
+            );
+          } catch (syncErr) {
+            debugPrint('[AppState] Auto-sync clip frames on search error: $syncErr');
+          }
+        }
+
+        // 3. 计算 MaxSim 相似度
         if (frames.isNotEmpty) {
           final maxSim = _deltaEngine.computeMaxSim(
             queryVector: queryVec,
@@ -779,6 +813,7 @@ class AppState extends ChangeNotifier {
         }
       }
     } catch (e) {
+      _lastSemanticError = e.toString().replaceFirst('Exception: ', '');
       debugPrint('[AppState] performSemanticSearch error: $e');
     } finally {
       _isSemanticSearching = false;

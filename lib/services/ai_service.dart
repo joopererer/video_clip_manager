@@ -428,8 +428,8 @@ class AiService {
           body: jsonEncode(payload),
         )
         .timeout(
-          const Duration(seconds: 60),
-          onTimeout: () => throw Exception('连接 VLM 服务超时 (60s)，请检查服务运行状态'),
+          const Duration(seconds: 180),
+          onTimeout: () => throw Exception('连接 VLM 服务超时 (180s)。首次加载本地多模态大模型至显存可能需要较长时间，请稍后重试或检查服务状态'),
         );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
