@@ -1,0 +1,46 @@
+{
+  "baseline_commit": "1993962",
+  "commands": [
+    {
+      "command": "dart format --output=none --set-exit-if-changed (10 touched Dart files)",
+      "exit": 0,
+      "log": "format-final.txt",
+      "environment": null
+    },
+    {
+      "command": "flutter pub get",
+      "exit": 0,
+      "log": "pub-get.txt",
+      "environment": null
+    },
+    {
+      "command": "flutter analyze",
+      "exit": 1,
+      "log": "analyze-final.txt",
+      "environment": null
+    },
+    {
+      "command": "flutter test",
+      "exit": 0,
+      "log": "test-final.txt",
+      "environment": "TEMP and TMP set only for this process to D:/workspace/FlutterProjects/video_clip_manager/build/stage2_tmp"
+    },
+    {
+      "command": "flutter build windows --debug -t test/fixtures/stage2_desktop_fixture.dart",
+      "exit": 0,
+      "log": "build-windows-fixture.txt",
+      "environment": null
+    },
+    {
+      "command": "flutter build windows --debug",
+      "exit": 0,
+      "log": "build-windows-final.txt",
+      "environment": "TEMP and TMP set only for this process to D:/workspace/FlutterProjects/video_clip_manager/build/stage2_tmp"
+    }
+  ],
+  "prior_failed_attempt": {
+    "command": "flutter test",
+    "reason": "Windows temporary C: disk exhausted (errno 112); abandoned stalled attempt and reran successfully with D: TEMP/TMP",
+    "log": "test-disk-full.txt"
+  }
+}

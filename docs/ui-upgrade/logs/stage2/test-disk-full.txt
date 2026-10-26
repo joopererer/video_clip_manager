@@ -1,0 +1,18 @@
+00:00 +0: loading D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart
+00:00 +0 -1: loading D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart [E]
+  FileSystemException: Cannot copy file to 'C:\Users\UNIVAS~1\AppData\Local\Temp\flutter_tools.e479c903\flutter_test_listener.e2d05e5\listener.dart.dill', path = 'C:\Users\UNIVAS~1\AppData\Local\Temp\flutter_tools.e479c903\flutter_test_compiler.e9ec39b3\output.dill' (OS Error: 磁盘空间不足。, errno = 112)
+  dart:io/common.dart 58:9                                  _checkForErrorResponse
+  dart:io/file_impl.dart 406:7                              _File.copy.<fn>
+  dart:async/zone_root.dart 48:47                           _rootRunUnary
+  dart:async/zone.dart 733:19                               _CustomZone.runUnary
+  ===== asynchronous gap ===========================
+  package:file/src/forwarding/forwarding_file.dart 29:51    ForwardingFile.copy
+  ===== asynchronous gap ===========================
+  package:file/src/forwarding/forwarding_file.dart 29:51    ForwardingFile.copy
+  ===== asynchronous gap ===========================
+  package:flutter_tools/src/test/test_compiler.dart 266:41  TestCompiler._onCompilationRequest
+
+00:00 +0 -1: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests resolveCliPath finds compiled local-media-ai executable
+00:00 +1 -1: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:00 +2 -1: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests generateCaption parses structured output correctly
+00:00 +3 -1: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests sanitizeTags strips punctuation, splits clauses and extracts atomic keywords
