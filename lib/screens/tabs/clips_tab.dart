@@ -755,7 +755,7 @@ class _ClipListItemState extends State<ClipListItem> {
         child: InkWell(
           onTap: widget.onPlay,
           child: Container(
-            height: 90, // 增加高度以避免溢出
+            constraints: const BoxConstraints(minHeight: 90),
             padding: const EdgeInsets.all(12.0),
             child: Row(
               children: [
@@ -803,6 +803,70 @@ class _ClipListItemState extends State<ClipListItem> {
                             color: Colors.grey,
                           ),
                         ),
+                        if (widget.clip.hitTimestampMs != null) ...[
+                          const SizedBox(height: 2),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade700,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.location_searching,
+                                      size: 10,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      '命中: ${formatDuration(Duration(milliseconds: widget.clip.hitTimestampMs!))}',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (widget.clip.aiSummary != null &&
+                                  widget.clip.aiSummary!.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    '✨ ${widget.clip.aiSummary!}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.teal.shade700,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ] else if (widget.clip.aiSummary != null &&
+                            widget.clip.aiSummary!.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '✨ ${widget.clip.aiSummary!}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.teal.shade700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                         if (widget.clip.tags.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Wrap(

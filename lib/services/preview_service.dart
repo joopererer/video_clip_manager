@@ -426,9 +426,6 @@ class PreviewService {
     }
 
     if (nearestTime != null) {
-      print(
-        'PreviewService: Using keyframe at $nearestTime for time $time (diff: ${minDifference!.inSeconds}s)',
-      );
       return keyframes[nearestTime];
     }
 
