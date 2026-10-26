@@ -132,7 +132,45 @@ class _MainScreenState extends State<MainScreen>
     if (trimmed.isEmpty) return;
 
     final appState = context.read<AppState>();
-    await appState.performSemanticSearch(query: trimmed, modelDir: 'models');
+    final modelDir = await appState.aiService.resolveEmbeddingModelDir();
+    if (modelDir == null) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.auto_awesome, color: Colors.purple),
+              SizedBox(width: 8),
+              Text('语义检索模型未就绪'),
+            ],
+          ),
+          content: const Text(
+            '自然语言跨模态视频画面检索需要本地嵌入模型 (EmbeddingGemma 2，约 530MB)。\n\n检测到当前尚未下载该模型，是否前往 AI 设置一键下载？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('稍后再说'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.download),
+              label: const Text('立即前往下载'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                showDialog(
+                  context: context,
+                  builder: (_) => const AiSettingsDialog(),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    await appState.performSemanticSearch(query: trimmed, modelDir: modelDir);
 
     if (!mounted) return;
     if (appState.lastSemanticError != null) {

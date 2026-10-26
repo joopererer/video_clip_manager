@@ -25,6 +25,10 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
   String? _downloadProgress;
   bool _localModelsReady = false;
   String? _localModelPath;
+  bool _embeddingModelReady = false;
+  String? _embeddingModelPath;
+  bool _isDownloadingEmbeddingModel = false;
+  String? _embeddingDownloadProgress;
   String? _testResult;
   bool _testSuccess = false;
 
@@ -70,6 +74,90 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
     _apiKeyController = TextEditingController(text: appState.vlmApiKey);
     _modelController = TextEditingController(text: appState.vlmModel);
     _checkLocalModelStatus();
+    _checkEmbeddingModelStatus();
+  }
+
+  Future<void> _checkEmbeddingModelStatus() async {
+    final appState = context.read<AppState>();
+    final dir = await appState.aiService.resolveEmbeddingModelDir();
+    if (mounted) {
+      setState(() {
+        _embeddingModelReady = dir != null;
+        _embeddingModelPath = dir;
+      });
+    }
+  }
+
+  Future<void> _downloadEmbeddingModel() async {
+    setState(() {
+      _isDownloadingEmbeddingModel = true;
+      _embeddingDownloadProgress = '正在启动下载脚本，从国内高速镜像拉取 EmbeddingGemma2 向量模型 (约 530MB)...';
+    });
+
+    try {
+      final scriptCandidates = [
+        r'scripts\fetch_embedding_models.ps1',
+        r'D:\workspace\IdeaProjects\video_clip_manager\scripts\fetch_embedding_models.ps1',
+        r'D:\workspace\FlutterProjects\video_clip_manager\scripts\fetch_embedding_models.ps1',
+        r'D:\workspace\local-media-ai\scripts\fetch_embedding_models.ps1',
+      ];
+      String? scriptPath;
+      for (final s in scriptCandidates) {
+        if (File(s).existsSync()) {
+          scriptPath = s;
+          break;
+        }
+      }
+
+      if (scriptPath == null) {
+        throw Exception('未找到下载脚本 scripts/fetch_embedding_models.ps1');
+      }
+
+      final proc = await Process.start(
+        'powershell',
+        [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          scriptPath,
+          '-OutDir',
+          'models',
+          '-Mirror',
+          'https://hf-mirror.com',
+        ],
+      );
+
+      proc.stdout.transform(const SystemEncoding().decoder).listen((data) {
+        if (mounted) {
+          setState(() {
+            _embeddingDownloadProgress = data.trim();
+          });
+        }
+      });
+
+      final exitCode = await proc.exitCode;
+      if (exitCode == 0) {
+        await _checkEmbeddingModelStatus();
+        if (mounted) {
+          setState(() {
+            _embeddingDownloadProgress = 'Embedding 向量模型下载完成并通过哈希校验！本地已就绪。';
+          });
+        }
+      } else {
+        throw Exception('下载退出代码: $exitCode');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _embeddingDownloadProgress = '下载异常: $e';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloadingEmbeddingModel = false);
+      }
+    }
   }
 
   Future<void> _checkLocalModelStatus() async {
@@ -317,6 +405,78 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // --- 1. 多模态语义检索模型 (EmbeddingGemma 2) 卡片 ---
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: _embeddingModelReady ? Colors.teal.shade50 : Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _embeddingModelReady ? Colors.teal.shade200 : Colors.amber.shade200,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  _embeddingModelReady ? Icons.check_circle : Icons.download_for_offline,
+                                  color: _embeddingModelReady ? Colors.teal.shade700 : Colors.amber.shade800,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _embeddingModelReady
+                                        ? '语义检索模型已就绪 (EmbeddingGemma 2 ONNX, 约 530MB)'
+                                        : '语义检索模型尚未下载 (EmbeddingGemma 2 ONNX, 约 530MB)',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: _embeddingModelReady ? Colors.teal.shade900 : Colors.amber.shade900,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _embeddingModelReady
+                                  ? '路径: $_embeddingModelPath\n已支持自然语言秒搜关键帧画面（触发 HIT 徽章）'
+                                  : '用于在搜索框输入自然语言查找视频特定画面与 HIT 最佳帧高亮。新用户点击下方一键下载：',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _embeddingModelReady ? Colors.teal.shade800 : Colors.amber.shade900,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (_embeddingDownloadProgress != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: Text(
+                                  _embeddingDownloadProgress!,
+                                  style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
+                                ),
+                              ),
+                            FilledButton.tonalIcon(
+                              icon: _isDownloadingEmbeddingModel
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : Icon(_embeddingModelReady ? Icons.refresh : Icons.download, size: 16),
+                              label: Text(_isDownloadingEmbeddingModel
+                                  ? '正在高速下载并校验...'
+                                  : (_embeddingModelReady ? '重新校验 / 更新模型文件' : '一键下载语义检索模型 (国内镜像)')),
+                              onPressed: _isDownloadingEmbeddingModel ? null : _downloadEmbeddingModel,
+                            ),
+                          ],
+                        ),
+                      ),
+
                       const Text(
                         '服务模式 / 预设模板',
                         style: TextStyle(fontWeight: FontWeight.bold),

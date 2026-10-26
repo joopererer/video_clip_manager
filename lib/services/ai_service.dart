@@ -233,6 +233,14 @@ class AiService {
     String? ortLib,
   }) async {
     final cli = await resolveCliPath();
+    var effectiveModelDir = modelDir;
+    if (!File(p.join(effectiveModelDir, 'tokenizer.json')).existsSync()) {
+      final autoDir = await resolveEmbeddingModelDir();
+      if (autoDir != null) {
+        effectiveModelDir = autoDir;
+      }
+    }
+
     final args = [
       'embed-text',
       '--text',
@@ -240,7 +248,7 @@ class AiService {
       '--prefix',
       prefix,
       '--model-dir',
-      modelDir,
+      effectiveModelDir,
     ];
     final resolvedOrt = ortLib ?? await resolveOrtLibPath();
     if (resolvedOrt != null && resolvedOrt.isNotEmpty) {
@@ -280,6 +288,14 @@ class AiService {
   }) async {
     if (frames.isEmpty) return [];
     final cli = await resolveCliPath();
+    var effectiveModelDir = modelDir;
+    if (!File(p.join(effectiveModelDir, 'tokenizer.json')).existsSync()) {
+      final autoDir = await resolveEmbeddingModelDir();
+      if (autoDir != null) {
+        effectiveModelDir = autoDir;
+      }
+    }
+
     final framesPayload = jsonEncode(frames.map((f) => f.toJson()).toList());
 
     final args = [
@@ -287,7 +303,7 @@ class AiService {
       '--frames-json',
       framesPayload,
       '--model-dir',
-      modelDir,
+      effectiveModelDir,
       '--soft-tokens',
       softTokens.toString(),
     ];
@@ -645,6 +661,26 @@ class AiService {
           'model': modelFile.path,
           'mmproj': mmprojFile.path,
         };
+      }
+    }
+    return null;
+  }
+
+  /// 检测多模态语义检索 (EmbeddingGemma 2 ONNX) 模型文件是否就绪
+  Future<String?> resolveEmbeddingModelDir() async {
+    final searchDirs = [
+      'models',
+      r'models\embeddinggemma2',
+      r'D:\workspace\IdeaProjects\video_clip_manager\models',
+      r'D:\workspace\FlutterProjects\video_clip_manager\models',
+      r'D:\workspace\local-media-ai\runtime\models',
+    ];
+
+    for (final dir in searchDirs) {
+      final tokenizer = File(p.join(dir, 'tokenizer.json'));
+      final onnxModel = File(p.join(dir, 'onnx', 'model_quantized.onnx'));
+      if (tokenizer.existsSync() && onnxModel.existsSync()) {
+        return Directory(dir).absolute.path;
       }
     }
     return null;
