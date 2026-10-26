@@ -358,6 +358,9 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final embeddingStats = appState.getEmbeddingStats();
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
@@ -472,6 +475,128 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
                                   ? '正在高速下载并校验...'
                                   : (_embeddingModelReady ? '重新校验 / 更新模型文件' : '一键下载语义检索模型 (国内镜像)')),
                               onPressed: _isDownloadingEmbeddingModel ? null : _downloadEmbeddingModel,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // --- 2. 片段语义特征向量库 (Frame Embeddings Pool) 卡片 ---
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo.shade50.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.indigo.shade200,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.view_array_rounded,
+                                  color: Colors.indigo.shade700,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '片段特征向量库 (Embeddings Pool)',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: Colors.indigo.shade900,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: embeddingStats['indexed'] == embeddingStats['total'] && (embeddingStats['total'] ?? 0) > 0
+                                        ? Colors.green.shade100
+                                        : Colors.indigo.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '已索引 ${embeddingStats['indexed']} / ${embeddingStats['total']} 片段',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: embeddingStats['indexed'] == embeddingStats['total'] && (embeddingStats['total'] ?? 0) > 0
+                                          ? Colors.green.shade900
+                                          : Colors.indigo.shade900,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '已缓存特征向量: ${embeddingStats['totalFrames']} 帧 (按 2 秒间隔提取画面特征并转化为 768 维向量)。\n'
+                              '• 保存/编辑片段时：后台静默增量同步，零打扰。\n'
+                              '• 搜索框检索时：未索引片段将自动按需补全。',
+                              style: TextStyle(
+                                fontSize: 11,
+                                height: 1.4,
+                                color: Colors.indigo.shade900,
+                              ),
+                            ),
+                            if (appState.isIndexingEmbeddings) ...[
+                              const SizedBox(height: 10),
+                              LinearProgressIndicator(
+                                value: appState.indexingProgress > 0 ? appState.indexingProgress : null,
+                                backgroundColor: Colors.indigo.shade100,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.indigo.shade600),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                appState.indexingStatus ?? '正在提取片段关键帧特征...',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.indigo.shade800,
+                                ),
+                              ),
+                            ] else if (appState.indexingStatus != null) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                appState.indexingStatus!,
+                                style: const TextStyle(fontSize: 11, color: Colors.teal),
+                              ),
+                            ],
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                FilledButton.tonalIcon(
+                                  icon: appState.isIndexingEmbeddings
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.bolt, size: 16),
+                                  label: Text(appState.isIndexingEmbeddings
+                                      ? '正在构建特征库 (${(appState.indexingProgress * 100).toInt()}%)...'
+                                      : (embeddingStats['indexed'] == embeddingStats['total'] && (embeddingStats['total'] ?? 0) > 0
+                                          ? '重新扫描并增量同步特征'
+                                          : '一键为所有片段构建特征向量')),
+                                  onPressed: appState.isIndexingEmbeddings || !_embeddingModelReady
+                                      ? null
+                                      : () async {
+                                          await appState.indexAllClips();
+                                        },
+                                ),
+                                if (!_embeddingModelReady) ...[
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    '(请先下载上方模型)',
+                                    style: TextStyle(fontSize: 11, color: Colors.amber),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
                         ),

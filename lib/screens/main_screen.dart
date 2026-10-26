@@ -618,6 +618,12 @@ class _MainScreenState extends State<MainScreen>
                           },
                           decoration: InputDecoration(
                             labelText: 'Search title, notes, tags or AI semantic query...',
+                            helperText: appState.searchStatus,
+                            helperStyle: TextStyle(
+                              color: Colors.purple.shade700,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 11,
+                            ),
                             prefixIcon: const Icon(Icons.search),
                             suffixIcon: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,

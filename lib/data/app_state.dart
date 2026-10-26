@@ -40,9 +40,19 @@ class AppState extends ChangeNotifier {
   final Map<String, MaxSimResult> _semanticScores = {};
   bool _isSemanticSearching = false;
   bool get isSemanticSearching => _isSemanticSearching;
+  String? _searchStatus;
+  String? get searchStatus => _searchStatus;
   Map<String, MaxSimResult> get semanticScores => Map.unmodifiable(_semanticScores);
   String? _lastSemanticError;
   String? get lastSemanticError => _lastSemanticError;
+
+  // 全局特征索引库状态
+  bool _isIndexingEmbeddings = false;
+  bool get isIndexingEmbeddings => _isIndexingEmbeddings;
+  double _indexingProgress = 0.0;
+  double get indexingProgress => _indexingProgress;
+  String? _indexingStatus;
+  String? get indexingStatus => _indexingStatus;
 
   // VLM 视觉大模型配置
   String get vlmMode => _prefs.getString('vlm_mode') ?? 'ollama';
@@ -753,12 +763,14 @@ class AppState extends ChangeNotifier {
     if (trimmed.isEmpty) {
       _semanticScores.clear();
       _lastSemanticError = null;
+      _searchStatus = null;
       notifyListeners();
       return;
     }
 
     _lastSemanticError = null;
     _isSemanticSearching = true;
+    _searchStatus = '正在将查询词转化为 768 维语义向量...';
     notifyListeners();
 
     try {
@@ -771,7 +783,9 @@ class AppState extends ChangeNotifier {
 
       _semanticScores.clear();
 
-      for (final clip in _clips) {
+      for (int i = 0; i < _clips.length; i++) {
+        final clip = _clips[i];
+
         // 1. 优先加载磁盘中的母视频帧池缓存
         if (_framePool.getCachedTimestamps(clip.videoPath).isEmpty) {
           await _framePool.loadFromDisk(clip.videoPath);
@@ -788,6 +802,9 @@ class AppState extends ChangeNotifier {
             !clip.videoPath.startsWith('http://') &&
             !clip.videoPath.startsWith('https://') &&
             File(clip.videoPath).existsSync()) {
+          _searchStatus = '正在提取未索引片段的画面特征 (${i + 1}/${_clips.length})...';
+          notifyListeners();
+
           try {
             frames = await _deltaEngine.syncClipRange(
               videoPathOrUrl: clip.videoPath,
@@ -817,6 +834,80 @@ class AppState extends ChangeNotifier {
       debugPrint('[AppState] performSemanticSearch error: $e');
     } finally {
       _isSemanticSearching = false;
+      _searchStatus = null;
+      notifyListeners();
+    }
+  }
+
+  /// 获取已完成语义特征构建的片段数量统计 (已索引数, 总片段数, 总缓存帧数)
+  Map<String, int> getEmbeddingStats() {
+    int indexed = 0;
+    int totalFrames = 0;
+    for (final clip in _clips) {
+      final frames = _framePool.getFramesInRange(
+        clip.videoPath,
+        clip.startTime.inMilliseconds,
+        clip.endTime.inMilliseconds,
+      );
+      if (frames.isNotEmpty) {
+        indexed++;
+        totalFrames += frames.length;
+      }
+    }
+    return {
+      'indexed': indexed,
+      'total': _clips.length,
+      'totalFrames': totalFrames,
+    };
+  }
+
+  /// 全局一键为所有本地片段扫描并增量构建向量索引
+  Future<void> indexAllClips({
+    void Function(int current, int total, String clipName)? onProgress,
+  }) async {
+    if (_isIndexingEmbeddings) return;
+    _isIndexingEmbeddings = true;
+    _indexingProgress = 0.0;
+    _indexingStatus = '准备构建语义特征向量库...';
+    notifyListeners();
+
+    try {
+      final modelDir = await _aiService.resolveEmbeddingModelDir() ?? 'models';
+      final localClips = _clips.where((c) =>
+          !c.videoPath.startsWith('http://') &&
+          !c.videoPath.startsWith('https://') &&
+          File(c.videoPath).existsSync()).toList();
+
+      if (localClips.isEmpty) {
+        _indexingStatus = '暂无需要索引的本地片段。';
+        return;
+      }
+
+      for (int i = 0; i < localClips.length; i++) {
+        final clip = localClips[i];
+        _indexingProgress = (i + 1) / localClips.length;
+        _indexingStatus = '正在提取关键帧特征 (${i + 1}/${localClips.length}): ${clip.name}';
+        notifyListeners();
+        onProgress?.call(i + 1, localClips.length, clip.name);
+
+        // 先载入磁盘已有记录
+        if (_framePool.getCachedTimestamps(clip.videoPath).isEmpty) {
+          await _framePool.loadFromDisk(clip.videoPath);
+        }
+
+        // 增量规划与同步
+        await _deltaEngine.syncClipRange(
+          videoPathOrUrl: clip.videoPath,
+          startMs: clip.startTime.inMilliseconds,
+          endMs: clip.endTime.inMilliseconds,
+          modelDir: modelDir,
+        );
+      }
+      _indexingStatus = '所有本地片段语义向量构建完成！';
+    } catch (e) {
+      _indexingStatus = '索引构建中断: $e';
+    } finally {
+      _isIndexingEmbeddings = false;
       notifyListeners();
     }
   }
@@ -825,6 +916,7 @@ class AppState extends ChangeNotifier {
   void clearSemanticSearch() {
     if (_semanticScores.isNotEmpty) {
       _semanticScores.clear();
+      _searchStatus = null;
       notifyListeners();
     }
   }
