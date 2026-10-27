@@ -17,9 +17,10 @@ import time
 from PIL import ImageGrab
 
 ROOT = Path(__file__).resolve().parents[1]
-LOGS = ROOT / "docs/ui-upgrade/logs/stage2"
+STAGE = os.environ.get("VCM_STAGE", "stage2")
+LOGS = ROOT / f"docs/ui-upgrade/logs/{STAGE}"
 STATE = LOGS / "capture-session.json"
-OUT = ROOT / "docs/ui-upgrade/screenshots/stage2/windows"
+OUT = ROOT / f"docs/ui-upgrade/screenshots/{STAGE}/windows"
 USER = ctypes.windll.user32
 USER.SetProcessDPIAware()
 USER.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int,

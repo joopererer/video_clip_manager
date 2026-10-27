@@ -158,16 +158,16 @@ class _ClipListRowState extends State<ClipListRow> {
             padding: const EdgeInsets.all(8.0),
             decoration: BoxDecoration(
               color: widget.isSelected
-                  ? AppColors.primaryContainer.withValues(alpha: 0.28)
+                  ? colors.primaryContainer.withValues(alpha: 0.28)
                   : ((_isHovered || _hasFocus)
                         ? colors.surfaceHighlight.withValues(alpha: 0.5)
                         : colors.surface),
               borderRadius: BorderRadius.circular(AppRadius.md),
               border: Border.all(
                 color: widget.isSelected
-                    ? AppColors.primary
+                    ? colors.primary
                     : ((_isHovered || _hasFocus)
-                          ? AppColors.primaryHover.withValues(alpha: 0.45)
+                          ? colors.primaryHover.withValues(alpha: 0.45)
                           : colors.border),
                 width: widget.isSelected ? 1.4 : 0.8,
               ),

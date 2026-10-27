@@ -8,6 +8,7 @@ import 'screens/main_screen.dart';
 import 'services/path_service.dart';
 import 'services/thumbnail_service.dart';
 import 'theme/app_theme.dart';
+import 'theme/theme_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,12 +27,14 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
 
   final thumbnailService = ThumbnailService(pathService: pathService);
+  final themeController = ThemeController(prefs);
 
   runApp(
     MultiProvider(
       providers: [
         Provider.value(value: pathService),
         Provider.value(value: thumbnailService),
+        ChangeNotifierProvider.value(value: themeController),
         ChangeNotifierProvider(
           create: (context) => AppState(
             prefs: prefs,
@@ -40,13 +43,15 @@ void main() async {
           )..loadInitialData(),
         ),
       ],
-      child: MaterialApp(
-        title: 'Video Clip Manager',
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.dark,
-        home: const MainScreen(),
-        debugShowCheckedModeBanner: false,
+      child: Consumer<ThemeController>(
+        builder: (context, theme, _) => MaterialApp(
+          title: 'Video Clip Manager',
+          theme: AppTheme.lightTheme,
+          darkTheme: theme.themeData,
+          themeMode: ThemeMode.dark,
+          home: const MainScreen(),
+          debugShowCheckedModeBanner: false,
+        ),
       ),
     ),
   );

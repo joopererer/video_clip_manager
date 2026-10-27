@@ -219,7 +219,7 @@ class _ClipsTabState extends State<ClipsTab> {
                           ),
                           decoration: BoxDecoration(
                             color: viewMode
-                                ? AppColors.primaryContainer
+                                ? colors.primaryContainer
                                 : Colors.transparent,
                             borderRadius: const BorderRadius.horizontal(
                               left: Radius.circular(AppRadius.sm),
@@ -228,9 +228,7 @@ class _ClipsTabState extends State<ClipsTab> {
                           child: Icon(
                             Icons.grid_view,
                             size: 17,
-                            color: viewMode
-                                ? AppColors.primaryHover
-                                : colors.textMuted,
+                            color: viewMode ? colors.primary : colors.textMuted,
                           ),
                         ),
                       ),
@@ -249,7 +247,7 @@ class _ClipsTabState extends State<ClipsTab> {
                           ),
                           decoration: BoxDecoration(
                             color: !viewMode
-                                ? AppColors.primaryContainer
+                                ? colors.primaryContainer
                                 : Colors.transparent,
                             borderRadius: const BorderRadius.horizontal(
                               right: Radius.circular(AppRadius.sm),
@@ -259,7 +257,7 @@ class _ClipsTabState extends State<ClipsTab> {
                             Icons.view_list,
                             size: 18,
                             color: !viewMode
-                                ? AppColors.primaryHover
+                                ? colors.primary
                                 : colors.textMuted,
                           ),
                         ),
@@ -301,7 +299,7 @@ class _ClipsTabState extends State<ClipsTab> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(option.icon, size: 14, color: AppColors.primary),
+                  Icon(option.icon, size: 14, color: colors.primary),
                   const SizedBox(width: 6),
                   Text(option.label),
                 ],
@@ -395,7 +393,7 @@ class _ClipsTabState extends State<ClipsTab> {
               (appState.selectedTags.isNotEmpty ||
                   appState.selectedRating != null ||
                   appState.selectedFavorite != null)
-              ? AppColors.primaryContainer.withValues(alpha: 0.6)
+              ? colors.primaryContainer.withValues(alpha: 0.6)
               : colors.surfaceElevated,
           borderRadius: BorderRadius.circular(AppRadius.sm),
           border: Border.all(
@@ -403,7 +401,7 @@ class _ClipsTabState extends State<ClipsTab> {
                 (appState.selectedTags.isNotEmpty ||
                     appState.selectedRating != null ||
                     appState.selectedFavorite != null)
-                ? AppColors.primary
+                ? colors.primary
                 : colors.borderSubtle,
           ),
         ),
@@ -417,7 +415,7 @@ class _ClipsTabState extends State<ClipsTab> {
                   (appState.selectedTags.isNotEmpty ||
                       appState.selectedRating != null ||
                       appState.selectedFavorite != null)
-                  ? AppColors.primaryHover
+                  ? colors.primaryHover
                   : colors.textSecondary,
             ),
             const SizedBox(width: 6),
@@ -430,7 +428,7 @@ class _ClipsTabState extends State<ClipsTab> {
                     (appState.selectedTags.isNotEmpty ||
                         appState.selectedRating != null ||
                         appState.selectedFavorite != null)
-                    ? AppColors.primaryHover
+                    ? colors.primaryHover
                     : colors.textPrimary,
               ),
             ),

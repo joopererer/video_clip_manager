@@ -18,6 +18,7 @@ class AppHeader extends StatelessWidget {
   final VoidCallback onOpenAiSettings;
   final VoidCallback onOpenScraperSettings;
   final VoidCallback onOpenAbout;
+  final VoidCallback? onOpenTheme;
   final String? searchStatus;
   final bool isNarrow;
 
@@ -37,6 +38,7 @@ class AppHeader extends StatelessWidget {
     required this.onOpenAiSettings,
     required this.onOpenScraperSettings,
     required this.onOpenAbout,
+    this.onOpenTheme,
     this.searchStatus,
     this.isNarrow = false,
   });
@@ -105,10 +107,7 @@ class AppHeader extends StatelessWidget {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(AppRadius.sm),
-                      borderSide: const BorderSide(
-                        color: AppColors.primary,
-                        width: 1.2,
-                      ),
+                      borderSide: BorderSide(color: colors.primary, width: 1.2),
                     ),
                   ),
                 ),
@@ -124,16 +123,16 @@ class AppHeader extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 180),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.primaryContainer.withValues(alpha: 0.6),
+                color: colors.primaryContainer.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(AppRadius.xs),
               ),
               child: Text(
                 searchStatus!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: AppColors.primaryHover,
+                  color: colors.primaryHover,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -168,7 +167,7 @@ class AppHeader extends StatelessWidget {
             icon: Icon(
               Icons.auto_awesome,
               size: 17,
-              color: hasSemanticScores ? AppColors.warning : AppColors.primary,
+              color: hasSemanticScores ? colors.warning : colors.primary,
             ),
             tooltip: '执行 AI 跨模态语义检索',
             onPressed: onTriggerSemanticSearch,
@@ -217,10 +216,13 @@ class AppHeader extends StatelessWidget {
                 case 4:
                   onOpenAbout();
                   break;
+                case 5:
+                  onOpenTheme?.call();
+                  break;
               }
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(
+            itemBuilder: (context) => [
+              const PopupMenuItem(
                 value: 0,
                 child: Row(
                   children: [
@@ -230,7 +232,7 @@ class AppHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 1,
                 child: Row(
                   children: [
@@ -271,6 +273,17 @@ class AppHeader extends StatelessWidget {
                   ],
                 ),
               ),
+              if (onOpenTheme != null)
+                const PopupMenuItem(
+                  value: 5,
+                  child: Row(
+                    children: [
+                      Icon(Icons.palette_outlined, size: 18),
+                      SizedBox(width: 8),
+                      Text('外观与配色'),
+                    ],
+                  ),
+                ),
             ],
           ),
         ],
@@ -332,6 +345,15 @@ class AppHeader extends StatelessWidget {
           onPressed: onOpenScraperSettings,
           visualDensity: VisualDensity.compact,
         ),
+        if (onOpenTheme != null) ...[
+          const SizedBox(width: AppSpacing.xxs),
+          IconButton(
+            icon: const Icon(Icons.palette_outlined, size: 19),
+            tooltip: '外观与配色',
+            onPressed: onOpenTheme,
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
         const SizedBox(width: AppSpacing.xxs),
         IconButton(
           icon: const Icon(Icons.info_outline, size: 19),

@@ -11,6 +11,7 @@ class AppSidebar extends StatelessWidget {
   final VoidCallback onOpenAiSettings;
   final VoidCallback onOpenScraperSettings;
   final VoidCallback onOpenAbout;
+  final VoidCallback? onOpenTheme;
   final VoidCallback onSwitchDb;
   final String currentDbName;
 
@@ -23,6 +24,7 @@ class AppSidebar extends StatelessWidget {
     required this.onOpenAiSettings,
     required this.onOpenScraperSettings,
     required this.onOpenAbout,
+    this.onOpenTheme,
     required this.onSwitchDb,
     required this.currentDbName,
   });
@@ -95,6 +97,14 @@ class AppSidebar extends StatelessWidget {
             tooltip: '外部视频嗅探与抓取配置',
             onTap: onOpenScraperSettings,
           ),
+          if (onOpenTheme != null)
+            _buildActionItem(
+              context,
+              icon: Icons.palette_outlined,
+              label: '外观配色',
+              tooltip: '选择预设配色或自定义强调色',
+              onTap: onOpenTheme!,
+            ),
           _buildActionItem(
             context,
             icon: Icons.info_outline,
@@ -131,12 +141,12 @@ class AppSidebar extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(AppSpacing.xxs),
             decoration: BoxDecoration(
-              color: AppColors.primaryContainer,
+              color: colors.primaryContainer,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.movie_filter_outlined,
-              color: AppColors.primary,
+              color: colors.primary,
               size: 20,
             ),
           ),
@@ -180,12 +190,12 @@ class AppSidebar extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isActive
-              ? AppColors.primary.withValues(alpha: 0.16)
+              ? colors.primary.withValues(alpha: 0.16)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(AppRadius.sm),
           border: isActive
               ? Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.35),
+                  color: colors.primary.withValues(alpha: 0.35),
                   width: 1.0,
                 )
               : null,
@@ -198,7 +208,7 @@ class AppSidebar extends StatelessWidget {
             Icon(
               isActive ? activeIcon : icon,
               size: 20,
-              color: isActive ? AppColors.primaryHover : colors.textSecondary,
+              color: isActive ? colors.primaryHover : colors.textSecondary,
             ),
             if (!isCollapsed) ...[
               const SizedBox(width: AppSpacing.sm),

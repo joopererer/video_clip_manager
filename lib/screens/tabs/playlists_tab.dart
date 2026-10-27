@@ -10,17 +10,19 @@ import '../player/playlist_playback_screen.dart';
 import '../../widgets/playlist_import_export_dialog.dart';
 import '../../services/preview_service.dart';
 import '../../services/screenshot_service.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
 
 class _PlaylistCardBase extends StatelessWidget {
-  final Playlist playlist;
   final bool isSelected;
+  final bool isHovered;
   final Widget child;
   final VoidCallback onTap;
   final ValueChanged<bool> onHover;
 
   const _PlaylistCardBase({
-    required this.playlist,
     required this.isSelected,
+    required this.isHovered,
     required this.child,
     required this.onTap,
     required this.onHover,
@@ -28,18 +30,28 @@ class _PlaylistCardBase extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
     return Card(
       clipBehavior: Clip.antiAlias,
       margin: const EdgeInsets.symmetric(vertical: 4.0),
-      color: isSelected ? Colors.purple.shade50 : null,
+      color: isSelected
+          ? c.primaryContainer.withValues(alpha: 0.35)
+          : (isHovered ? c.surfaceElevated : c.surface),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         side: BorderSide(
-          color: isSelected ? Colors.purple.shade300 : Colors.grey.shade300,
+          color: isSelected
+              ? c.primary
+              : (isHovered ? c.primaryHover.withValues(alpha: 0.45) : c.border),
           width: isSelected ? 1.5 : 1,
         ),
       ),
-      child: InkWell(onTap: onTap, onHover: onHover, child: child),
+      child: InkWell(
+        onTap: onTap,
+        onHover: onHover,
+        hoverColor: Colors.transparent,
+        child: child,
+      ),
     );
   }
 }
@@ -53,7 +65,18 @@ class PlaylistsTab extends StatefulWidget {
 }
 
 class _PlaylistsTabState extends State<PlaylistsTab> {
-  String? _selectedPlaylistId;
+  AppColorExtension get _c => context.appColors;
+
+  void _setHover(int index, bool hovering) {
+    final next = hovering
+        ? index
+        : (_hoveredIndex == index ? null : _hoveredIndex);
+    if (next != _hoveredIndex) setState(() => _hoveredIndex = next);
+  }
+
+  // 以列表位置而非 id 作为选中/悬停键：历史数据中可能存在空 id 或重复 id
+  int? _selectedIndex;
+  int? _hoveredIndex;
   bool _isImporting = false;
   bool _isExporting = false;
 
@@ -107,9 +130,9 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
       margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
       decoration: BoxDecoration(
-        color: Colors.purple.shade50,
+        color: _c.surface,
         borderRadius: BorderRadius.circular(8.0),
-        border: Border.all(color: Colors.purple.shade200, width: 0.5),
+        border: Border.all(color: _c.border, width: 0.5),
       ),
       child: Row(
         children: [
@@ -124,21 +147,21 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                   '播放列表',
                   '${playlists.length}',
                   Icons.playlist_play,
-                  Colors.purple.shade600,
+                  _c.primary,
                 ),
                 const SizedBox(width: 16),
                 _buildInfoItem(
                   '总时长',
                   _formatDuration(totalDuration),
                   Icons.access_time,
-                  Colors.blue.shade600,
+                  _c.info,
                 ),
                 const SizedBox(width: 16),
                 _buildInfoItem(
                   '总片段',
                   '$totalClips',
                   Icons.video_library,
-                  Colors.green.shade600,
+                  _c.success,
                 ),
               ],
             ),
@@ -159,12 +182,10 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Colors.purple.shade600,
-                      ),
+                      valueColor: AlwaysStoppedAnimation<Color>(_c.primary),
                     ),
                   )
-                : Icon(Icons.file_upload, size: 18),
+                : Icon(Icons.file_upload, size: 18, color: _c.textPrimary),
           ),
 
           const SizedBox(width: 24),
@@ -175,7 +196,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
             tooltip: '排序方式',
             icon: PopupMenuButton<String>(
               padding: EdgeInsets.zero,
-              icon: const Icon(Icons.sort, size: 18),
+              icon: Icon(Icons.sort, size: 18, color: _c.textPrimary),
               onSelected: (value) => appState.setPlaylistsSortBy(value),
               // OPTIMIZED: 使用Map动态生成菜单项
               itemBuilder: (context) => _sortOptions.entries.map((entry) {
@@ -186,7 +207,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                     children: [
                       Text(entry.value),
                       if (appState.playlistsSortBy == entry.key)
-                        const Icon(Icons.check, size: 16, color: Colors.green),
+                        Icon(Icons.check, size: 16, color: _c.success),
                     ],
                   ),
                 );
@@ -205,6 +226,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
             icon: Icon(
               appState.playlistsIsGridView ? Icons.list : Icons.grid_view,
               size: 18,
+              color: _c.textPrimary,
             ),
           ),
         ],
@@ -232,15 +254,18 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: _c.surfaceElevated,
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: Colors.purple.shade200, width: 0.5),
+            border: Border.all(color: _c.border),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(label, style: const TextStyle(fontSize: 12)),
+              Text(
+                label,
+                style: TextStyle(fontSize: 12, color: _c.textSecondary),
+              ),
               const SizedBox(width: 4),
               // The icon is placed in a SizedBox to ensure consistent layout
               SizedBox(
@@ -273,7 +298,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: Colors.grey.shade700,
+            color: _c.textSecondary,
           ),
         ),
       ],
@@ -285,9 +310,9 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
       child: Container(
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
+          color: _c.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: _c.border),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -296,14 +321,10 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.purple.shade100,
+                color: _c.primaryContainer,
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                Icons.playlist_play,
-                size: 48,
-                color: Colors.purple.shade600,
-              ),
+              child: Icon(Icons.playlist_play, size: 48, color: _c.primary),
             ),
             const SizedBox(height: 24),
             Text(
@@ -311,13 +332,13 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
+                color: _c.textSecondary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               '开始创建您的第一个播放列表',
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 14, color: _c.textSecondary),
             ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
@@ -325,8 +346,8 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
               icon: const Icon(Icons.add, size: 18),
               label: const Text('创建播放列表'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple.shade600,
-                foregroundColor: Colors.white,
+                backgroundColor: _c.primary,
+                foregroundColor: _c.onPrimary,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 12,
@@ -352,7 +373,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
       itemCount: playlists.length,
       itemBuilder: (context, index) {
         final playlist = playlists[index];
-        return _buildPlaylistCard(context, appState, playlist);
+        return _buildPlaylistCard(context, appState, playlist, index);
       },
     );
   }
@@ -373,7 +394,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
       itemCount: playlists.length,
       itemBuilder: (context, index) {
         final playlist = playlists[index];
-        return _buildPlaylistGridCard(context, appState, playlist);
+        return _buildPlaylistGridCard(context, appState, playlist, index);
       },
     );
   }
@@ -382,17 +403,16 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     BuildContext context,
     AppState appState,
     Playlist playlist,
+    int index,
   ) {
     return _PlaylistCardBase(
-      playlist: playlist,
-      isSelected: _selectedPlaylistId == playlist.id,
+      isSelected: _selectedIndex == index,
+      isHovered: _hoveredIndex == index,
       onTap: () {
-        setState(() => _selectedPlaylistId = playlist.id);
+        setState(() => _selectedIndex = index);
         _playPlaylist(context, appState, playlist);
       },
-      onHover: (hovering) {
-        if (hovering) setState(() => _selectedPlaylistId = playlist.id);
-      },
+      onHover: (hovering) => _setHover(index, hovering),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
         child: Row(
@@ -413,9 +433,10 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                       Expanded(
                         child: Text(
                           playlist.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 16,
+                            color: _c.textPrimary,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -430,7 +451,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                           playlist,
                           'play',
                         ),
-                        color: Colors.green.shade600,
+                        color: _c.success,
                       ),
                       const SizedBox(width: 8),
                       _buildActionButton(
@@ -442,7 +463,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                           playlist,
                           'edit',
                         ),
-                        color: Colors.blue.shade600,
+                        color: _c.info,
                       ),
                       const SizedBox(width: 8),
                       _buildActionButton(
@@ -454,7 +475,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                           playlist,
                           'manage',
                         ),
-                        color: Colors.orange.shade600,
+                        color: _c.warning,
                       ),
                       const SizedBox(width: 8),
                       PopupMenuButton<String>(
@@ -468,28 +489,25 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                         itemBuilder: (context) => [
                           PopupMenuItem(
                             value: 'export',
-                            child: const Row(
+                            child: Row(
                               children: [
                                 Icon(
                                   Icons.file_download,
-                                  color: Colors.blue,
+                                  color: _c.info,
                                   size: 18,
                                 ),
-                                SizedBox(width: 8),
-                                Text(
-                                  '导出',
-                                  style: TextStyle(color: Colors.blue),
-                                ),
+                                const SizedBox(width: 8),
+                                Text('导出', style: TextStyle(color: _c.info)),
                               ],
                             ),
                           ),
-                          const PopupMenuItem(
+                          PopupMenuItem(
                             value: 'delete',
                             child: Row(
                               children: [
-                                Icon(Icons.delete, color: Colors.red, size: 18),
-                                SizedBox(width: 8),
-                                Text('删除', style: TextStyle(color: Colors.red)),
+                                Icon(Icons.delete, color: _c.danger, size: 18),
+                                const SizedBox(width: 8),
+                                Text('删除', style: TextStyle(color: _c.danger)),
                               ],
                             ),
                           ),
@@ -501,10 +519,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                   if (playlist.description?.isNotEmpty ?? false) ...[
                     Text(
                       playlist.description!,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
+                      style: TextStyle(fontSize: 12, color: _c.textSecondary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -515,19 +530,19 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                       _buildStatItem(
                         Icons.video_library,
                         '${playlist.clipCount} 个片段',
-                        Colors.blue.shade600,
+                        _c.info,
                       ),
                       const SizedBox(width: 16),
                       _buildStatItem(
                         Icons.access_time,
                         _formatDuration(playlist.totalDuration),
-                        Colors.green.shade600,
+                        _c.success,
                       ),
                       const SizedBox(width: 16),
                       _buildStatItem(
                         Icons.calendar_today,
                         _formatDate(playlist.createdAt),
-                        Colors.orange.shade600,
+                        _c.warning,
                       ),
                     ],
                   ),
@@ -546,20 +561,19 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     BuildContext context,
     AppState appState,
     Playlist playlist,
+    int index,
   ) {
-    final isSelected = _selectedPlaylistId == playlist.id;
+    final isSelected = _selectedIndex == index;
     final itemsWithClips = appState.getPlaylistItemsWithClips(playlist.id);
 
     return _PlaylistCardBase(
-      playlist: playlist,
       isSelected: isSelected,
+      isHovered: _hoveredIndex == index,
       onTap: () {
-        setState(() => _selectedPlaylistId = playlist.id);
+        setState(() => _selectedIndex = index);
         _playPlaylist(context, appState, playlist);
       },
-      onHover: (hovering) {
-        if (hovering) setState(() => _selectedPlaylistId = playlist.id);
-      },
+      onHover: (hovering) => _setHover(index, hovering),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -585,7 +599,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                     if (itemsWithClips.isEmpty)
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
+                          color: _c.surfaceElevated,
                           borderRadius: const BorderRadius.only(
                             topLeft: Radius.circular(8),
                             topRight: Radius.circular(8),
@@ -594,7 +608,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                         child: Center(
                           child: Icon(
                             Icons.playlist_play,
-                            color: Colors.grey.shade400,
+                            color: _c.textMuted,
                             size: 48,
                           ),
                         ),
@@ -609,7 +623,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                         width: play_icon_size,
                         height: play_icon_size,
                         decoration: BoxDecoration(
-                          color: Colors.purple.shade600.withValues(alpha: 0.9),
+                          color: _c.primary.withValues(alpha: 0.9),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -635,7 +649,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                                 children: [
                                   _buildActionButton(
                                     icon: Icons.edit,
-                                    color: Colors.blue.shade600,
+                                    color: _c.info,
                                     tooltip: "编辑",
                                     onPressed: () => _handlePlaylistAction(
                                       context,
@@ -648,7 +662,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                                   const SizedBox(width: 4),
                                   _buildActionButton(
                                     icon: Icons.list,
-                                    color: Colors.orange.shade600,
+                                    color: _c.warning,
                                     tooltip: "管理片段",
                                     onPressed: () => _handlePlaylistAction(
                                       context,
@@ -661,7 +675,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                                   const SizedBox(width: 4),
                                   _buildActionButton(
                                     icon: Icons.file_download,
-                                    color: Colors.blue.shade600,
+                                    color: _c.info,
                                     tooltip: "导出",
                                     onPressed: () => _handlePlaylistAction(
                                       context,
@@ -675,7 +689,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                                   const SizedBox(width: 4),
                                   _buildActionButton(
                                     icon: Icons.delete,
-                                    color: Colors.red.shade600,
+                                    color: _c.danger,
                                     tooltip: "删除",
                                     onPressed: () => _handlePlaylistAction(
                                       context,
@@ -693,7 +707,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                               children: [
                                 _buildActionButton(
                                   icon: Icons.edit,
-                                  color: Colors.blue.shade600,
+                                  color: _c.info,
                                   tooltip: "编辑",
                                   onPressed: () => _handlePlaylistAction(
                                     context,
@@ -706,7 +720,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                                 const SizedBox(width: 4),
                                 _buildActionButton(
                                   icon: Icons.list,
-                                  color: Colors.orange.shade600,
+                                  color: _c.warning,
                                   tooltip: "管理片段",
                                   onPressed: () => _handlePlaylistAction(
                                     context,
@@ -719,7 +733,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                                 const SizedBox(width: 4),
                                 _buildActionButton(
                                   icon: Icons.file_download,
-                                  color: Colors.blue.shade600,
+                                  color: _c.info,
                                   tooltip: "导出",
                                   onPressed: () => _handlePlaylistAction(
                                     context,
@@ -733,7 +747,7 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                                 const SizedBox(width: 4),
                                 _buildActionButton(
                                   icon: Icons.delete,
-                                  color: Colors.red.shade600,
+                                  color: _c.danger,
                                   tooltip: "删除",
                                   onPressed: () => _handlePlaylistAction(
                                     context,
@@ -760,9 +774,10 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
               children: [
                 Text(
                   playlist.name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 18,
+                    color: _c.textPrimary,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -770,33 +785,25 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(
-                      Icons.video_library,
-                      size: 18,
-                      color: Colors.blue.shade600,
-                    ),
+                    Icon(Icons.video_library, size: 18, color: _c.info),
                     const SizedBox(width: 4),
                     Text(
                       '${playlist.clipCount}',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.blue.shade600,
+                        color: _c.info,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Icon(
-                      Icons.access_time,
-                      size: 18,
-                      color: Colors.green.shade600,
-                    ),
+                    Icon(Icons.access_time, size: 18, color: _c.success),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(
                         _formatDuration(playlist.totalDuration),
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.green.shade600,
+                          color: _c.success,
                           fontWeight: FontWeight.w500,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -942,13 +949,9 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
     Widget content;
     if (itemsWithClips.isEmpty) {
       content = Container(
-        color: Colors.grey.shade100,
+        color: _c.surfaceElevated,
         child: Center(
-          child: Icon(
-            Icons.playlist_play,
-            color: Colors.grey.shade400,
-            size: 24,
-          ),
+          child: Icon(Icons.playlist_play, color: _c.textMuted, size: 24),
         ),
       );
     } else {
@@ -1019,14 +1022,14 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
       return Container(
         height: 28,
         decoration: BoxDecoration(
-          color: Colors.grey.shade100,
+          color: _c.surfaceElevated,
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: _c.border),
         ),
         child: Center(
           child: Text(
             '暂无片段',
-            style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 10, color: _c.textSecondary),
           ),
         ),
       );
@@ -1037,9 +1040,9 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: _c.surfaceElevated,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: _c.border),
       ),
       child: PlaylistTimelineView(
         items: itemsWithClips,
@@ -1204,7 +1207,10 @@ class _PlaylistsTabState extends State<PlaylistsTab> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _c.danger,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('删除'),
           ),
         ],

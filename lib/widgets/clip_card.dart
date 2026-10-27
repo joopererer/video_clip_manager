@@ -159,16 +159,16 @@ class _ClipCardState extends State<ClipCard> {
               borderRadius: BorderRadius.circular(AppRadius.card),
               border: Border.all(
                 color: widget.isSelected
-                    ? AppColors.primary
+                    ? colors.primary
                     : ((_isHovered || _hasFocus)
-                          ? AppColors.primaryHover.withValues(alpha: 0.6)
+                          ? colors.primaryHover.withValues(alpha: 0.6)
                           : colors.border),
                 width: widget.isSelected ? 1.6 : 1.0,
               ),
               boxShadow: (_isHovered || _hasFocus)
                   ? [
                       BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.12),
+                        color: colors.primary.withValues(alpha: 0.12),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -259,8 +259,8 @@ class _ClipCardState extends State<ClipCard> {
                                       borderRadius: BorderRadius.circular(24),
                                       child: Container(
                                         padding: const EdgeInsets.all(10),
-                                        decoration: const BoxDecoration(
-                                          color: AppColors.primary,
+                                        decoration: BoxDecoration(
+                                          color: colors.primary,
                                           shape: BoxShape.circle,
                                         ),
                                         child: const Icon(

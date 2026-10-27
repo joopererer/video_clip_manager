@@ -18,6 +18,7 @@ import '../utils/toast_utils.dart';
 import '../widgets/ai_settings_dialog.dart';
 import '../widgets/common/app_header.dart';
 import '../widgets/common/app_sidebar.dart';
+import '../widgets/theme_picker_dialog.dart';
 import 'settings/external_scrapers_settings_screen.dart';
 import 'tabs/clips_tab.dart';
 import 'tabs/playlists_tab.dart';
@@ -213,6 +214,13 @@ class _MainScreenState extends State<MainScreen> {
     _showSnackBar('Added video: $videoName');
   }
 
+  void _showThemePicker() {
+    showDialog(
+      context: context,
+      builder: (context) => const ThemePickerDialog(),
+    );
+  }
+
   void _showAboutDialog() {
     showDialog(
       context: context,
@@ -322,6 +330,7 @@ class _MainScreenState extends State<MainScreen> {
                       );
                     },
                     onOpenAbout: _showAboutDialog,
+                    onOpenTheme: _showThemePicker,
                     onSwitchDb: () async {
                       final result = await appState.switchDatabase();
                       _showSnackBar(result);
@@ -387,6 +396,7 @@ class _MainScreenState extends State<MainScreen> {
                             );
                           },
                           onOpenAbout: _showAboutDialog,
+                          onOpenTheme: _showThemePicker,
                           searchStatus: appState.searchStatus,
                           isNarrow: constraints.maxWidth < 1050,
                         ),

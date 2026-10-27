@@ -1,0 +1,76 @@
+00:00 +0: loading D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart
+00:00 +0: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\stage2_test_deb6bd1/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:00 +1: Stage 2 Capture 2: Widget harness 1280x800 Clips List View
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\stage2_test_8c0ffc63/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:01 +2: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\stage2_test_73a2d67/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:01 +3: Stage 2 Capture 4: Active Search and Filter State
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\stage2_test_73e55d15/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:01 +4: Desktop interactions: hover, context menu, favorite, rating, reset
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\stage2_test_e3d0fa8a/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "播放片段": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure>.<anonymous closure> (file:///D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart:376:13)
+<asynchronous suspension>
+#5      _captureWidgetToFile (file:///D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart:94:5)
+<asynchronous suspension>
+#6      main.<anonymous closure> (file:///D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart:341:7)
+<asynchronous suspension>
+#7      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#8      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1682:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart line 376
+The test description was:
+  Desktop interactions: hover, context menu, favorite, rating, reset
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +4 -1: Desktop interactions: hover, context menu, favorite, rating, reset [E]
+  Test failed. See exception logs above.
+  The test description was: Desktop interactions: hover, context menu, favorite, rating, reset
+  
+00:02 +4 -1: Some tests failed.

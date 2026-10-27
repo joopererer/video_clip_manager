@@ -1,0 +1,11 @@
+00:00 +0: loading D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart
+00:00 +0: Desktop interactions: hover, context menu, favorite, rating, reset
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\stage2_test_c7909f97/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:01 +1: All tests passed!
