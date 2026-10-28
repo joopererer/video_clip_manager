@@ -1,0 +1,2 @@
+Building Windows application...                                   232.9s
+√ Built build\windows\x64\runner\Release\video_clip_manager.exe
