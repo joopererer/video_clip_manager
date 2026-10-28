@@ -47,7 +47,7 @@ Policy on ClipsTab, VideosTab and PlaylistsTab, in grid and list mode:
 | Gesture | Result |
 |---|---|
 | Single click | Selects immediately. No wait for the double-click window. |
-| Double click | Plays once. On VideosTab, opens the existing `ClipEditorScreen` or `OnlineClipEditorScreen` (user decision `editor_play`). |
+| Double click | Plays once. On VideosTab this first opened the clip editor (user decision `editor_play`); **superseded by section 11**, which opens an original-video preview instead. |
 | Right click | Selects, then opens the context menu. |
 | Explicit play button | Plays immediately. |
 | Favorite, rating, edit, new clip, more menu | Run their own action only. They do not select or play the card. |
@@ -150,3 +150,110 @@ See `git log` on the branch. In order:
 - Whole-project analyze baseline comparison is incomplete (section 7).
 - Responsive check on a real window at the five sizes was not done.
 - Untracked user files (`models/`, `.github/.github/`, the zip) are outside this change; the `models/` ONNX data is large and needs a decision before any release packaging.
+
+## 11. Follow-up: original-video preview dialog (after user acceptance round 1)
+
+User manual acceptance of Stage 5 passed items 1 to 7 (ClipsTab and PlaylistsTab interaction, M3U8 in library and playlist, M3U8 custom IN/OUT and cross-clip jump, local and missing media, layout near 900/1100/1280 px, Release start/play/close). These were run by the user on a real Windows desktop, not by me. The one open item was VideosTab, where double click, the play icon and the scissors icon all opened `ClipEditorScreen`. This section separates preview from clip creation.
+
+### 11.1 New interaction on VideosTab (list and grid)
+
+| Gesture | Result |
+|---|---|
+| Single click | Selects. |
+| Double click | Opens the original-video preview dialog (once). |
+| Play button (`Preview` tooltip) | Opens the preview dialog. The grid tile had no play button before; one was added. |
+| Scissors button (`Create Clip`) | Goes straight to `ClipEditorScreen` / `OnlineClipEditorScreen`, no player in between. |
+| Right click, `Play` | Opens the preview. |
+| Right click, `Create Clip` | Goes to the editor. |
+| `Clip from Whole Video`, `Delete Video`, More menu | Unchanged. |
+
+ClipsTab and PlaylistsTab were not edited in this round.
+
+### 11.2 Reuse check (done before writing code)
+
+- `ClipPlaybackScreen` is a clip player (clip IN/OUT range, prev/next clip, rating, tags). Its position listener pauses at the clip end, which is wrong for a whole-video preview, so it was not reused.
+- `ClipEditorScreen` / `OnlineClipEditorScreen` own IN/OUT editing and saving; explicitly out of scope for the preview.
+- `UnifiedVideoPlayer` (a `ChangeNotifier` service) and `CustomPlayerControls` are not referenced by any other file in `lib`, so they are not part of a working playback path today. I did not evaluate them further and did not reuse them.
+- Reused: `resolveMediaSource` / `mediaFailureMessage` / `classifyOpenError` (Stage 5 M3U8 fix), `OnlineVideoCacheService.isVideoUrlExpired` (same expiry rule as the online editor), the `Video(controls: NoVideoControls, fit: BoxFit.contain)` pattern from `ClipEditorScreen`, the playlist screen's `PreviewService().pauseGlobalPreGeneration()` + `ScreenshotService().prepareForPlayback()` start-up and `markReady()` shutdown, and the `media_kit_video` native fullscreen channel through `defaultEnterNativeFullscreen` / `defaultExitNativeFullscreen` (already part of the plugin; the Windows runner was not modified).
+
+### 11.3 Files changed
+
+New:
+- `lib/widgets/video_preview/video_preview_dialog.dart` (dialog, `VideoPreviewEnvironment`, fullscreen route)
+- `lib/widgets/video_preview/preview_playback.dart` (`PreviewPlayback` interface and the media_kit implementation; one `Player` + one `VideoController`)
+- `lib/utils/preview_source.dart` (`resolvePreviewSource`, `isDirectMediaUrl`, `formatPreviewClock`)
+- `test/stage5_video_preview_test.dart` (33 tests)
+
+Modified:
+- `lib/screens/tabs/videos_tab.dart` (+73/-8 lines: `_openPreview`, handlers, grid Preview button, menu entry `Play`, test hooks `onOpenPreview` and `previewEnvironment`)
+- `test/stage5_videos_tab_test.dart` (+48/-6 lines: updated for the new routing, two new tests)
+- `docs/ui-upgrade/STAGE5_REPORT.md` (this section)
+
+Not touched: `AppState`, JSON models and schema, `ScreenshotService`, `PreviewService`, `ClipPlaybackScreen`, `ClipEditorScreen`, `OnlineClipEditorScreen`, `ClipsTab`, `PlaylistsTab`, `playlist_playback_screen.dart`, `pubspec.yaml` (no new dependency), the Windows runner.
+
+### 11.4 How the preview works
+
+- Header: video name, kind (Local file / Network stream / Online + platform), duration, pixel size (marked `portrait` when height is larger), clip count, source path (tooltip for the full text).
+- Controls: play/pause, seek slider with `position / total`, mute/unmute (restores the previous volume), fullscreen, `Create Clip`. No IN/OUT, no save.
+- Keys: Esc closes the dialog, or leaves fullscreen first when fullscreen. Space plays/pauses only when no button holds focus.
+- Aspect ratio: `BoxFit.contain` on a black background, so landscape and portrait sources are never stretched or cropped.
+- Sources: local files must exist (missing file gives the existing "file does not exist" message and **no player is created**); `http(s)/rtmp/rtsp` and `.m3u8` are not checked on disk; online videos use the downloaded file, then a fresh cached direct link with its saved headers, then a direct media/HLS URL. If an online video only has a page URL (for example a YouTube watch page) and no valid cached link, the dialog says so and points to `Create Clip`, which owns the sniffing flow. The preview does not sniff.
+- Load errors: missing file, open failure and open timeout (8 s local, 20 s network) are shown in the dialog, not mixed up.
+- Start-up: `PreviewService().pauseGlobalPreGeneration()` and `await ScreenshotService().prepareForPlayback()` run before the dialog is shown.
+- Lifecycle: the dialog creates one `Player` and one `VideoController` after the source is resolved. `_release()` is guarded by a single future, so subscriptions, the load timer and the player are released once, then `resumeGlobalPreGeneration()` and `ScreenshotService().markReady()` run. Closing by button, Esc, barrier click or `Create Clip` all go through it.
+- Fullscreen: a root-navigator route that shows `playback.buildVideo()` on the **same** controller, plus native window fullscreen via the plugin's channel. It never calls `Player()` or `VideoController()`. Leaving the route (Esc, button) leaves native fullscreen.
+- Create Clip: the video is removed from the tree, one frame is awaited, the player is disposed, and only then does the dialog return `PreviewAction.createClip`; `VideosTab` opens the editor afterwards. A test records that no preview player is alive when the editor opens.
+- Double-open guard: `_previewBusy` blocks a second preview while one is starting or open; the shared `DoubleTapTracker` already resets after a double click.
+
+### 11.5 Automated checks (Automated unless marked)
+
+| Check | Result |
+|---|---|
+| `dart format` on touched files | no remaining changes |
+| `flutter analyze` on the 4 new/changed preview files (`lib/widgets/video_preview`, `lib/utils/preview_source.dart`, both test files) | No issues (`logs/stage5/preview-analyze-new-files.txt`) |
+| `flutter analyze` whole project | 0 errors, 1354 issues (unchanged from the previous Stage 5 run; `logs/stage5/preview-analyze-all.txt`). `videos_tab.dart` still carries its older info/warning lines (unused `online_video_add_dialog.dart` import, `use_build_context_synchronously`, `unnecessary_import`); I did not clean them up to keep the diff small. |
+| `flutter test` | **281 / 281 passed** (`logs/stage5/preview-flutter-test.txt`). The previous report said 244. This round added 33 tests in the new file and 2 in `stage5_videos_tab_test.dart` (that file now runs 18), which accounts for 35 of the 37 difference. I did not trace the other 2, so treat the 244 baseline as approximate. |
+| `flutter build windows --debug` | Succeeded (`logs/stage5/preview-build-debug.txt`) |
+| `flutter build windows --release` | Succeeded (`logs/stage5/preview-build-release.txt`) |
+
+What the tests cover, with a fake player that counts create/open/dispose (media_kit is not loaded in `flutter test`):
+- Double click (grid and list) opens the preview, not the editor; a rapid triple click never creates a second player; the Preview button opens the preview and does not select the card.
+- Scissors button opens the editor with no player created. Right click `Play` opens the preview; right click `Create Clip` opens the editor.
+- Dialog shows name, facts, portrait marker and clip count; one player per dialog; closing by button or Esc disposes it once and releases the services once.
+- Ten open/close rounds create and dispose ten players, with exactly one alive while open and none after each close.
+- Missing file: message shown, zero players created, play control disabled.
+- Play/pause, slider drag causes one seek to the released position, mute sets volume 0 and unmute restores 100.
+- Fullscreen enter/exit keeps one player, never disposes it, Esc leaves fullscreen first and keeps the dialog, three round trips still use one player.
+- Create Clip: result is `createClip`, the player was already disposed when the result was delivered, and a second tap does not dispose twice; from `VideosTab` the editor opens with zero live preview players.
+- Source rules: local exists / missing, local `.m3u8` must exist, network `.m3u8` never touches disk, online direct HLS, online page URL without cache (rejected), fresh cached link with headers and User-Agent, expired cache rejected.
+
+### 11.6 Windows native evidence
+
+- `screenshots/stage5/preview_release_launch.png`: Release exe launched by me, window `video_clip_manager` captured at 1280×720, then closed (process exited). This shows app start only. I did not open the preview dialog in a real window and did not check the content of this image beyond it being saved, so it is **not** evidence of the dialog.
+- No screenshot of the preview dialog itself exists. A real-window screenshot needs a real video, which I did not drive.
+
+### 11.7 Not verified (no automated or manual evidence)
+
+Everything below needs a person on the real Windows desktop with real media. None of it was run by me.
+- Landscape video playback in the preview.
+- Portrait video playback and correct aspect ratio.
+- Local file with Unicode / spaces in the path in the real player.
+- M3U8 / network media in the preview.
+- Real seek accuracy, pause, mute and actual audio silence.
+- Real native fullscreen on Windows, Esc inside fullscreen on a real window, and returning to the dialog.
+- Create Clip from the preview in the real app (editor starting right after the preview player is disposed).
+- Ten consecutive open/close cycles in the real app: no black screen, no residual audio, no leftover memory. The test only proves the Dart-side create/dispose balance with a fake player.
+- Window sizes 900×700 and 1280×800 with the dialog open (the dialog sizes itself to the window minus 48 px, not exercised on a real window).
+- Preview of an online video with a cached direct link in the real app.
+
+### 11.8 Risks
+
+- The preview dialog pops its player in `dispose()` like the existing screens. If a real Windows run shows a flash or a black frame on close, the first place to look is the order of `Video` unmount and `Player.dispose()`.
+- Esc handling in the fullscreen route relies on a `Focus` with `autofocus`. It is tested with the test key simulator, not on a real window.
+- Online videos whose cached link is missing or expired cannot be previewed; the user is sent to `Create Clip`. This is intentional so the preview does not duplicate the sniffing flow, but it is a behavior change from "double click opens the online editor".
+- The context menu entry `Open / Play` is now `Play` and the play button tooltip is now `Preview`. Anything that located them by the old text (only my own tests did) needs the new text.
+- `ScreenshotService().markReady()` runs after each preview closes, matching the playlist screen. If thumbnails stop regenerating after previews, check that call first.
+
+### 11.9 Commit
+
+One independent commit on `feat/dark-ui-workspace` (`feat(videos): add original-video preview dialog and split Play from Create Clip`). Not merged to master. No Release was created or published.

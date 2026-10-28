@@ -9,6 +9,7 @@ import '../../data/models.dart';
 import '../../services/online_video_service.dart';
 import '../../utils/toast_utils.dart';
 import '../../widgets/common/media_card_activation.dart';
+import '../../widgets/video_preview/video_preview_dialog.dart';
 import '../../widgets/video_thumbnail.dart';
 import '../../widgets/online_video_add_dialog.dart';
 import '../player/clip_editor_screen.dart';
@@ -26,6 +27,15 @@ class VideosTab extends StatefulWidget {
   @visibleForTesting
   final void Function(BuildContext context, dynamic video)? onOpenEditor;
 
+  /// Replaces the original-video preview dialog. Tests use it because the
+  /// real dialog creates a native media_kit player. Null in production.
+  @visibleForTesting
+  final void Function(BuildContext context, dynamic video)? onOpenPreview;
+
+  /// Environment handed to [VideoPreviewDialog]. Tests inject a fake player.
+  @visibleForTesting
+  final VideoPreviewEnvironment? previewEnvironment;
+
   const VideosTab({
     super.key,
     required this.searchQuery,
@@ -33,6 +43,8 @@ class VideosTab extends StatefulWidget {
     this.selectedRating,
     this.selectedFavorite,
     this.onOpenEditor,
+    this.onOpenPreview,
+    this.previewEnvironment,
   });
 
   @override
@@ -41,6 +53,10 @@ class VideosTab extends StatefulWidget {
 
 class _VideosTabState extends State<VideosTab> {
   String? _selectedVideoId;
+
+  /// True while a preview is being prepared or shown, so a fast double click
+  /// or a click on another Play button cannot stack a second player.
+  bool _previewBusy = false;
 
   bool _isSelected(dynamic video) => _selectedVideoId == video.id;
 
@@ -235,7 +251,7 @@ class _VideosTabState extends State<VideosTab> {
       shape: _cardShape(context, _isSelected(video)),
       child: MediaCardInteractor(
         onSelect: () => _select(video),
-        onActivate: () => _navigateToClipEditor(context, video),
+        onActivate: () => _openPreview(context, video),
         onSecondaryTapDown: (d) =>
             _showVideoContextMenu(context, video, d.globalPosition),
         child: Padding(
@@ -339,7 +355,7 @@ class _VideosTabState extends State<VideosTab> {
       shape: _cardShape(context, _isSelected(video)),
       child: MediaCardInteractor(
         onSelect: () => _select(video),
-        onActivate: () => _navigateToClipEditor(context, video),
+        onActivate: () => _openPreview(context, video),
         onSecondaryTapDown: (d) =>
             _showVideoContextMenu(context, video, d.globalPosition),
         child: Column(
@@ -446,6 +462,17 @@ class _VideosTabState extends State<VideosTab> {
                         height: 24,
                         width: 24,
                         child: IconButton(
+                          tooltip: 'Preview',
+                          padding: EdgeInsets.zero,
+                          iconSize: 18,
+                          icon: const Icon(Icons.play_circle_outline),
+                          onPressed: () => _openPreview(context, video),
+                        ),
+                      ),
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: IconButton(
                           tooltip: 'Create Clip',
                           padding: EdgeInsets.zero,
                           iconSize: 16,
@@ -492,12 +519,12 @@ class _VideosTabState extends State<VideosTab> {
   /// Shared by the "more" button and the right-click menu.
   List<PopupMenuEntry<String>> _videoMenuItems(dynamic video) => [
     const PopupMenuItem(
-      value: 'open_editor',
+      value: 'preview',
       child: Row(
         children: [
           Icon(Icons.play_circle_outline),
           SizedBox(width: 8),
-          Text('Open / Play'),
+          Text('Play'),
         ],
       ),
     ),
@@ -540,16 +567,17 @@ class _VideosTabState extends State<VideosTab> {
   ];
 
   /// Explicit buttons so the two entry points stay discoverable now that a
-  /// single click only selects. Both open the existing clip editor.
+  /// single click only selects. Play opens the original-video preview; the
+  /// scissors button goes straight to the clip editor.
   Widget _buildQuickActions(BuildContext context, dynamic video) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
-          tooltip: 'Open / Play',
+          tooltip: 'Preview',
           icon: const Icon(Icons.play_circle_outline, size: 20),
           visualDensity: VisualDensity.compact,
-          onPressed: () => _navigateToClipEditor(context, video),
+          onPressed: () => _openPreview(context, video),
         ),
         IconButton(
           tooltip: 'Create Clip',
@@ -559,6 +587,41 @@ class _VideosTabState extends State<VideosTab> {
         ),
       ],
     );
+  }
+
+  /// Opens the original-video preview (never the clip editor). Only one
+  /// preview can be open or starting at a time. When the user picks
+  /// "Create Clip" in it, the preview has already released its player by the
+  /// time this method continues, so the editor starts on a free media stack.
+  Future<void> _openPreview(BuildContext context, dynamic video) async {
+    if (_previewBusy) return;
+    final override = widget.onOpenPreview;
+    if (override != null) {
+      override(context, video);
+      return;
+    }
+    _previewBusy = true;
+    try {
+      final clipCount = video is OriginalVideo
+          ? context
+                .read<AppState>()
+                .clips
+                .where((c) => c.videoPath == video.path)
+                .length
+          : context.read<AppState>().getOnlineVideoClips(video.id).length;
+      final action = await VideoPreviewDialog.show(
+        context,
+        video as Object,
+        clipCount: clipCount,
+        environment:
+            widget.previewEnvironment ?? const VideoPreviewEnvironment(),
+      );
+      if (action == PreviewAction.createClip && context.mounted) {
+        _navigateToClipEditor(context, video);
+      }
+    } finally {
+      _previewBusy = false;
+    }
   }
 
   void _navigateToClipEditor(BuildContext context, dynamic video) {
@@ -584,7 +647,9 @@ class _VideosTabState extends State<VideosTab> {
   void _handleVideoAction(BuildContext context, String action, dynamic video) {
     final appState = context.read<AppState>();
     switch (action) {
-      case 'open_editor':
+      case 'preview':
+        _openPreview(context, video);
+        break;
       case 'create_clip':
         _navigateToClipEditor(context, video);
         break;

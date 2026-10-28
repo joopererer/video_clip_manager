@@ -68,9 +68,11 @@ void main() {
     final label = grid ? 'grid' : 'list';
     group('VideosTab card interaction ($label)', () {
       late List<String> opened;
+      late List<String> previews;
 
       Future<_Services> pump(WidgetTester tester) async {
         opened = [];
+        previews = [];
         tester.view.physicalSize = const Size(1280, 800);
         tester.view.devicePixelRatio = 1.0;
         addTearDown(tester.view.resetPhysicalSize);
@@ -97,6 +99,7 @@ void main() {
                   searchQuery: '',
                   selectedTags: const [],
                   onOpenEditor: (_, video) => opened.add(video.id as String),
+                  onOpenPreview: (_, video) => previews.add(video.id as String),
                 ),
               ),
             ),
@@ -145,14 +148,17 @@ void main() {
         expect(selected(tester, '原始视频 二.mp4'), isTrue);
       });
 
-      testWidgets('double click opens the editor exactly once', (tester) async {
+      testWidgets('double click opens the preview once, not the editor', (
+        tester,
+      ) async {
         await pump(tester);
         final p = body(tester, '原始视频 一.mp4');
         await tester.tapAt(p);
         await tester.pump(const Duration(milliseconds: 100));
         await tester.tapAt(p);
         await tester.pump(const Duration(milliseconds: 600));
-        expect(opened, ['v1']);
+        expect(previews, ['v1']);
+        expect(opened, isEmpty);
       });
 
       testWidgets('double click does not open on a different card', (
@@ -164,13 +170,14 @@ void main() {
         await tester.tapAt(body(tester, '原始视频 二.mp4'));
         await tester.pump(const Duration(milliseconds: 600));
         expect(
-          opened.length,
+          previews.length,
           lessThanOrEqualTo(1),
-          reason: 'one tap per card must never open two editors',
+          reason: 'one tap per card must never open two previews',
         );
+        expect(opened, isEmpty);
       });
 
-      testWidgets('right click selects and shows Open and Create Clip', (
+      testWidgets('right click selects and shows Play and Create Clip', (
         tester,
       ) async {
         await pump(tester);
@@ -182,14 +189,49 @@ void main() {
         await g.up();
         await tester.pumpAndSettle();
         expect(selected(tester, '原始视频 一.mp4'), isTrue);
-        expect(find.text('Open / Play'), findsOneWidget);
+        expect(find.text('Play'), findsOneWidget);
         expect(find.text('Create Clip'), findsOneWidget);
         expect(find.text('Delete Video'), findsOneWidget);
         expect(opened, isEmpty);
+        expect(previews, isEmpty);
 
         await tester.tap(find.text('Create Clip'));
         await tester.pumpAndSettle();
         expect(opened, ['v1']);
+        expect(previews, isEmpty);
+      });
+
+      testWidgets('right click Play opens the preview, not the editor', (
+        tester,
+      ) async {
+        await pump(tester);
+        final g = await tester.startGesture(
+          body(tester, '原始视频 一.mp4'),
+          kind: PointerDeviceKind.mouse,
+          buttons: kSecondaryMouseButton,
+        );
+        await g.up();
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Play'));
+        await tester.pumpAndSettle();
+        expect(previews, ['v1']);
+        expect(opened, isEmpty);
+      });
+
+      testWidgets('Preview button opens the preview and does not select', (
+        tester,
+      ) async {
+        await pump(tester);
+        final button = find.descendant(
+          of: card('原始视频 一.mp4'),
+          matching: find.byTooltip('Preview'),
+        );
+        expect(button, findsOneWidget);
+        await tester.tap(button);
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(previews, ['v1']);
+        expect(opened, isEmpty);
+        expect(selected(tester, '原始视频 一.mp4'), isFalse);
       });
 
       testWidgets('explicit Create Clip button stays available and works', (
