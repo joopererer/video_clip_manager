@@ -5,7 +5,6 @@ import 'package:media_kit/media_kit.dart' hide Playlist;
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 
 import '../../data/models.dart';
@@ -16,6 +15,7 @@ import '../../services/preview_service.dart';
 import '../../services/screenshot_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
+import '../../utils/media_source.dart';
 import '../../utils/playlist_playback_layout.dart';
 import '../../widgets/playlist_timeline_view.dart' show playlistClipColor;
 
@@ -410,6 +410,18 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     }
   }
 
+  void _showMediaFailure(MediaSourceFailure failure, String path) {
+    final message = mediaFailureMessage(failure, path);
+    if (message == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orange,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   Future<void> _initializePlayer() async {
     if (_currentItem == null) return;
 
@@ -446,31 +458,22 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     });
 
     // 打开媒体文件
-    try {
-      final file = File(clip.videoPath);
-      final exists = await file.exists();
-      if (!exists) {
-        print(
-          'Playlist: file not found: ${clip.videoPath}, aborting item initialization',
-        );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('文件不存在: ${clip.videoPath.split('\\').last}'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ),
-          );
-          setState(() {
-            _isPlayerReady = false;
-            _isPlayerFullyInitialized = false;
-          });
-        }
-        return;
+    // 网络源（含 HTTP/HTTPS M3U8）不做本地 File.exists()；本地路径仍然校验。
+    final resolution = await resolveMediaSource(clip.videoPath);
+    if (!resolution.isUsable) {
+      print(
+        'Playlist: media source unusable (${resolution.failure}): ${clip.videoPath}, aborting item initialization',
+      );
+      if (mounted) {
+        _showMediaFailure(resolution.failure, clip.videoPath);
+        setState(() {
+          _isPlayerReady = false;
+          _isPlayerFullyInitialized = false;
+        });
       }
-    } catch (e) {
-      print('Playlist: error checking file existence: $e');
+      return;
     }
+    final isNetworkSource = resolution.kind == MediaSourceKind.network;
 
     try {
       await player
@@ -481,13 +484,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     } on TimeoutException catch (te) {
       print('Playlist: open timed out for ${clip.videoPath}: $te');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('打开媒体超时: ${clip.videoPath.split('\\').last}'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ),
-        );
+        _showMediaFailure(MediaSourceFailure.openTimeout, clip.videoPath);
         setState(() {
           _isPlayerReady = false;
           _isPlayerFullyInitialized = false;
@@ -497,6 +494,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     } catch (e) {
       print('Playlist: open failed for ${clip.videoPath}: $e');
       if (mounted) {
+        _showMediaFailure(MediaSourceFailure.openFailed, clip.videoPath);
         setState(() {
           _isPlayerReady = false;
           _isPlayerFullyInitialized = false;
@@ -508,6 +506,18 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     if (mounted) {
       // 等待媒体加载完成
       await Future.delayed(Duration(milliseconds: 200));
+
+      // HLS/网络流需要先解析分片才能 seek，与 ClipPlaybackScreen 的等待策略一致。
+      if (isNetworkSource && player.state.duration == Duration.zero) {
+        try {
+          await player.stream.duration
+              .firstWhere((d) => d > Duration.zero)
+              .timeout(const Duration(seconds: 12));
+        } catch (_) {
+          // 继续尝试 seek；若确实无法加载，后续 seek/play 的超时会给出提示。
+        }
+        if (!mounted) return;
+      }
 
       // 跳转到开始时间或挂起的全局定位时间
       final seekTarget =
