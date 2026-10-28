@@ -7,6 +7,7 @@ import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../utils/tag_utils.dart';
 import 'clip_media_preview.dart';
+import 'common/media_card_activation.dart';
 import 'common/timecode_chip.dart';
 
 class ClipListRow extends StatefulWidget {
@@ -42,7 +43,6 @@ class _ClipListRowState extends State<ClipListRow> {
   bool _hasFocus = false;
 
   void _showContextMenu(Offset globalPosition) async {
-    widget.onSelect?.call();
     final RenderBox? overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox?;
     if (overlay == null) return;
@@ -145,13 +145,11 @@ class _ClipListRowState extends State<ClipListRow> {
       child: MouseRegion(
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
-        child: InkWell(
+        child: MediaCardInteractor(
+          onSelect: widget.onSelect,
+          onActivate: widget.onPlay,
           onSecondaryTapDown: (details) =>
               _showContextMenu(details.globalPosition),
-          onTap: () {
-            widget.onSelect?.call();
-            widget.onPlay();
-          },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.5),

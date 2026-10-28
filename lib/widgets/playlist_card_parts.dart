@@ -1,10 +1,12 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import '../data/models.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../utils/playlist_summary.dart';
+import 'common/media_card_activation.dart';
+
+// Existing importers (and tests) still find the tracker through this file.
+export 'common/media_card_activation.dart' show DoubleTapTracker;
 
 enum PlaylistAction { play, edit, manage, export, delete }
 
@@ -98,31 +100,6 @@ class PlaylistMenuButton extends StatelessWidget {
   }
 }
 
-/// Recognises a second tap on the same card within [window]. Selection stays
-/// instant, unlike `onDoubleTap`, which delays the first tap.
-class DoubleTapTracker {
-  DoubleTapTracker({this.window = const Duration(milliseconds: 350)});
-
-  final Duration window;
-  Timer? _timer;
-
-  /// Registers a tap; returns true when it completes a double tap.
-  bool registerTap() {
-    if (_timer?.isActive ?? false) {
-      _timer!.cancel();
-      _timer = null;
-      return true;
-    }
-    _timer = Timer(window, () {});
-    return false;
-  }
-
-  void dispose() {
-    _timer?.cancel();
-    _timer = null;
-  }
-}
-
 /// Shared look and interaction of playlist cards: hover, focus, selection,
 /// single click selects, double click plays, right click opens the menu.
 class PlaylistCardFrame extends StatefulWidget {
@@ -146,18 +123,10 @@ class PlaylistCardFrame extends StatefulWidget {
 }
 
 class _PlaylistCardFrameState extends State<PlaylistCardFrame> {
-  final _taps = DoubleTapTracker();
   bool _hovered = false;
   bool _focused = false;
 
-  @override
-  void dispose() {
-    _taps.dispose();
-    super.dispose();
-  }
-
   Future<void> _openMenu(Offset position) async {
-    widget.onSelect();
     final action = await showPlaylistContextMenu(context, position);
     if (action != null && mounted) widget.onAction(action);
   }
@@ -172,13 +141,11 @@ class _PlaylistCardFrameState extends State<PlaylistCardFrame> {
       child: MouseRegion(
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
-        child: InkWell(
+        child: MediaCardInteractor(
           borderRadius: BorderRadius.circular(AppRadius.card),
           hoverColor: Colors.transparent,
-          onTap: () {
-            widget.onSelect();
-            if (_taps.registerTap()) widget.onPlay();
-          },
+          onSelect: widget.onSelect,
+          onActivate: widget.onPlay,
           onSecondaryTapDown: (d) => _openMenu(d.globalPosition),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),

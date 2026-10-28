@@ -7,6 +7,7 @@ import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../utils/tag_utils.dart';
 import 'clip_media_preview.dart';
+import 'common/media_card_activation.dart';
 import 'common/timecode_chip.dart';
 
 class ClipCard extends StatefulWidget {
@@ -42,7 +43,6 @@ class _ClipCardState extends State<ClipCard> {
   bool _hasFocus = false;
 
   void _showContextMenu(Offset globalPosition) async {
-    widget.onSelect?.call();
     final RenderBox? overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox?;
     if (overlay == null) return;
@@ -145,13 +145,11 @@ class _ClipCardState extends State<ClipCard> {
       child: MouseRegion(
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
-        child: InkWell(
+        child: MediaCardInteractor(
+          onSelect: widget.onSelect,
+          onActivate: widget.onPlay,
           onSecondaryTapDown: (details) =>
               _showContextMenu(details.globalPosition),
-          onTap: () {
-            widget.onSelect?.call();
-            widget.onPlay();
-          },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             decoration: BoxDecoration(
@@ -306,6 +304,9 @@ class _ClipCardState extends State<ClipCard> {
                                       size: 18,
                                     ),
                                     onPressed: () {
+                                      // Opening the menu from the button also
+                                      // selects the card (existing behavior).
+                                      widget.onSelect?.call();
                                       final box =
                                           context.findRenderObject()
                                               as RenderBox;

@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
@@ -7,6 +8,7 @@ import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../services/online_video_service.dart';
 import '../../utils/toast_utils.dart';
+import '../../widgets/common/media_card_activation.dart';
 import '../../widgets/video_thumbnail.dart';
 import '../../widgets/online_video_add_dialog.dart';
 import '../player/clip_editor_screen.dart';
@@ -19,12 +21,18 @@ class VideosTab extends StatefulWidget {
   final int? selectedRating;
   final bool? selectedFavorite;
 
+  /// Replaces the push of the clip editor. Tests use it because the real
+  /// editor creates a native media_kit player. Null in production.
+  @visibleForTesting
+  final void Function(BuildContext context, dynamic video)? onOpenEditor;
+
   const VideosTab({
     super.key,
     required this.searchQuery,
     required this.selectedTags,
     this.selectedRating,
     this.selectedFavorite,
+    this.onOpenEditor,
   });
 
   @override
@@ -32,6 +40,45 @@ class VideosTab extends StatefulWidget {
 }
 
 class _VideosTabState extends State<VideosTab> {
+  String? _selectedVideoId;
+
+  bool _isSelected(dynamic video) => _selectedVideoId == video.id;
+
+  void _select(dynamic video) {
+    if (_selectedVideoId == video.id) return;
+    setState(() => _selectedVideoId = video.id as String);
+  }
+
+  ShapeBorder _cardShape(BuildContext context, bool selected) {
+    final scheme = Theme.of(context).colorScheme;
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(
+        color: selected ? scheme.primary : Colors.transparent,
+        width: selected ? 1.6 : 0,
+      ),
+    );
+  }
+
+  /// Right click: the card is already selected by [MediaCardInteractor].
+  Future<void> _showVideoContextMenu(
+    BuildContext context,
+    dynamic video,
+    Offset position,
+  ) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final value = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        position & const Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      items: _videoMenuItems(video),
+    );
+    if (value == null || !context.mounted) return;
+    _handleVideoAction(context, value, video);
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -185,8 +232,12 @@ class _VideosTabState extends State<VideosTab> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _navigateToClipEditor(context, video),
+      shape: _cardShape(context, _isSelected(video)),
+      child: MediaCardInteractor(
+        onSelect: () => _select(video),
+        onActivate: () => _navigateToClipEditor(context, video),
+        onSecondaryTapDown: (d) =>
+            _showVideoContextMenu(context, video, d.globalPosition),
         child: Padding(
           padding: const EdgeInsets.all(8.0),
           child: Row(
@@ -261,7 +312,8 @@ class _VideosTabState extends State<VideosTab> {
                   ],
                 ),
               ),
-              // 右侧菜单按钮
+              // 右侧显式操作与菜单按钮（不触发卡片选中/播放）
+              _buildQuickActions(context, video),
               _buildVideoMenuButton(context, video),
             ],
           ),
@@ -284,8 +336,12 @@ class _VideosTabState extends State<VideosTab> {
 
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _navigateToClipEditor(context, video),
+      shape: _cardShape(context, _isSelected(video)),
+      child: MediaCardInteractor(
+        onSelect: () => _select(video),
+        onActivate: () => _navigateToClipEditor(context, video),
+        onSecondaryTapDown: (d) =>
+            _showVideoContextMenu(context, video, d.globalPosition),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -383,14 +439,31 @@ class _VideosTabState extends State<VideosTab> {
                     'Clips: $clipCount',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: _buildVideoMenuButton(
-                      context,
-                      video,
-                      isCompact: true,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: IconButton(
+                          tooltip: 'Create Clip',
+                          padding: EdgeInsets.zero,
+                          iconSize: 16,
+                          icon: const Icon(Icons.content_cut),
+                          onPressed: () =>
+                              _navigateToClipEditor(context, video),
+                        ),
+                      ),
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: _buildVideoMenuButton(
+                          context,
+                          video,
+                          isCompact: true,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -407,45 +480,93 @@ class _VideosTabState extends State<VideosTab> {
     bool isCompact = false,
   }) {
     return PopupMenuButton<String>(
-      icon: isCompact ? null : const Icon(Icons.more_vert),
+      icon: isCompact ? const Icon(Icons.more_vert, size: 18) : null,
+      iconSize: 20,
+      tooltip: 'More',
+      padding: isCompact ? EdgeInsets.zero : const EdgeInsets.all(8),
       onSelected: (value) => _handleVideoAction(context, value, video),
-      itemBuilder: (context) => [
-        const PopupMenuItem(
-          value: 'create_clip',
-          child: Row(
-            children: [
-              Icon(Icons.content_cut),
-              SizedBox(width: 8),
-              Text('Create Clip'),
-            ],
-          ),
-        ),
-        if (video is OriginalVideo)
-          const PopupMenuItem(
-            value: 'clip_from_whole',
-            child: Row(
-              children: [
-                Icon(Icons.video_library),
-                SizedBox(width: 8),
-                Text('Clip from Whole Video'),
-              ],
+      itemBuilder: (context) => _videoMenuItems(video),
+    );
+  }
+
+  /// Shared by the "more" button and the right-click menu.
+  List<PopupMenuEntry<String>> _videoMenuItems(dynamic video) => [
+    const PopupMenuItem(
+      value: 'open_editor',
+      child: Row(
+        children: [
+          Icon(Icons.play_circle_outline),
+          SizedBox(width: 8),
+          Text('Open / Play'),
+        ],
+      ),
+    ),
+    const PopupMenuItem(
+      value: 'create_clip',
+      child: Row(
+        children: [
+          Icon(Icons.content_cut),
+          SizedBox(width: 8),
+          Text('Create Clip'),
+        ],
+      ),
+    ),
+    if (video is OriginalVideo)
+      const PopupMenuItem(
+        value: 'clip_from_whole',
+        child: Row(
+          children: [
+            Icon(Icons.video_library),
+            SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'Clip from Whole Video',
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        const PopupMenuItem(
-          value: 'delete_video',
-          child: Row(
-            children: [
-              Icon(Icons.delete, color: Colors.red),
-              SizedBox(width: 8),
-              Text('Delete Video', style: TextStyle(color: Colors.red)),
-            ],
-          ),
+          ],
+        ),
+      ),
+    const PopupMenuItem(
+      value: 'delete_video',
+      child: Row(
+        children: [
+          Icon(Icons.delete, color: Colors.red),
+          SizedBox(width: 8),
+          Text('Delete Video', style: TextStyle(color: Colors.red)),
+        ],
+      ),
+    ),
+  ];
+
+  /// Explicit buttons so the two entry points stay discoverable now that a
+  /// single click only selects. Both open the existing clip editor.
+  Widget _buildQuickActions(BuildContext context, dynamic video) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: 'Open / Play',
+          icon: const Icon(Icons.play_circle_outline, size: 20),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _navigateToClipEditor(context, video),
+        ),
+        IconButton(
+          tooltip: 'Create Clip',
+          icon: const Icon(Icons.content_cut, size: 18),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _navigateToClipEditor(context, video),
         ),
       ],
     );
   }
 
   void _navigateToClipEditor(BuildContext context, dynamic video) {
+    final override = widget.onOpenEditor;
+    if (override != null) {
+      override(context, video);
+      return;
+    }
     if (video is OriginalVideo) {
       Navigator.push(
         context,
@@ -463,6 +584,7 @@ class _VideosTabState extends State<VideosTab> {
   void _handleVideoAction(BuildContext context, String action, dynamic video) {
     final appState = context.read<AppState>();
     switch (action) {
+      case 'open_editor':
       case 'create_clip':
         _navigateToClipEditor(context, video);
         break;
