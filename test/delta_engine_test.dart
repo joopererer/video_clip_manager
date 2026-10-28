@@ -22,7 +22,11 @@ class MockAiService extends Fake implements AiService {
   }) async {
     extractCount++;
     return [
-      ExtractedClipFrame(tMs: startMs, path: '/tmp/frame0.jpg', sizeBytes: 1024),
+      ExtractedClipFrame(
+        tMs: startMs,
+        path: '/tmp/frame0.jpg',
+        sizeBytes: 1024,
+      ),
       ExtractedClipFrame(tMs: endMs, path: '/tmp/frame1.jpg', sizeBytes: 1024),
     ];
   }
@@ -35,10 +39,14 @@ class MockAiService extends Fake implements AiService {
     int softTokens = 140,
   }) async {
     embedCount++;
-    return frames.map((f) => {
-      't_ms': f.tMs,
-      'vector': [1.0, 0.0, 0.0],
-    }).toList();
+    return frames
+        .map(
+          (f) => {
+            't_ms': f.tMs,
+            'vector': [1.0, 0.0, 0.0],
+          },
+        )
+        .toList();
   }
 }
 
@@ -65,9 +73,21 @@ void main() {
       const url = 'https://example.com/stream.m3u8';
 
       pool.putFrames(url, [
-        const VideoFrameEmbeddingRecord(tMs: 1000, vector: [1.0, 0.0], createdAtMs: 1),
-        const VideoFrameEmbeddingRecord(tMs: 3000, vector: [0.0, 1.0], createdAtMs: 1),
-        const VideoFrameEmbeddingRecord(tMs: 5000, vector: [0.5, 0.5], createdAtMs: 1),
+        const VideoFrameEmbeddingRecord(
+          tMs: 1000,
+          vector: [1.0, 0.0],
+          createdAtMs: 1,
+        ),
+        const VideoFrameEmbeddingRecord(
+          tMs: 3000,
+          vector: [0.0, 1.0],
+          createdAtMs: 1,
+        ),
+        const VideoFrameEmbeddingRecord(
+          tMs: 5000,
+          vector: [0.5, 0.5],
+          createdAtMs: 1,
+        ),
       ]);
 
       expect(pool.getCachedTimestamps(url), {1000, 3000, 5000});
@@ -104,7 +124,10 @@ void main() {
         await pool1.saveToDisk(video, customStorageDir: tempDir.path);
 
         final pool2 = FrameEmbeddingPool();
-        final loadedCount = await pool2.loadFromDisk(video, customStorageDir: tempDir.path);
+        final loadedCount = await pool2.loadFromDisk(
+          video,
+          customStorageDir: tempDir.path,
+        );
 
         expect(loadedCount, 2);
         final loadedFrames = pool2.getFramesInRange(video, 0, 5000);
@@ -147,7 +170,11 @@ void main() {
 
       // Cached frame at 2100ms (tolerance 250ms matches 2000ms)
       pool.putFrames(video, [
-        const VideoFrameEmbeddingRecord(tMs: 2100, vector: [1.0], createdAtMs: 1),
+        const VideoFrameEmbeddingRecord(
+          tMs: 2100,
+          vector: [1.0],
+          createdAtMs: 1,
+        ),
       ]);
 
       final engine = DeltaEngine(pool: pool);
@@ -166,40 +193,71 @@ void main() {
       expect(plan.reuseRatio, closeTo(1 / 3, 1e-4));
     });
 
-    test('planDelta detects 100% cache hit on trimmed/already cached range', () {
-      final pool = FrameEmbeddingPool();
-      const video = 'video1.mp4';
+    test(
+      'planDelta detects 100% cache hit on trimmed/already cached range',
+      () {
+        final pool = FrameEmbeddingPool();
+        const video = 'video1.mp4';
 
-      pool.putFrames(video, [
-        const VideoFrameEmbeddingRecord(tMs: 0, vector: [1.0], createdAtMs: 1),
-        const VideoFrameEmbeddingRecord(tMs: 2000, vector: [1.0], createdAtMs: 1),
-        const VideoFrameEmbeddingRecord(tMs: 4000, vector: [1.0], createdAtMs: 1),
-        const VideoFrameEmbeddingRecord(tMs: 6000, vector: [1.0], createdAtMs: 1),
-      ]);
+        pool.putFrames(video, [
+          const VideoFrameEmbeddingRecord(
+            tMs: 0,
+            vector: [1.0],
+            createdAtMs: 1,
+          ),
+          const VideoFrameEmbeddingRecord(
+            tMs: 2000,
+            vector: [1.0],
+            createdAtMs: 1,
+          ),
+          const VideoFrameEmbeddingRecord(
+            tMs: 4000,
+            vector: [1.0],
+            createdAtMs: 1,
+          ),
+          const VideoFrameEmbeddingRecord(
+            tMs: 6000,
+            vector: [1.0],
+            createdAtMs: 1,
+          ),
+        ]);
 
-      final engine = DeltaEngine(pool: pool);
+        final engine = DeltaEngine(pool: pool);
 
-      // User trims clip from [0..6000] down to [2000..4000]
-      final plan = engine.planDelta(
-        videoPathOrUrl: video,
-        startMs: 2000,
-        endMs: 4000,
-        stepMs: 2000,
-      );
+        // User trims clip from [0..6000] down to [2000..4000]
+        final plan = engine.planDelta(
+          videoPathOrUrl: video,
+          startMs: 2000,
+          endMs: 4000,
+          stepMs: 2000,
+        );
 
-      expect(plan.expectedTimestamps, [2000, 4000]);
-      expect(plan.cachedTimestamps, [2000, 4000]);
-      expect(plan.missingTimestamps, isEmpty);
-      expect(plan.isFullCacheHit, isTrue);
-      expect(plan.reuseRatio, 1.0);
-    });
+        expect(plan.expectedTimestamps, [2000, 4000]);
+        expect(plan.cachedTimestamps, [2000, 4000]);
+        expect(plan.missingTimestamps, isEmpty);
+        expect(plan.isFullCacheHit, isTrue);
+        expect(plan.reuseRatio, 1.0);
+      },
+    );
 
     test('computeMaxSim finds optimal frame and timestamp', () {
       final engine = DeltaEngine();
       final frames = [
-        const VideoFrameEmbeddingRecord(tMs: 1000, vector: [1.0, 0.0, 0.0], createdAtMs: 1),
-        const VideoFrameEmbeddingRecord(tMs: 3000, vector: [0.0, 1.0, 0.0], createdAtMs: 1),
-        const VideoFrameEmbeddingRecord(tMs: 5000, vector: [0.7071, 0.7071, 0.0], createdAtMs: 1),
+        const VideoFrameEmbeddingRecord(
+          tMs: 1000,
+          vector: [1.0, 0.0, 0.0],
+          createdAtMs: 1,
+        ),
+        const VideoFrameEmbeddingRecord(
+          tMs: 3000,
+          vector: [0.0, 1.0, 0.0],
+          createdAtMs: 1,
+        ),
+        const VideoFrameEmbeddingRecord(
+          tMs: 5000,
+          vector: [0.7071, 0.7071, 0.0],
+          createdAtMs: 1,
+        ),
       ];
 
       // Query vector strongly aligned with [0, 1, 0]
@@ -215,7 +273,11 @@ void main() {
       final pool = FrameEmbeddingPool();
       const video = 'video1.mp4';
       pool.putFrames(video, [
-        const VideoFrameEmbeddingRecord(tMs: 1000, vector: [1.0, 0.0], createdAtMs: 1),
+        const VideoFrameEmbeddingRecord(
+          tMs: 1000,
+          vector: [1.0, 0.0],
+          createdAtMs: 1,
+        ),
       ]);
 
       final mockAi = MockAiService();

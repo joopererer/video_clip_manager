@@ -75,7 +75,11 @@ class ClipCaptionInfo {
     final rawTags = json['tags'] ?? json['key_actions'] ?? json['actions'];
     final scene = json['scene'] as String? ?? '';
     final subject = (json['main_subject'] ?? json['subject']) as String? ?? '';
-    final sanitized = AiService.sanitizeTags(rawTags, scene: scene, mainSubject: subject);
+    final sanitized = AiService.sanitizeTags(
+      rawTags,
+      scene: scene,
+      mainSubject: subject,
+    );
     return ClipCaptionInfo(
       scene: scene,
       mainSubject: subject,
@@ -166,9 +170,12 @@ class AiService {
     String? customOutDir,
   }) async {
     final cli = await resolveCliPath();
-    final tempDir = customOutDir ??
-        p.join((await getTemporaryDirectory()).path,
-            'clip_frames_${DateTime.now().millisecondsSinceEpoch}');
+    final tempDir =
+        customOutDir ??
+        p.join(
+          (await getTemporaryDirectory()).path,
+          'clip_frames_${DateTime.now().millisecondsSinceEpoch}',
+        );
     await Directory(tempDir).create(recursive: true);
 
     final args = [
@@ -339,7 +346,7 @@ class AiService {
   }
 
   /// VLM 结构化视频故事描述生成
-    Future<ClipCaptionInfo> generateCaption({
+  Future<ClipCaptionInfo> generateCaption({
     List<String>? framePaths,
     List<ExtractedClipFrame>? frames,
     String? instruction,
@@ -361,7 +368,8 @@ class AiService {
     // 1. 若配置了 API 端点（Ollama / LM Studio / DashScope / OpenAI 兼容）
     if (apiUrl != null && apiUrl.trim().isNotEmpty) {
       final trimmedUrl = apiUrl.trim();
-      if ((trimmedUrl.contains('localhost:11434') || trimmedUrl.contains('127.0.0.1:11434')) &&
+      if ((trimmedUrl.contains('localhost:11434') ||
+              trimmedUrl.contains('127.0.0.1:11434')) &&
           !(await isServerHealthy(trimmedUrl))) {
         await ensureBuiltInLlamaServerRunning(port: '11434');
       }
@@ -369,18 +377,16 @@ class AiService {
         paths: paths,
         apiUrl: apiUrl.trim(),
         apiKey: apiKey?.trim(),
-        model: (model != null && model.trim().isNotEmpty) ? model.trim() : 'qwen2-vl:2b',
+        model: (model != null && model.trim().isNotEmpty)
+            ? model.trim()
+            : 'qwen2-vl:2b',
         instruction: instruction,
       );
     }
 
     // 2. 否则通过本地 Sidecar CLI 进程执行
     final cli = await resolveCliPath();
-    final args = [
-      'caption',
-      '--frames',
-      paths.join(','),
-    ];
+    final args = ['caption', '--frames', paths.join(',')];
     if (instruction != null && instruction.isNotEmpty) {
       args.addAll(['--instruction', instruction]);
     }
@@ -411,37 +417,33 @@ class AiService {
         ? '${apiUrl}chat/completions'
         : '$apiUrl/chat/completions';
 
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
+    final headers = <String, String>{'Content-Type': 'application/json'};
     if (apiKey != null && apiKey.isNotEmpty) {
       headers['Authorization'] = 'Bearer $apiKey';
     }
 
-    final promptText = instruction ??
+    final promptText =
+        instruction ??
         '你是一位资深视频镜头与媒体资产分析专家。'
-        '请仔细观察按时间先后顺序排列的一组视频连续关键帧画面，提炼该视频片段的核心事件、环境场景、主要主体与专业分类标签。\n\n'
-        '【关键输出要求】：\n'
-        '1. 必须严格且仅输出标准纯 JSON 格式（不要使用 Markdown 代码块或外部额外文本）。\n'
-        '2. Schema 结构必须包含以下字段：\n'
-        '{\n'
-        '  "scene": "精炼场景环境名词（不超过8个字，例如：雪山、雨夜街道、办公室）",\n'
-        '  "main_subject": "画面的核心主角/主体（不超过6个字，例如：女人、跑车、金毛犬）",\n'
-        '  "tags": ["标签1", "标签2", "标签3", "标签4", "标签5"],\n'
-        '  "key_actions": ["动作动名词1", "动作动名词2"],\n'
-        '  "summary": "一段生动连贯的自然语言剧情概要，详细描述整个片段发生了什么故事"\n'
-        '}\n\n'
-        '【标签规范（非常重要）】：\n'
-        '- "tags" 是面向专业视频素材管理系统（如 Eagle、Adobe Premiere、素材库）的分类关键词列表（建议 5-10 个）。\n'
-        '- 必须全部为【独立的原子关键词/名词/动名词】（2~4字为佳，如：女人、雪山、木棍、大雾、徒步、冬季、户外、远足）。\n'
-        '- 严禁包含整句或短语！严禁出现标点符号（绝不允许出现逗号、顿号、分号，如“行走，手持木棍”是严重错误的）！\n'
-        '- 请将动作与物体完全拆开为原子词，例如应输出 "徒步", "木棍"，而不是 "手持木棍行走"。';
+            '请仔细观察按时间先后顺序排列的一组视频连续关键帧画面，提炼该视频片段的核心事件、环境场景、主要主体与专业分类标签。\n\n'
+            '【关键输出要求】：\n'
+            '1. 必须严格且仅输出标准纯 JSON 格式（不要使用 Markdown 代码块或外部额外文本）。\n'
+            '2. Schema 结构必须包含以下字段：\n'
+            '{\n'
+            '  "scene": "精炼场景环境名词（不超过8个字，例如：雪山、雨夜街道、办公室）",\n'
+            '  "main_subject": "画面的核心主角/主体（不超过6个字，例如：女人、跑车、金毛犬）",\n'
+            '  "tags": ["标签1", "标签2", "标签3", "标签4", "标签5"],\n'
+            '  "key_actions": ["动作动名词1", "动作动名词2"],\n'
+            '  "summary": "一段生动连贯的自然语言剧情概要，详细描述整个片段发生了什么故事"\n'
+            '}\n\n'
+            '【标签规范（非常重要）】：\n'
+            '- "tags" 是面向专业视频素材管理系统（如 Eagle、Adobe Premiere、素材库）的分类关键词列表（建议 5-10 个）。\n'
+            '- 必须全部为【独立的原子关键词/名词/动名词】（2~4字为佳，如：女人、雪山、木棍、大雾、徒步、冬季、户外、远足）。\n'
+            '- 严禁包含整句或短语！严禁出现标点符号（绝不允许出现逗号、顿号、分号，如“行走，手持木棍”是严重错误的）！\n'
+            '- 请将动作与物体完全拆开为原子词，例如应输出 "徒步", "木棍"，而不是 "手持木棍行走"。';
 
     final contentItems = <Map<String, dynamic>>[
-      {
-        'type': 'text',
-        'text': promptText,
-      }
+      {'type': 'text', 'text': promptText},
     ];
 
     for (final path in paths) {
@@ -453,9 +455,7 @@ class AiService {
         final mime = ext == '.png' ? 'image/png' : 'image/jpeg';
         contentItems.add({
           'type': 'image_url',
-          'image_url': {
-            'url': 'data:$mime;base64,$base64Str',
-          },
+          'image_url': {'url': 'data:$mime;base64,$base64Str'},
         });
       }
     }
@@ -463,31 +463,29 @@ class AiService {
     final payload = {
       'model': model,
       'messages': [
-        {
-          'role': 'user',
-          'content': contentItems,
-        }
+        {'role': 'user', 'content': contentItems},
       ],
       'temperature': 0.2,
       'max_tokens': 1024,
     };
 
     final res = await http
-        .post(
-          Uri.parse(endpoint),
-          headers: headers,
-          body: jsonEncode(payload),
-        )
+        .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
         .timeout(
           const Duration(seconds: 180),
-          onTimeout: () => throw Exception('连接 VLM 服务超时 (180s)。首次加载本地多模态大模型至显存可能需要较长时间，请稍后重试或检查服务状态'),
+          onTimeout: () => throw Exception(
+            '连接 VLM 服务超时 (180s)。首次加载本地多模态大模型至显存可能需要较长时间，请稍后重试或检查服务状态',
+          ),
         );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('VLM 服务请求失败 (HTTP ${res.statusCode}): ${utf8.decode(res.bodyBytes, allowMalformed: true)}');
+      throw Exception(
+        'VLM 服务请求失败 (HTTP ${res.statusCode}): ${utf8.decode(res.bodyBytes, allowMalformed: true)}',
+      );
     }
 
-    final respJson = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    final respJson =
+        jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     final choices = respJson['choices'] as List<dynamic>?;
     if (choices == null || choices.isEmpty) {
       throw Exception('VLM 服务未返回有效选择结果: ${res.body}');
@@ -517,15 +515,31 @@ class AiService {
       final tokens = raw.split(RegExp(r'[,，、;；|/\\\s\n\r]+'));
       for (final token in tokens) {
         var clean = token
-            .replaceAll(RegExp(r'^[^\w\u4e00-\u9fa5]+|[^\w\u4e00-\u9fa5]+$'), '')
+            .replaceAll(
+              RegExp(r'^[^\w\u4e00-\u9fa5]+|[^\w\u4e00-\u9fa5]+$'),
+              '',
+            )
             .trim();
         if (clean.isEmpty) continue;
 
         // 剥离常见谓词/助词前缀，提取核心物体或动作名词
         // 例如："手持木棍" -> "木棍", "身穿蓝衣" -> "蓝衣", "一个女人" -> "女人"
         for (final prefix in [
-          '一个', '一根', '一只', '一部', '一片', '手持', '手拿', '手提', '身穿',
-          '佩戴', '背着', '站在', '走在', '正在', '在'
+          '一个',
+          '一根',
+          '一只',
+          '一部',
+          '一片',
+          '手持',
+          '手拿',
+          '手提',
+          '身穿',
+          '佩戴',
+          '背着',
+          '站在',
+          '走在',
+          '正在',
+          '在',
         ]) {
           if (clean.startsWith(prefix) && clean.length > prefix.length + 1) {
             clean = clean.substring(prefix.length).trim();
@@ -565,14 +579,36 @@ class AiService {
     // 智能提取场景中的精炼名词（若场景很短 <= 6 字直接加入，若长则尝试提取环境高频词）
     if (scene != null && scene.trim().isNotEmpty) {
       final s = scene.trim();
-      if (s.length >= 2 && s.length <= 6 && !s.contains(RegExp(r'[,，、。!！?？]'))) {
+      if (s.length >= 2 &&
+          s.length <= 6 &&
+          !s.contains(RegExp(r'[,，、。!！?？]'))) {
         processCandidate(s);
       } else {
         // 如果 scene 是一长串描述，提取其中可能出现的高频环境词
         for (final envKeyword in [
-          '雪山', '海滩', '森林', '沙漠', '草原', '街道', '办公室', '会议室',
-          '城市', '公路', '星空', '雾气', '大雾', '晴天', '雨夜', '室内', '户外',
-          '山脉', '湖泊', '河流', '日落', '日出', '夜景'
+          '雪山',
+          '海滩',
+          '森林',
+          '沙漠',
+          '草原',
+          '街道',
+          '办公室',
+          '会议室',
+          '城市',
+          '公路',
+          '星空',
+          '雾气',
+          '大雾',
+          '晴天',
+          '雨夜',
+          '室内',
+          '户外',
+          '山脉',
+          '湖泊',
+          '河流',
+          '日落',
+          '日出',
+          '夜景',
         ]) {
           if (s.contains(envKeyword)) {
             result.add(envKeyword);
@@ -588,7 +624,9 @@ class AiService {
   ClipCaptionInfo parseCaptionFromRaw(String rawText) {
     String clean = rawText.trim();
     if (clean.contains('```')) {
-      final match = RegExp(r'```(?:json)?\s*([\s\S]*?)\s*```').firstMatch(clean);
+      final match = RegExp(
+        r'```(?:json)?\s*([\s\S]*?)\s*```',
+      ).firstMatch(clean);
       if (match != null) {
         clean = match.group(1)?.trim() ?? clean;
       }
@@ -597,12 +635,18 @@ class AiService {
     try {
       final map = jsonDecode(clean) as Map<String, dynamic>;
       final scene = map['scene']?.toString() ?? '视频场景';
-      final mainSubject = (map['main_subject'] ?? map['subject'])?.toString() ?? '主体';
+      final mainSubject =
+          (map['main_subject'] ?? map['subject'])?.toString() ?? '主体';
       final rawTags = map['tags'] ?? map['key_actions'] ?? map['actions'] ?? [];
-      final keyActions = sanitizeTags(rawTags, scene: scene, mainSubject: mainSubject);
+      final keyActions = sanitizeTags(
+        rawTags,
+        scene: scene,
+        mainSubject: mainSubject,
+      );
       final summary = map['summary']?.toString() ?? clean;
 
-      final searchDoc = 'Scene: $scene\nMain Subject: $mainSubject\nActions: ${keyActions.join(", ")}\nSummary: $summary';
+      final searchDoc =
+          'Scene: $scene\nMain Subject: $mainSubject\nActions: ${keyActions.join(", ")}\nSummary: $summary';
 
       return ClipCaptionInfo(
         scene: scene,
@@ -655,12 +699,11 @@ class AiService {
 
     for (final dir in searchDirs) {
       final modelFile = File(p.join(dir, 'Qwen2-VL-2B-Instruct-Q4_K_M.gguf'));
-      final mmprojFile = File(p.join(dir, 'mmproj-Qwen2-VL-2B-Instruct-f16.gguf'));
+      final mmprojFile = File(
+        p.join(dir, 'mmproj-Qwen2-VL-2B-Instruct-f16.gguf'),
+      );
       if (modelFile.existsSync() && mmprojFile.existsSync()) {
-        return {
-          'model': modelFile.path,
-          'mmproj': mmprojFile.path,
-        };
+        return {'model': modelFile.path, 'mmproj': mmprojFile.path};
       }
     }
     return null;
@@ -692,7 +735,9 @@ class AiService {
       final healthUri = Uri.parse(
         baseUrl.endsWith('/') ? '${baseUrl}health' : '$baseUrl/health',
       );
-      final res = await http.get(healthUri).timeout(const Duration(milliseconds: 1200));
+      final res = await http
+          .get(healthUri)
+          .timeout(const Duration(milliseconds: 1200));
       if (res.statusCode >= 200 && res.statusCode < 400) return true;
     } catch (_) {}
 
@@ -700,7 +745,9 @@ class AiService {
       final modelsUri = Uri.parse(
         baseUrl.endsWith('/') ? '${baseUrl}models' : '$baseUrl/models',
       );
-      final res = await http.get(modelsUri).timeout(const Duration(milliseconds: 1200));
+      final res = await http
+          .get(modelsUri)
+          .timeout(const Duration(milliseconds: 1200));
       if (res.statusCode >= 200 && res.statusCode < 400) return true;
     } catch (_) {}
 
@@ -721,17 +768,18 @@ class AiService {
 
     try {
       debugPrint('[AiService] Spawning built-in llama-server on port $port...');
-      _localServerProcess = await Process.start(
-        exe,
-        [
-          '-m', models['model']!,
-          '--mmproj', models['mmproj']!,
-          '--port', port,
-          '-ngl', '99',
-          '--ctx-size', '4096',
-        ],
-        mode: ProcessStartMode.detached,
-      );
+      _localServerProcess = await Process.start(exe, [
+        '-m',
+        models['model']!,
+        '--mmproj',
+        models['mmproj']!,
+        '--port',
+        port,
+        '-ngl',
+        '99',
+        '--ctx-size',
+        '4096',
+      ], mode: ProcessStartMode.detached);
 
       // 轮询等待服务就绪
       for (int i = 0; i < 15; i++) {
@@ -746,5 +794,4 @@ class AiService {
     }
     return false;
   }
-
 }

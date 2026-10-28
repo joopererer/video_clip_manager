@@ -48,8 +48,7 @@ class MaxSimResult {
   });
 
   @override
-  String toString() =>
-      'MaxSimResult(score: \, hitTime: \ms)';
+  String toString() => 'MaxSimResult(score: \, hitTime: \ms)';
 }
 
 /// 增量叠加同步引擎 (Delta Engine)
@@ -57,11 +56,9 @@ class DeltaEngine {
   final FrameEmbeddingPool pool;
   final AiService aiService;
 
-  DeltaEngine({
-    FrameEmbeddingPool? pool,
-    AiService? aiService,
-  })  : pool = pool ?? FrameEmbeddingPool(),
-        aiService = aiService ?? AiService();
+  DeltaEngine({FrameEmbeddingPool? pool, AiService? aiService})
+    : pool = pool ?? FrameEmbeddingPool(),
+      aiService = aiService ?? AiService();
 
   /// 规划指定 Clip 区间的帧池差集
   DeltaSyncPlan planDelta({
@@ -129,12 +126,15 @@ class DeltaEngine {
     );
 
     if (plan.isFullCacheHit) {
-      debugPrint('[DeltaEngine] 100% 缓存命中，零计算复用已有 ${plan.cachedTimestamps.length} 帧');
+      debugPrint(
+        '[DeltaEngine] 100% 缓存命中，零计算复用已有 ${plan.cachedTimestamps.length} 帧',
+      );
       return pool.getFramesInRange(videoPathOrUrl, startMs, endMs);
     }
 
     debugPrint(
-        '[DeltaEngine] 增量规划: 期望 ${plan.expectedTimestamps.length} 帧, 命中 ${plan.cachedTimestamps.length} 帧, 缺失 ${plan.missingTimestamps.length} 帧');
+      '[DeltaEngine] 增量规划: 期望 ${plan.expectedTimestamps.length} 帧, 命中 ${plan.cachedTimestamps.length} 帧, 缺失 ${plan.missingTimestamps.length} 帧',
+    );
 
     // 3. 针对缺失边界执行抽帧
     final minMissing = plan.missingTimestamps.reduce(min);
@@ -167,12 +167,14 @@ class DeltaEngine {
           vec = rawVec.map((v) => (v as num).toDouble()).toList();
         }
 
-        newRecords.add(VideoFrameEmbeddingRecord(
-          tMs: frame.tMs,
-          vector: vec,
-          frameImagePath: frame.path,
-          createdAtMs: now,
-        ));
+        newRecords.add(
+          VideoFrameEmbeddingRecord(
+            tMs: frame.tMs,
+            vector: vec,
+            frameImagePath: frame.path,
+            createdAtMs: now,
+          ),
+        );
       }
 
       // 5. 合并入池并持久化

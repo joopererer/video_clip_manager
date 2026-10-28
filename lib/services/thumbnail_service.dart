@@ -82,7 +82,9 @@ class ThumbnailService {
 
       await Directory(thumbDir).create(recursive: true);
 
-      debugPrint('ThumbnailService: Requesting screenshot for entity $entityId at $time');
+      debugPrint(
+        'ThumbnailService: Requesting screenshot for entity $entityId at $time',
+      );
       try {
         await ScreenshotService().awaitHostReady();
       } catch (_) {}
@@ -90,18 +92,24 @@ class ThumbnailService {
       final data = await ScreenshotService()
           .takeScreenshot(videoPath, time)
           .timeout(
-            Duration(seconds: AppState.instance?.screenshotTimeoutSeconds ?? 30),
+            Duration(
+              seconds: AppState.instance?.screenshotTimeoutSeconds ?? 30,
+            ),
             onTimeout: () => null,
           );
 
       if (data != null) {
         try {
           await thumbFile.writeAsBytes(data);
-          debugPrint('ThumbnailService: Generated thumbnail at ${thumbFile.path}');
+          debugPrint(
+            'ThumbnailService: Generated thumbnail at ${thumbFile.path}',
+          );
           completer.complete(fileName);
           return fileName;
         } catch (e) {
-          debugPrint('ThumbnailService: Failed to write thumbnail file ${thumbFile.path}: $e');
+          debugPrint(
+            'ThumbnailService: Failed to write thumbnail file ${thumbFile.path}: $e',
+          );
           completer.complete(null);
           return null;
         }

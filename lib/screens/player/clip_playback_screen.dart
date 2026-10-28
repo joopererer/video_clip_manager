@@ -33,7 +33,7 @@ class ClipPlaybackScreen extends StatefulWidget {
     this.selectedRating,
     this.selectedFavorite,
     this.currentSortOption = SortOption.dateAddedDesc,
-      this.initialSeekTime,
+    this.initialSeekTime,
   });
 
   @override
@@ -108,7 +108,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       Duration loadedDuration = mainPlayer.state.duration;
       if (loadedDuration == Duration.zero) {
         try {
-          final isNetwork = _currentClip.videoPath.startsWith('http://') ||
+          final isNetwork =
+              _currentClip.videoPath.startsWith('http://') ||
               _currentClip.videoPath.startsWith('https://');
           final timeout = isNetwork
               ? const Duration(seconds: 12)
@@ -127,7 +128,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       }
 
       // 如果依然未能获取时长但已经有缓冲数据，也可以继续尝试
-      if (loadedDuration == Duration.zero && mainPlayer.state.buffer == Duration.zero) {
+      if (loadedDuration == Duration.zero &&
+          mainPlayer.state.buffer == Duration.zero) {
         throw Exception('Main player failed to load media');
       }
 
@@ -244,7 +246,9 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
         );
         await _continuePreGeneration();
       } else {
-        print('ClipPlayback: Cache complete or more than 30% remaining, skipping generation');
+        print(
+          'ClipPlayback: Cache complete or more than 30% remaining, skipping generation',
+        );
       }
     } catch (e) {
       print('ClipPlayback: Error in smart pre-generation: $e');

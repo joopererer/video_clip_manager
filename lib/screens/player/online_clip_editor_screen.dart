@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart' as mk;
@@ -40,8 +39,8 @@ class OnlineClipEditorScreen extends StatefulWidget {
   final OnlineVideoClip? clipToEdit;
 
   const OnlineClipEditorScreen({
-    super.key, 
-    required this.video, 
+    super.key,
+    required this.video,
     this.clipToEdit,
   });
 
@@ -89,7 +88,11 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
   late final FocusNode _focusNode;
   bool _isSniffing = false;
 
-  void _showSnackDeferred(String message, {Color? bgColor, Duration? duration}) {
+  void _showSnackDeferred(
+    String message, {
+    Color? bgColor,
+    Duration? duration,
+  }) {
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -104,10 +107,13 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
   }
 
   /// 保存嗅探到的视频数据到AppState
-  Future<void> _saveSniffedVideoData(String videoUrl, Map<String, String>? httpHeaders) async {
+  Future<void> _saveSniffedVideoData(
+    String videoUrl,
+    Map<String, String>? httpHeaders,
+  ) async {
     try {
       final appState = context.read<AppState>();
-      
+
       // 使用新的缓存服务更新视频信息
       final updatedVideo = OnlineVideoCacheService.updateVideoCache(
         video: widget.video,
@@ -116,12 +122,12 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         allStreams: [..._availableVideoStreams, ..._availableAudioStreams],
         qualityOptions: _qualityOptions,
       );
-      
+
       await appState.updateOnlineVideo(updatedVideo);
-      
+
       final cacheStatus = OnlineVideoCacheService.getCacheStatus(updatedVideo);
       final expirationHours = cacheStatus['expirationHours'] as int;
-      
+
       _showSnackDeferred(
         '视频链接已缓存(${expirationHours}小时有效)，下次播放更快',
         bgColor: Colors.green[600],
@@ -152,7 +158,8 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
 
       final headers = <String, String>{
         if (quality.stream.httpHeaders != null) ...quality.stream.httpHeaders!,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
       };
 
       // 如果有音频流，需要同时切换
@@ -173,7 +180,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
 
       // 恢复播放位置
       await player.seek(currentPosition);
-      
+
       // 恢复播放状态
       if (wasPlaying) {
         await player.play();
@@ -186,7 +193,6 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         bgColor: Colors.green[600],
         duration: const Duration(seconds: 2),
       );
-
     } catch (e) {
       _showSnackDeferred(
         '切换质量失败: $e',
@@ -268,8 +274,9 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
               itemCount: _qualityOptions.length,
               itemBuilder: (context, index) {
                 final quality = _qualityOptions[index];
-                final isSelected = _currentVideoStream?.formatId == quality.stream.formatId;
-                
+                final isSelected =
+                    _currentVideoStream?.formatId == quality.stream.formatId;
+
                 return ListTile(
                   leading: Icon(
                     quality.hasAudio ? Icons.volume_up : Icons.volume_off,
@@ -278,19 +285,23 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                   title: Text(
                     quality.displayName,
                     style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? Theme.of(context).colorScheme.primary : null,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      color: isSelected
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
                     ),
                   ),
                   subtitle: Text(
                     '分辨率: ${quality.resolution} | 比特率: ${quality.bitrate.toInt()}kbps',
                   ),
-                  trailing: isSelected 
-                    ? Icon(
-                        Icons.check_circle,
-                        color: Theme.of(context).colorScheme.primary,
-                      )
-                    : null,
+                  trailing: isSelected
+                      ? Icon(
+                          Icons.check_circle,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      : null,
                   onTap: () {
                     Navigator.of(context).pop();
                     _switchVideoQuality(quality);
@@ -306,7 +317,9 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
   }
 
   /// 显示流选择对话框
-  Future<VideoStream?> _showStreamSelectionDialog(List<StreamQuality> qualities) async {
+  Future<VideoStream?> _showStreamSelectionDialog(
+    List<StreamQuality> qualities,
+  ) async {
     return showDialog<VideoStream>(
       context: context,
       builder: (context) => AlertDialog(
@@ -327,17 +340,17 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                 subtitle: Text(
                   '分辨率: ${quality.resolution} | 比特率: ${quality.bitrate.toInt()}kbps',
                 ),
-                trailing: quality.hasAudio 
-                  ? const Chip(
-                      label: Text('有音频'),
-                      backgroundColor: Colors.green,
-                      labelStyle: TextStyle(color: Colors.white),
-                    )
-                  : const Chip(
-                      label: Text('无音频'),
-                      backgroundColor: Colors.red,
-                      labelStyle: TextStyle(color: Colors.white),
-                    ),
+                trailing: quality.hasAudio
+                    ? const Chip(
+                        label: Text('有音频'),
+                        backgroundColor: Colors.green,
+                        labelStyle: TextStyle(color: Colors.white),
+                      )
+                    : const Chip(
+                        label: Text('无音频'),
+                        backgroundColor: Colors.red,
+                        labelStyle: TextStyle(color: Colors.white),
+                      ),
                 onTap: () => Navigator.of(context).pop(quality.stream),
               );
             },
@@ -389,15 +402,16 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
       // 优先使用本地下载的视频
       String videoPath = widget.video.url;
       Map<String, String>? httpHeaders;
-      
+
       // 检查缓存状态
       final cacheStatus = OnlineVideoCacheService.getCacheStatus(widget.video);
       final isExpired = cacheStatus['isExpired'] as bool;
       final isExpiringSoon = cacheStatus['isExpiringSoon'] as bool;
-      
+
       // 如果链接即将过期，显示警告
       if (isExpiringSoon && !isExpired) {
-        final timeUntilExpiration = cacheStatus['timeUntilExpiration'] as Duration?;
+        final timeUntilExpiration =
+            cacheStatus['timeUntilExpiration'] as Duration?;
         if (timeUntilExpiration != null) {
           _showSnackDeferred(
             '视频链接将在${timeUntilExpiration.inMinutes}分钟后过期',
@@ -406,7 +420,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
           );
         }
       }
-      
+
       // 若在添加时已嗅探过直链与头信息，且未过期，优先使用
       if (!isExpired && widget.video.metadata.containsKey('videoUrl')) {
         final detectedUrl = widget.video.metadata['videoUrl'] as String?;
@@ -415,18 +429,28 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         }
         final headers = widget.video.metadata['httpHeaders'];
         if (headers is Map) {
-          httpHeaders = headers.map((k, v) => MapEntry(k.toString(), v.toString()));
+          httpHeaders = headers.map(
+            (k, v) => MapEntry(k.toString(), v.toString()),
+          );
         }
-        
+
         // 从缓存中恢复流信息
-        _availableVideoStreams = OnlineVideoCacheService.getCachedStreams(widget.video) ?? [];
-        _availableAudioStreams = _availableVideoStreams.where((s) => s.hasAudio && !s.hasVideo).toList();
-        _availableVideoStreams = _availableVideoStreams.where((s) => s.hasVideo).toList();
-        _qualityOptions = OnlineVideoCacheService.getCachedQualityOptions(widget.video) ?? [];
-        
-        print('从缓存恢复: ${_availableVideoStreams.length}个视频流, ${_availableAudioStreams.length}个音频流, ${_qualityOptions.length}个质量选项');
+        _availableVideoStreams =
+            OnlineVideoCacheService.getCachedStreams(widget.video) ?? [];
+        _availableAudioStreams = _availableVideoStreams
+            .where((s) => s.hasAudio && !s.hasVideo)
+            .toList();
+        _availableVideoStreams = _availableVideoStreams
+            .where((s) => s.hasVideo)
+            .toList();
+        _qualityOptions =
+            OnlineVideoCacheService.getCachedQualityOptions(widget.video) ?? [];
+
+        print(
+          '从缓存恢复: ${_availableVideoStreams.length}个视频流, ${_availableAudioStreams.length}个音频流, ${_qualityOptions.length}个质量选项',
+        );
       }
-      
+
       if (widget.video.isDownloaded && widget.video.localPath != null) {
         final localFile = File(widget.video.localPath!);
         if (await localFile.exists()) {
@@ -435,7 +459,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
           return;
         }
       }
-      
+
       // 尝试直接播放缓存的URL（仅当未过期时）
       if (!isExpired && videoPath != widget.video.url && videoPath.isNotEmpty) {
         try {
@@ -444,7 +468,8 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
               videoPath,
               httpHeaders: {
                 if (httpHeaders != null) ...httpHeaders,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+                'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
               },
             ),
             play: false,
@@ -456,16 +481,13 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
           );
           return;
         } catch (e) {
-          _showSnackDeferred(
-            '缓存链接播放失败，重新嗅探: $e',
-            bgColor: Colors.orange[700],
-          );
+          _showSnackDeferred('缓存链接播放失败，重新嗅探: $e', bgColor: Colors.orange[700]);
           // 缓存URL失败，立即尝试重新嗅探
           await _sniffAndPlayVideo();
           return;
         }
       }
-      
+
       // 如果链接已过期，直接重新嗅探
       if (isExpired) {
         _showSnackDeferred(
@@ -476,13 +498,13 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         await _sniffAndPlayVideo();
         return;
       }
-      
+
       // 如果没有缓存的URL，尝试嗅探视频链接
       if (!widget.video.isDownloaded) {
         await _sniffAndPlayVideo();
         return;
       }
-      
+
       // 监听播放器状态变化
       player.stream.error.listen((error) {
         _showSnackDeferred(
@@ -491,10 +513,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         );
       });
     } catch (e) {
-      _showSnackDeferred(
-        'Failed to load video: $e',
-        bgColor: Colors.red[700],
-      );
+      _showSnackDeferred('Failed to load video: $e', bgColor: Colors.red[700]);
     }
   }
 
@@ -509,7 +528,9 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
       );
 
       // 使用混合嗅探器（优先 yt-dlp，失败回落到自定义）
-      final info = await HybridVideoSnifferService.extractVideoInfo(widget.video.url);
+      final info = await HybridVideoSnifferService.extractVideoInfo(
+        widget.video.url,
+      );
 
       if (info == null || (info.videoUrl == null || info.videoUrl!.isEmpty)) {
         _showSnackDeferred(
@@ -523,25 +544,33 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
       // 优先从 yt-dlp 流中选择最佳可播放链接并携带HTTP头
       final allStreams = info.streams.whereType<VideoStream>().toList();
       final videoStreams = allStreams.where((s) => s.hasVideo).toList();
-      final audioStreams = allStreams.where((s) => s.hasAudio && !s.hasVideo).toList();
-      
+      final audioStreams = allStreams
+          .where((s) => s.hasAudio && !s.hasVideo)
+          .toList();
+
       // 存储流信息供动态切换使用
       _availableVideoStreams = videoStreams;
       _availableAudioStreams = audioStreams;
       _qualityOptions = VideoStreamSelector.getQualityOptions(videoStreams);
-      
+
       // 显示音频检测摘要
-      final audioSummary = AudioDetectionService.getAudioDetectionSummary(allStreams);
+      final audioSummary = AudioDetectionService.getAudioDetectionSummary(
+        allStreams,
+      );
       print('音频检测摘要: ${audioSummary['recommendation']}');
-      print('总流数: ${audioSummary['totalStreams']}, 音频流: ${audioSummary['audioStreams']}, 音频检测率: ${audioSummary['audioDetectionRate']}%');
-      
+      print(
+        '总流数: ${audioSummary['totalStreams']}, 音频流: ${audioSummary['audioStreams']}, 音频检测率: ${audioSummary['audioDetectionRate']}%',
+      );
+
       if (videoStreams.isNotEmpty) {
         // 检查是否有包含音频的视频流
         final videoWithAudio = videoStreams.where((s) => s.hasAudio).toList();
-        
+
         // 首先尝试找到真正的组合流（有实际音频编解码器的）
-        final bestCombined = AudioDetectionService.getBestCombinedStream(allStreams);
-        
+        final bestCombined = AudioDetectionService.getBestCombinedStream(
+          allStreams,
+        );
+
         if (bestCombined != null) {
           // 找到了真正的组合流，直接使用
           final best = bestCombined;
@@ -549,10 +578,13 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
           _currentAudioStream = null;
           final headers = <String, String>{
             if (best.httpHeaders != null) ...best.httpHeaders!,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
           };
 
-          final audioInfo = best.abr != null ? ' (音频: ${best.abr!.toInt()}kbps)' : ' (包含音频)';
+          final audioInfo = best.abr != null
+              ? ' (音频: ${best.abr!.toInt()}kbps)'
+              : ' (包含音频)';
           _showSnackDeferred(
             '🔊 使用组合流: ${best.resolutionString}${audioInfo}',
             bgColor: Colors.green[700],
@@ -563,25 +595,31 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
             mk.Media(best.url, httpHeaders: headers),
             play: false,
           );
-          
+
           await _saveSniffedVideoData(best.url, best.httpHeaders);
           return;
         } else if (audioStreams.isNotEmpty) {
           // 没有真正的组合流，尝试不同的播放策略
-          final bestVideo = VideoStreamSelector.selectBestStream(videoStreams) ?? videoStreams.first;
-          final bestAudio = AudioDetectionService.getBestAudioStream(allStreams) ?? audioStreams.first;
+          final bestVideo =
+              VideoStreamSelector.selectBestStream(videoStreams) ??
+              videoStreams.first;
+          final bestAudio =
+              AudioDetectionService.getBestAudioStream(allStreams) ??
+              audioStreams.first;
           _currentVideoStream = bestVideo;
           _currentAudioStream = bestAudio;
-          
+
           final headers = <String, String>{
             if (bestVideo.httpHeaders != null) ...bestVideo.httpHeaders!,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
           };
 
           // 策略1: 如果视频流是HLS格式，尝试直接播放（HLS可能包含音频轨道）
-          if (bestVideo.protocol == 'm3u8_native' || bestVideo.url.contains('.m3u8')) {
+          if (bestVideo.protocol == 'm3u8_native' ||
+              bestVideo.url.contains('.m3u8')) {
             print('🎵 尝试播放HLS流: ${bestVideo.url}');
-            
+
             _showSnackDeferred(
               '🎵 播放HLS视频流: ${bestVideo.resolutionString}',
               bgColor: Colors.blue[700],
@@ -593,17 +631,16 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                 mk.Media(bestVideo.url, httpHeaders: headers),
                 play: false,
               );
-              
+
               // HLS 流播放成功，但可能没有音频，所以我们还需要尝试添加音频
               print('✅ HLS 视频流播放成功，检查是否需要添加音频...');
-              
+
               // 延迟检查音频，如果没有音频则添加单独的音频流
               Future.delayed(const Duration(seconds: 1), () async {
                 if (mounted) {
                   await _tryAddSeparateAudioTrack(bestAudio, headers);
                 }
               });
-              
             } catch (e) {
               print('❌ HLS 视频流播放失败: $e');
               // 如果 HLS 播放失败，回退到分离流策略
@@ -612,7 +649,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
           } else if (bestVideo.tbr != null && bestVideo.tbr! > 500) {
             // 策略1.5: 如果视频流的总比特率很高，可能包含音频
             print('🎵 高比特率视频流可能包含音频: ${bestVideo.tbr}kbps');
-            
+
             _showSnackDeferred(
               '🔊 尝试高比特率流: ${bestVideo.resolutionString} (${bestVideo.tbr!.toInt()}kbps)',
               bgColor: Colors.purple[700],
@@ -625,25 +662,37 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
             );
           } else {
             // 策略2: 寻找质量稍低但真正包含音频的组合流
-            final lowerQualityCombined = allStreams.where((s) => 
-              s.hasAudio && s.hasVideo && 
-              s.acodec != null && s.acodec != 'none' && s.acodec!.isNotEmpty
-            ).toList();
-            
+            final lowerQualityCombined = allStreams
+                .where(
+                  (s) =>
+                      s.hasAudio &&
+                      s.hasVideo &&
+                      s.acodec != null &&
+                      s.acodec != 'none' &&
+                      s.acodec!.isNotEmpty,
+                )
+                .toList();
+
             if (lowerQualityCombined.isNotEmpty) {
-              final bestLowQuality = VideoStreamSelector.selectBestStream(lowerQualityCombined);
+              final bestLowQuality = VideoStreamSelector.selectBestStream(
+                lowerQualityCombined,
+              );
               if (bestLowQuality != null) {
                 print('🎵 使用较低质量但包含音频的组合流: ${bestLowQuality.formatId}');
-                
+
                 _currentVideoStream = bestLowQuality;
                 _currentAudioStream = null;
-                
+
                 final lowQualityHeaders = <String, String>{
-                  if (bestLowQuality.httpHeaders != null) ...bestLowQuality.httpHeaders!,
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+                  if (bestLowQuality.httpHeaders != null)
+                    ...bestLowQuality.httpHeaders!,
+                  'User-Agent':
+                      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
                 };
 
-                final audioInfo = bestLowQuality.abr != null ? ' (音频: ${bestLowQuality.abr!.toInt()}kbps)' : ' (包含音频)';
+                final audioInfo = bestLowQuality.abr != null
+                    ? ' (音频: ${bestLowQuality.abr!.toInt()}kbps)'
+                    : ' (包含音频)';
                 _showSnackDeferred(
                   '🔊 使用较低质量组合流: ${bestLowQuality.resolutionString}${audioInfo}',
                   bgColor: Colors.orange[700],
@@ -663,17 +712,20 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
               await _playWithSeparateStreams(bestVideo, bestAudio, headers);
             }
           }
-          
+
           await _saveSniffedVideoData(bestVideo.url, bestVideo.httpHeaders);
           return;
         } else {
           // 只有视频流，没有音频
-          final best = VideoStreamSelector.selectBestStream(videoStreams) ?? videoStreams.first;
+          final best =
+              VideoStreamSelector.selectBestStream(videoStreams) ??
+              videoStreams.first;
           _currentVideoStream = best;
           _currentAudioStream = null;
           final headers = <String, String>{
             if (best.httpHeaders != null) ...best.httpHeaders!,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
           };
 
           _showSnackDeferred(
@@ -686,7 +738,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
             mk.Media(best.url, httpHeaders: headers),
             play: false,
           );
-          
+
           await _saveSniffedVideoData(best.url, best.httpHeaders);
           return;
         }
@@ -695,16 +747,11 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
       // 回退：使用通用videoUrl（可能缺少必要headers）
       await player.open(mk.Media(info.videoUrl!), play: false);
     } catch (e) {
-      _showSnackDeferred(
-        '视频嗅探失败: $e',
-        bgColor: Colors.red[700],
-      );
+      _showSnackDeferred('视频嗅探失败: $e', bgColor: Colors.red[700]);
     } finally {
       if (mounted) setState(() => _isSniffing = false);
     }
   }
-
-  
 
   @override
   void dispose() {
@@ -940,18 +987,19 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
       final response = await http.get(
         Uri.parse(thumbnailUrl),
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
       );
-      
+
       if (response.statusCode == 200) {
         final thumbnailService = context.read<ThumbnailService>();
         final fileName = thumbnailService.getThumbnailFileName(clipId);
         final filePath = thumbnailService.buildThumbnailPath(dbPath, fileName);
-        
+
         final file = File(filePath);
         await file.writeAsBytes(response.bodyBytes);
-        
+
         return fileName;
       } else {
         print('Failed to download thumbnail: HTTP ${response.statusCode}');
@@ -964,7 +1012,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
 
   void _deleteClip(OnlineVideoClip clip) {
     final appState = context.read<AppState>();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1116,9 +1164,9 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     final isEditing = _originalEditingClip != null;
 
     if (isEditing) {
-      final latestClipInState = appState.onlineVideoClips.where(
-        (c) => c.id == _originalEditingClip!.id,
-      ).firstOrNull;
+      final latestClipInState = appState.onlineVideoClips
+          .where((c) => c.id == _originalEditingClip!.id)
+          .firstOrNull;
       if (latestClipInState == null) {
         WidgetsBinding.instance.addPostFrameCallback(
           (_) => _resetFormToBlank(),
@@ -1147,11 +1195,16 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
           },
           child: Scaffold(
             appBar: AppBar(
-              title: Text(isEditing ? 'Edit Online Clip' : 'Create New Online Clip'),
+              title: Text(
+                isEditing ? 'Edit Online Clip' : 'Create New Online Clip',
+              ),
               actions: [
                 if (_isSniffing)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12.0,
+                      vertical: 12.0,
+                    ),
                     child: SizedBox(
                       width: 20,
                       height: 20,
@@ -1229,7 +1282,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     );
   }
 
-    Widget _buildEditorPanel(AppState appState) {
+  Widget _buildEditorPanel(AppState appState) {
     return Column(
       children: [
         // 视频播放器
@@ -1259,7 +1312,9 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                       child: GestureDetector(
                         onTap: () {
                           if (!_videoFocusNode.hasFocus) {
-                            FocusScope.of(context).requestFocus(_videoFocusNode);
+                            FocusScope.of(
+                              context,
+                            ).requestFocus(_videoFocusNode);
                           }
                           player.playOrPause();
                         },
@@ -1436,8 +1491,6 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     );
   }
 
-
-
   Widget _buildTagsSection(AppState appState) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1451,16 +1504,18 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            ..._formClip.tags.map((tag) => Chip(
-              label: Text(tag),
-              onDeleted: () {
-                setState(() {
-                  final newTags = List<String>.from(_formClip.tags)
-                    ..remove(tag);
-                  _formClip = _formClip.copyWith(tags: newTags);
-                });
-              },
-            )),
+            ..._formClip.tags.map(
+              (tag) => Chip(
+                label: Text(tag),
+                onDeleted: () {
+                  setState(() {
+                    final newTags = List<String>.from(_formClip.tags)
+                      ..remove(tag);
+                    _formClip = _formClip.copyWith(tags: newTags);
+                  });
+                },
+              ),
+            ),
             ActionChip(
               label: const Text('Add Tag'),
               onPressed: () => _showAddTagDialog(),
@@ -1505,8 +1560,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
               final value = _newTagController.text.trim();
               if (value.isNotEmpty) {
                 setState(() {
-                  final newTags = List<String>.from(_formClip.tags)
-                    ..add(value);
+                  final newTags = List<String>.from(_formClip.tags)..add(value);
                   _formClip = _formClip.copyWith(tags: newTags);
                 });
                 _newTagController.clear();
@@ -1520,8 +1574,6 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     );
   }
 
-
-
   Widget _buildCoverPlaceholder() {
     return Container(
       color: Colors.grey[300],
@@ -1534,10 +1586,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
             Text(
               'Online Video\nCover will be downloaded when saved',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ],
         ),
@@ -1569,10 +1618,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
           const SizedBox(width: 8),
           Text(
             action,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: Colors.white, fontSize: 12),
           ),
         ],
       ),
@@ -1753,7 +1799,9 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Previewing clip: ${formatDuration(startTime)} - ${formatDuration(endTime)}'),
+        content: Text(
+          'Previewing clip: ${formatDuration(startTime)} - ${formatDuration(endTime)}',
+        ),
         backgroundColor: Colors.blue[700],
         duration: Duration(seconds: (endTime - startTime).inSeconds + 1),
       ),
@@ -1789,10 +1837,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                   child: Text(
                     'No clips yet.\nCreate your first clip!',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey,
-                    ),
+                    style: TextStyle(fontSize: 16, color: Colors.grey),
                   ),
                 )
               : ScrollablePositionedList.builder(
@@ -1801,7 +1846,7 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                   itemBuilder: (context, index) {
                     final clip = clipsForThisVideo[index];
                     final isSelected = _originalEditingClip?.id == clip.id;
-                    
+
                     return Card(
                       margin: const EdgeInsets.symmetric(
                         horizontal: 8,
@@ -1818,10 +1863,12 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                               ? ClipRRect(
                                   borderRadius: BorderRadius.circular(4),
                                   child: Image.file(
-                                    File(thumbnailService.buildThumbnailPath(
-                                      appState.currentDbPath!,
-                                      clip.thumbnailPath!,
-                                    )),
+                                    File(
+                                      thumbnailService.buildThumbnailPath(
+                                        appState.currentDbPath!,
+                                        clip.thumbnailPath!,
+                                      ),
+                                    ),
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) {
                                       return Container(
@@ -1845,7 +1892,9 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                         title: Text(
                           clip.name.isEmpty ? 'Untitled Clip' : clip.name,
                           style: TextStyle(
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
                         ),
                         subtitle: Column(
@@ -1858,14 +1907,20 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                             if (clip.tags.isNotEmpty)
                               Wrap(
                                 spacing: 4,
-                                children: clip.tags.take(3).map((tag) => Chip(
-                                  label: Text(
-                                    tag,
-                                    style: const TextStyle(fontSize: 10),
-                                  ),
-                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: VisualDensity.compact,
-                                )).toList(),
+                                children: clip.tags
+                                    .take(3)
+                                    .map(
+                                      (tag) => Chip(
+                                        label: Text(
+                                          tag,
+                                          style: const TextStyle(fontSize: 10),
+                                        ),
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                    )
+                                    .toList(),
                               ),
                           ],
                         ),
@@ -1897,7 +1952,10 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
                                 children: [
                                   Icon(Icons.delete, color: Colors.red),
                                   SizedBox(width: 8),
-                                  Text('Delete', style: TextStyle(color: Colors.red)),
+                                  Text(
+                                    'Delete',
+                                    style: TextStyle(color: Colors.red),
+                                  ),
                                 ],
                               ),
                             ),
@@ -1913,7 +1971,10 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
   }
 
   /// 尝试为当前视频添加单独的音频轨道
-  Future<void> _tryAddSeparateAudioTrack(VideoStream? audioStream, Map<String, String> headers) async {
+  Future<void> _tryAddSeparateAudioTrack(
+    VideoStream? audioStream,
+    Map<String, String> headers,
+  ) async {
     if (audioStream == null) {
       print('❌ 没有可用的音频流');
       _showSnackDeferred(
@@ -1923,10 +1984,12 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
       );
       return;
     }
-    
+
     print('🎵 检测到音频流，但 MediaKit 暂不支持 HLS+音频同时播放');
-    print('   音频流: [${audioStream.formatId}] ${audioStream.acodec} ${audioStream.abr?.toInt() ?? 0}kbps');
-    
+    print(
+      '   音频流: [${audioStream.formatId}] ${audioStream.acodec} ${audioStream.abr?.toInt() ?? 0}kbps',
+    );
+
     _showSnackDeferred(
       '⚠️ 仅播放视频（音频需单独处理）',
       bgColor: Colors.orange[700],
@@ -1935,56 +1998,61 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
   }
 
   /// 尝试使用分离流播放的多种策略
-  Future<void> _playWithSeparateStreams(VideoStream bestVideo, VideoStream bestAudio, Map<String, String> headers) async {
+  Future<void> _playWithSeparateStreams(
+    VideoStream bestVideo,
+    VideoStream bestAudio,
+    Map<String, String> headers,
+  ) async {
     final videoInfo = '视频${bestVideo.resolutionString}';
-    final audioInfo = bestAudio.abr != null ? 
-        '音频${bestAudio.abr!.toInt()}kbps' : 
-        '音频${bestAudio.formatNote ?? 'Unknown'}';
-    
+    final audioInfo = bestAudio.abr != null
+        ? '音频${bestAudio.abr!.toInt()}kbps'
+        : '音频${bestAudio.formatNote ?? 'Unknown'}';
+
     print('🔧 尝试分离流播放策略...');
     print('   视频流: ${bestVideo.url}');
     print('   音频流: ${bestAudio.url}');
-    
+
     _showSnackDeferred(
       '🔧 正在合并音视频流...',
       bgColor: Colors.blue[700],
       duration: const Duration(seconds: 2),
     );
-    
+
     // 策略 1: 使用音视频合并服务
     try {
       final audioHeaders = <String, String>{
         if (bestAudio.httpHeaders != null) ...bestAudio.httpHeaders!,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
       };
-      
+
       final mergedUrl = await AudioVideoMergerService.createMergedStreamUrl(
-        bestVideo, 
+        bestVideo,
         bestAudio,
         videoHeaders: headers,
         audioHeaders: audioHeaders,
       );
-      
+
       if (mergedUrl != null) {
         print('✅ 成功创建合并流: $mergedUrl');
-        
+
         _showSnackDeferred(
           '✅ 音视频合并成功: ${videoInfo} + ${audioInfo}',
           bgColor: Colors.green[700],
           duration: const Duration(seconds: 3),
         );
-        
+
         await player.open(
           mk.Media(mergedUrl, httpHeaders: headers),
           play: false,
         );
-        
+
         return;
       }
     } catch (e) {
       print('❌ 音视频合并失败: $e');
     }
-    
+
     // 策略 2: 尝试 MediaKit Playlist（可能不工作，但值得一试）
     try {
       _showSnackDeferred(
@@ -1992,12 +2060,13 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         bgColor: Colors.purple[700],
         duration: const Duration(seconds: 2),
       );
-      
+
       final audioHeaders = <String, String>{
         if (bestAudio.httpHeaders != null) ...bestAudio.httpHeaders!,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
       };
-      
+
       await player.open(
         mk.Playlist([
           mk.Media(bestVideo.url, httpHeaders: headers),
@@ -2005,33 +2074,32 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
         ]),
         play: false,
       );
-      
+
       _showSnackDeferred(
         '✅ Playlist 播放: ${videoInfo} + ${audioInfo}',
         bgColor: Colors.green[700],
         duration: const Duration(seconds: 3),
       );
-      
+
       return;
-      
     } catch (e) {
       print('❌ MediaKit Playlist 失败: $e');
     }
-    
+
     // 策略 3: 回退到只播放视频
     print('⚠️ 所有音视频合并策略都失败，回退到仅视频播放');
-    
+
     _showSnackDeferred(
       '⚠️ 音视频合并失败，仅播放视频: ${videoInfo}',
       bgColor: Colors.orange[700],
       duration: const Duration(seconds: 3),
     );
-    
+
     await player.open(
       mk.Media(bestVideo.url, httpHeaders: headers),
       play: false,
     );
-    
+
     // 显示详细的音频流信息给用户
     _showSnackDeferred(
       '💡 检测到音频流 ${audioInfo}，但无法与视频合并播放',
@@ -2040,4 +2108,3 @@ class _OnlineClipEditorScreenState extends State<OnlineClipEditorScreen> {
     );
   }
 }
-

@@ -60,29 +60,25 @@ class _VideosTabState extends State<VideosTab> {
     );
   }
 
-  Widget _buildVideoInfoBar(
-    AppState appState,
-    List<dynamic> mixedVideos,
-  ) {
+  Widget _buildVideoInfoBar(AppState appState, List<dynamic> mixedVideos) {
     final localVideos = mixedVideos.where((v) => v['type'] == 'local').length;
     final onlineVideos = mixedVideos.where((v) => v['type'] == 'online').length;
-    
-    final totalDuration = mixedVideos.fold<Duration>(
-      Duration.zero,
-      (sum, v) {
-        if (v['type'] == 'local') {
-          final video = v['video'] as OriginalVideo;
-          return sum + (video.duration ?? Duration.zero);
-        } else {
-          final video = v['video'] as OnlineVideo;
-          return sum + (video.duration ?? Duration.zero);
-        }
-      },
-    );
+
+    final totalDuration = mixedVideos.fold<Duration>(Duration.zero, (sum, v) {
+      if (v['type'] == 'local') {
+        final video = v['video'] as OriginalVideo;
+        return sum + (video.duration ?? Duration.zero);
+      } else {
+        final video = v['video'] as OnlineVideo;
+        return sum + (video.duration ?? Duration.zero);
+      }
+    });
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      color: Theme.of(
+        context,
+      ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
       child: Row(
         children: [
           _buildInfoItem('Total', '${mixedVideos.length}', Icons.movie),
@@ -178,12 +174,10 @@ class _VideosTabState extends State<VideosTab> {
     final appState = context.read<AppState>();
     final video = videoData['video'];
     final videoType = videoData['type'];
-    
+
     int clipCount;
     if (videoType == 'local') {
-      clipCount = appState.clips
-          .where((c) => c.videoPath == video.path)
-          .length;
+      clipCount = appState.clips.where((c) => c.videoPath == video.path).length;
     } else {
       clipCount = appState.getOnlineVideoClips(video.id).length;
     }
@@ -214,7 +208,9 @@ class _VideosTabState extends State<VideosTab> {
                       child: Container(
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
-                          color: videoType == 'online' ? Colors.blue : Colors.green,
+                          color: videoType == 'online'
+                              ? Colors.blue
+                              : Colors.green,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Icon(
@@ -258,9 +254,9 @@ class _VideosTabState extends State<VideosTab> {
                     if (videoType == 'online')
                       Text(
                         OnlineVideoService.getPlatformName(video.platform),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.blue,
-                        ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: Colors.blue),
                       ),
                   ],
                 ),
@@ -278,12 +274,10 @@ class _VideosTabState extends State<VideosTab> {
     final appState = context.read<AppState>();
     final video = videoData['video'];
     final videoType = videoData['type'];
-    
+
     int clipCount;
     if (videoType == 'local') {
-      clipCount = appState.clips
-          .where((c) => c.videoPath == video.path)
-          .length;
+      clipCount = appState.clips.where((c) => c.videoPath == video.path).length;
     } else {
       clipCount = appState.getOnlineVideoClips(video.id).length;
     }
@@ -330,7 +324,9 @@ class _VideosTabState extends State<VideosTab> {
                     child: Container(
                       padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
-                        color: videoType == 'online' ? Colors.blue : Colors.green,
+                        color: videoType == 'online'
+                            ? Colors.blue
+                            : Colors.green,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Icon(
@@ -346,7 +342,10 @@ class _VideosTabState extends State<VideosTab> {
                       right: 4,
                       child: Text(
                         OnlineVideoService.getPlatformIcon(video.platform),
-                        style: const TextStyle(fontSize: 16, color: Colors.white),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                 ],
@@ -367,9 +366,9 @@ class _VideosTabState extends State<VideosTab> {
                   if (videoType == 'online')
                     Text(
                       OnlineVideoService.getPlatformName(video.platform),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.blue,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.blue),
                     ),
                 ],
               ),
@@ -461,11 +460,7 @@ class _VideosTabState extends State<VideosTab> {
     }
   }
 
-  void _handleVideoAction(
-    BuildContext context,
-    String action,
-    dynamic video,
-  ) {
+  void _handleVideoAction(BuildContext context, String action, dynamic video) {
     final appState = context.read<AppState>();
     switch (action) {
       case 'create_clip':
@@ -476,7 +471,10 @@ class _VideosTabState extends State<VideosTab> {
           appState.createClipFromWholeVideo(video);
           ToastUtils.showSuccess(context, 'Created clip from "${video.name}"');
         } else if (video is OnlineVideo) {
-          ToastUtils.showWarning(context, 'Clipping from online videos is not yet supported.');
+          ToastUtils.showWarning(
+            context,
+            'Clipping from online videos is not yet supported.',
+          );
         }
         break;
       case 'delete_video':
@@ -487,12 +485,12 @@ class _VideosTabState extends State<VideosTab> {
 
   void _deleteVideo(BuildContext context, dynamic video) {
     final appState = context.read<AppState>();
-    
+
     if (video is OriginalVideo) {
       final clipCount = appState.clips
           .where((c) => c.videoPath == video.path)
           .length;
-      
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -519,7 +517,7 @@ class _VideosTabState extends State<VideosTab> {
       );
     } else if (video is OnlineVideo) {
       final clipCount = appState.getOnlineVideoClips(video.id).length;
-      
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -536,7 +534,10 @@ class _VideosTabState extends State<VideosTab> {
               onPressed: () {
                 appState.deleteOnlineVideo(video.id);
                 Navigator.of(context).pop();
-                ToastUtils.showSuccess(context, 'Online video deleted successfully');
+                ToastUtils.showSuccess(
+                  context,
+                  'Online video deleted successfully',
+                );
               },
               style: TextButton.styleFrom(foregroundColor: Colors.red),
               child: const Text('Delete'),
@@ -587,14 +588,14 @@ class _VideosTabState extends State<VideosTab> {
   void _showAddOnlineVideoScreen(BuildContext context) async {
     // 在对话框显示之前获取 AppState 引用，避免异步操作后 context 失效
     final appState = context.read<AppState>();
-    
+
     try {
       final result = await showDialog<OnlineVideo>(
         context: context,
         barrierDismissible: false,
         builder: (context) => AddOnlineVideoScreen(),
       );
-      
+
       if (result != null) {
         try {
           await appState.addOnlineVideo(result);
@@ -624,7 +625,7 @@ class _VideosTabState extends State<VideosTab> {
       if (result != null && result.files.isNotEmpty) {
         final appState = context.read<AppState>();
         final paths = result.files.map((file) => file.path!).toList();
-        
+
         for (final path in paths) {
           final video = OriginalVideo(
             id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -648,7 +649,7 @@ class _VideosTabState extends State<VideosTab> {
     final hours = duration.inHours;
     final minutes = duration.inMinutes % 60;
     final seconds = duration.inSeconds % 60;
-    
+
     if (hours > 0) {
       return '${hours}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     } else {

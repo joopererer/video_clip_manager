@@ -91,9 +91,15 @@ void main() {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Dark Media Workspace — 核心组件规范', style: AppTypography.pageTitle),
+              const Text(
+                'Dark Media Workspace — 核心组件规范',
+                style: AppTypography.pageTitle,
+              ),
               const SizedBox(height: AppSpacing.xs),
-              const Text('包含按钮、输入框、标签、时间码徽章、卡片与对话框样式验证', style: AppTypography.bodySecondary),
+              const Text(
+                '包含按钮、输入框、标签、时间码徽章、卡片与对话框样式验证',
+                style: AppTypography.bodySecondary,
+              ),
               const SizedBox(height: AppSpacing.lg),
 
               // 卡片与表面层
@@ -107,7 +113,10 @@ void main() {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('标准表面 (Surface #252A34)', style: AppTypography.subtitle),
+                            const Text(
+                              '标准表面 (Surface #252A34)',
+                              style: AppTypography.subtitle,
+                            ),
                             const SizedBox(height: AppSpacing.xs),
                             const Text(
                               '卡片使用 12px 圆角与 #3B414E 细微边框，确保在 #171A20 基础背景上具备清晰层次感。',
@@ -125,13 +134,19 @@ void main() {
                                   showMs: true,
                                 ),
                                 TimecodeChip(
-                                  duration: const Duration(minutes: 1, seconds: 30),
+                                  duration: const Duration(
+                                    minutes: 1,
+                                    seconds: 30,
+                                  ),
                                   label: 'OUT',
                                   labelColor: AppColors.warning,
                                   showMs: true,
                                 ),
                                 TimecodeChip(
-                                  duration: const Duration(minutes: 1, seconds: 21),
+                                  duration: const Duration(
+                                    minutes: 1,
+                                    seconds: 21,
+                                  ),
                                   label: 'DURATION',
                                   labelColor: AppColors.primary,
                                   showMs: true,
@@ -152,7 +167,10 @@ void main() {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('抬升表面 (Surface Elevated #303644)', style: AppTypography.subtitle),
+                            const Text(
+                              '抬升表面 (Surface Elevated #303644)',
+                              style: AppTypography.subtitle,
+                            ),
                             const SizedBox(height: AppSpacing.xs),
                             const Text(
                               '用于对话框、浮层与二级面板，提供更高阶对比度与深色质感。',
@@ -208,7 +226,10 @@ void main() {
                       decoration: InputDecoration(
                         labelText: '语义搜索',
                         hintText: '输入自然语言描述画面…',
-                        prefixIcon: const Icon(Icons.auto_awesome, color: AppColors.primary),
+                        prefixIcon: const Icon(
+                          Icons.auto_awesome,
+                          color: AppColors.primary,
+                        ),
                         suffixIcon: IconButton(
                           icon: const Icon(Icons.clear, size: 18),
                           onPressed: () {},
@@ -246,14 +267,8 @@ void main() {
                     selected: false,
                     onSelected: (_) {},
                   ),
-                  Chip(
-                    label: const Text('4K 航拍'),
-                    onDeleted: () {},
-                  ),
-                  Chip(
-                    label: const Text('城市风景'),
-                    onDeleted: () {},
-                  ),
+                  Chip(label: const Text('4K 航拍'), onDeleted: () {}),
+                  Chip(label: const Text('城市风景'), onDeleted: () {}),
                 ],
               ),
             ],

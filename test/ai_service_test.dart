@@ -11,8 +11,11 @@ void main() {
     test('resolveCliPath finds compiled local-media-ai executable', () async {
       final cliPath = await ai.resolveCliPath();
       expect(cliPath, isNotNull);
-      expect(await File(cliPath!).exists(), isTrue,
-          reason: 'local-media-ai binary should exist at $cliPath');
+      expect(
+        await File(cliPath!).exists(),
+        isTrue,
+        reason: 'local-media-ai binary should exist at $cliPath',
+      );
     });
 
     test('checkDoctor reports FFmpeg and CLI presence', () async {
@@ -42,32 +45,38 @@ void main() {
       expect(caption.mainSubject, equals('surfer'));
       expect(caption.keyActions, contains('surfer'));
       expect(caption.keyActions, contains('paddling'));
-      expect(caption.summary, equals('A surfer rides an ocean wave skillfully.'));
+      expect(
+        caption.summary,
+        equals('A surfer rides an ocean wave skillfully.'),
+      );
       expect(caption.searchDocument, contains('Scene: ocean beach'));
       expect(caption.searchDocument, contains('Subject: surfer'));
     });
 
-    test('sanitizeTags strips punctuation, splits clauses and extracts atomic keywords', () {
-      final tags = AiService.sanitizeTags(
-        ['行走，手持木棍'],
-        scene: '一个女人在雪山上行走，手持一根木棍，背景是雪山和雾气。',
-        mainSubject: '女人',
-      );
+    test(
+      'sanitizeTags strips punctuation, splits clauses and extracts atomic keywords',
+      () {
+        final tags = AiService.sanitizeTags(
+          ['行走，手持木棍'],
+          scene: '一个女人在雪山上行走，手持一根木棍，背景是雪山和雾气。',
+          mainSubject: '女人',
+        );
 
-      // 绝不能包含逗号或整句短语
-      for (final t in tags) {
-        expect(t.contains(','), isFalse);
-        expect(t.contains('，'), isFalse);
-        expect(t.length, lessThanOrEqualTo(8));
-        expect(t.length, greaterThanOrEqualTo(2));
-      }
+        // 绝不能包含逗号或整句短语
+        for (final t in tags) {
+          expect(t.contains(','), isFalse);
+          expect(t.contains('，'), isFalse);
+          expect(t.length, lessThanOrEqualTo(8));
+          expect(t.length, greaterThanOrEqualTo(2));
+        }
 
-      // 应提炼出原子名词/动名词
-      expect(tags, contains('行走'));
-      expect(tags, contains('木棍'));
-      expect(tags, contains('女人'));
-      expect(tags, contains('雪山'));
-      expect(tags, contains('雾气'));
-    });
+        // 应提炼出原子名词/动名词
+        expect(tags, contains('行走'));
+        expect(tags, contains('木棍'));
+        expect(tags, contains('女人'));
+        expect(tags, contains('雪山'));
+        expect(tags, contains('雾气'));
+      },
+    );
   });
 }

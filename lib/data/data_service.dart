@@ -15,12 +15,12 @@ class LoadResult {
   final List<OnlineVideoClip>? onlineVideoClips;
   final String? path;
   LoadResult({
-    this.clips, 
-    this.videos, 
-    this.playlists, 
+    this.clips,
+    this.videos,
+    this.playlists,
     this.onlineVideos,
     this.onlineVideoClips,
-    this.path
+    this.path,
   });
 }
 
@@ -99,7 +99,9 @@ class DataService {
         'videos': videos.map((video) => video.toJson()).toList(),
         'playlists': playlists.map((playlist) => playlist.toJson()).toList(),
         'onlineVideos': onlineVideos.map((video) => video.toJson()).toList(),
-        'onlineVideoClips': onlineVideoClips.map((clip) => clip.toJson()).toList(),
+        'onlineVideoClips': onlineVideoClips
+            .map((clip) => clip.toJson())
+            .toList(),
       };
 
       final jsonString = const JsonEncoder.withIndent('  ').convert(data);
@@ -148,7 +150,7 @@ class DataService {
                     .map((json) => OnlineVideoClip.fromJson(json))
                     .toList()
               : <OnlineVideoClip>[];
-          
+
           return LoadResult(
             clips: clips,
             videos: videos,

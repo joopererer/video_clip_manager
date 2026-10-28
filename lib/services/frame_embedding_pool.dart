@@ -47,11 +47,11 @@ class VideoFrameEmbeddingRecord {
   }
 
   Map<String, dynamic> toJson() => {
-        't_ms': tMs,
-        'vector': vector,
-        'frame_image_path': frameImagePath,
-        'created_at_ms': createdAtMs,
-      };
+    't_ms': tMs,
+    'vector': vector,
+    'frame_image_path': frameImagePath,
+    'created_at_ms': createdAtMs,
+  };
 
   factory VideoFrameEmbeddingRecord.fromJson(Map<String, dynamic> json) {
     final rawVec = (json['vector'] as List<dynamic>?) ?? [];
@@ -97,7 +97,10 @@ class FrameEmbeddingPool {
   }
 
   /// 从磁盘加载缓存
-  Future<int> loadFromDisk(String videoPathOrUrl, {String? customStorageDir}) async {
+  Future<int> loadFromDisk(
+    String videoPathOrUrl, {
+    String? customStorageDir,
+  }) async {
     try {
       final file = await _getFile(videoPathOrUrl, customDir: customStorageDir);
       if (!await file.exists()) return 0;
@@ -127,7 +130,10 @@ class FrameEmbeddingPool {
   }
 
   /// 保存当前视频的所有帧嵌入到磁盘
-  Future<void> saveToDisk(String videoPathOrUrl, {String? customStorageDir}) async {
+  Future<void> saveToDisk(
+    String videoPathOrUrl, {
+    String? customStorageDir,
+  }) async {
     try {
       final key = computeVideoKey(videoPathOrUrl);
       final map = _pool[key];
@@ -177,7 +183,10 @@ class FrameEmbeddingPool {
   }
 
   /// 插入或合并新的帧记录
-  void putFrames(String videoPathOrUrl, List<VideoFrameEmbeddingRecord> frames) {
+  void putFrames(
+    String videoPathOrUrl,
+    List<VideoFrameEmbeddingRecord> frames,
+  ) {
     final key = computeVideoKey(videoPathOrUrl);
     final map = _pool.putIfAbsent(key, () => {});
     for (final frame in frames) {
