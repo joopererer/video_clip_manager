@@ -1,11 +1,10 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../data/app_state.dart';
+import '../services/vlm_connection_probe.dart';
 import '../theme/app_colors.dart';
 
 /// 连接测试的状态：检测中使用蓝色（信息），而不是错误色。
@@ -27,6 +26,9 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
   bool _obscureApiKey = true;
   _TestState _testState = _TestState.idle;
   String? _testMessage;
+
+  /// Model ids reported by the service's `GET /models`, shown as choices.
+  List<String> _serverModels = const [];
 
   bool _isDownloadingModel = false;
   String? _downloadProgress;
@@ -216,6 +218,7 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
       }
       _testState = _TestState.idle;
       _testMessage = null;
+      _serverModels = const [];
     });
   }
 
@@ -248,40 +251,21 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
         await appState.aiService.ensureBuiltInLlamaServerRunning(port: '11434');
       }
 
-      final endpoint = url.endsWith('/')
-          ? '${url}chat/completions'
-          : '$url/chat/completions';
-
-      final headers = <String, String>{'Content-Type': 'application/json'};
-      if (key.isNotEmpty) headers['Authorization'] = 'Bearer $key';
-
-      final body = jsonEncode({
-        'model': model,
-        'messages': [
-          {'role': 'user', 'content': 'ping'},
-        ],
-        'max_tokens': 5,
-      });
-
-      final stopwatch = Stopwatch()..start();
-      final response = await http
-          .post(Uri.parse(endpoint), headers: headers, body: body)
-          .timeout(const Duration(seconds: 10));
-      stopwatch.stop();
+      // Same two requests for every preset: GET /models, then the unchanged
+      // minimal POST /chat/completions (Ollama request format is untouched).
+      final result = await VlmConnectionProbe().probe(
+        baseUrl: url,
+        model: model,
+        apiKey: key,
+        isLmStudio: _selectedMode == 'lm_studio',
+      );
       if (!mounted) return;
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        setState(() {
-          _testState = _TestState.success;
-          _testMessage = '连接成功，耗时 ${stopwatch.elapsedMilliseconds}ms';
-        });
-      } else {
-        setState(() {
-          _testState = _TestState.failure;
-          _testMessage =
-              '连接失败 (HTTP ${response.statusCode}): ${response.body.takePrefix(120)}';
-        });
-      }
+      setState(() {
+        if (result.models.isNotEmpty) _serverModels = result.models;
+        _testState = result.isOk ? _TestState.success : _TestState.failure;
+        _testMessage = result.message;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -289,6 +273,34 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
         _testMessage = '连接异常: $e';
       });
     }
+  }
+
+  /// Lists the model ids the service reports. Needs only the address, so the
+  /// user can pick a real id instead of typing one blind.
+  Future<void> _fetchServerModels() async {
+    final url = _apiUrlController.text.trim();
+    if (url.isEmpty) {
+      setState(() {
+        _testState = _TestState.failure;
+        _testMessage = '请先填写 API 地址';
+      });
+      return;
+    }
+    setState(() {
+      _testState = _TestState.running;
+      _testMessage = '正在获取服务模型列表...';
+    });
+    final result = await VlmConnectionProbe().listModels(
+      baseUrl: url,
+      apiKey: _apiKeyController.text.trim(),
+      isLmStudio: _selectedMode == 'lm_studio',
+    );
+    if (!mounted) return;
+    setState(() {
+      _testState = result.isOk ? _TestState.success : _TestState.failure;
+      _testMessage = result.message;
+      _serverModels = result.models;
+    });
   }
 
   Future<void> _save() async {
@@ -721,6 +733,25 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
                 icon: Icons.memory,
               ),
             ),
+            if (_serverModels.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              _caption(colors, '服务返回的可用模型 (点击选用)：'),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final id in _serverModels)
+                    ChoiceChip(
+                      label: Text(id, style: const TextStyle(fontSize: 12)),
+                      selected: _modelController.text.trim() == id,
+                      visualDensity: VisualDensity.compact,
+                      onSelected: (_) =>
+                          setState(() => _modelController.text = id),
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _apiKeyController,
@@ -837,12 +868,23 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        OutlinedButton.icon(
-          icon: running
-              ? _spinner()
-              : const Icon(Icons.network_check, size: 16),
-          label: Text(running ? '正在探测...' : '测试连接'),
-          onPressed: running ? null : _testConnection,
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              icon: running
+                  ? _spinner()
+                  : const Icon(Icons.network_check, size: 16),
+              label: Text(running ? '正在探测...' : '测试连接'),
+              onPressed: running ? null : _testConnection,
+            ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.list_alt, size: 16),
+              label: const Text('获取服务模型列表'),
+              onPressed: running ? null : _fetchServerModels,
+            ),
+          ],
         ),
         if (_testState != _TestState.idle && _testMessage != null) ...[
           const SizedBox(height: 10),
@@ -875,12 +917,5 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
         ],
       ],
     );
-  }
-}
-
-extension on String {
-  String takePrefix(int len) {
-    if (length <= len) return this;
-    return '${substring(0, len)}...';
   }
 }
