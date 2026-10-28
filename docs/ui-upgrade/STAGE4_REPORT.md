@@ -1,7 +1,7 @@
 # Stage 4 Report: Playlist Workbench UI
 
 Branch: `feat/dark-ui-workspace` (baseline `af42909`, Stage 3 accepted).
-Status: **implemented, awaiting acceptance.** Not started: Stage 5.
+Status: **accepted after user manual verification on real Windows** (see section 5a). Stage 5 follows in `STAGE5_REPORT.md`.
 
 ## 1. Commits
 
@@ -59,6 +59,23 @@ New tests this stage: `playlist_draft_test` (17), `playlist_save_regression_test
 - **`PlaylistPlaybackScreen` has no widget test.** It creates a real media_kit `Player` and goes through `ScreenshotService`, which I did not mock. Only its pure layout/percent helpers are unit tested. The screen itself has been compiled and linked, not run.
 - Playback, seek, mode switching, clicking a queue row, global progress seek, and repeated open/close of the playlist player were not exercised on a running window.
 - Overflow at 900x700 is covered by widget tests for the management screen and playlists tab only. The player screen's 900x700 layout is unchecked.
+
+## 5a. User manual verification (real Windows app)
+
+The following 8 items were verified by the user in the running Windows application and passed. These are **manual user verifications, not automated tests**, and the assistant did not run them.
+
+| # | Item | Result |
+|---|---|---|
+| 1 | Playlist card: click selects, double-click plays, right-click menu | User manually verified, passed |
+| 2 | Drag several clips in a row, save, reopen: order correct | User manually verified, passed |
+| 3 | Reset, Cancel and unsaved-exit prompt | User manually verified, passed |
+| 4 | 1280x800 player: right queue, control bar, highlight | User manually verified, passed |
+| 5 | 900x700: queue moves below, no overflow | User manually verified, passed |
+| 6 | Queue click, previous/next, cross-clip global seek | User manually verified, passed |
+| 7 | Sequential, loop, random modes and queue highlight | User manually verified, passed |
+| 8 | Open/close player 10 times: no black screen, crash or leftover audio | User manually verified, passed |
+
+This supersedes the "not verified" list in section 5 for these behaviors. Items in section 5 outside this list (for example real-window screenshots) remain unverified.
 
 ## 6. Manual checklist for acceptance
 
