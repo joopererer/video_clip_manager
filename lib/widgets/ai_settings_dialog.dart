@@ -1,9 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../data/app_state.dart';
+import '../services/ai_model_downloader.dart';
+import '../services/ai_model_verifier.dart';
 import '../services/vlm_connection_probe.dart';
 import '../theme/app_colors.dart';
 
@@ -39,6 +42,15 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
   String? _embeddingModelPath;
   bool _isDownloadingEmbeddingModel = false;
   String? _embeddingDownloadProgress;
+  double? _embeddingDownloadFraction;
+  bool _cancelEmbeddingDownload = false;
+
+  /// Cheap (size-only) state of the model folder, refreshed after each action.
+  ModelVerification? _embeddingInspection;
+
+  /// Result of the last download/verify attempt, shown with full details.
+  ModelInstallResult? _lastInstall;
+  bool _showInstallDetails = false;
 
   static const Map<String, Map<String, String>> _presets = {
     'ollama': {
@@ -92,11 +104,14 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
 
   Future<void> _checkEmbeddingModelStatus() async {
     final appState = context.read<AppState>();
-    final dir = await appState.aiService.resolveEmbeddingModelDir();
+    final ai = appState.aiService;
+    final dir = await ai.resolveEmbeddingModelDir();
+    final inspection = await ai.inspectEmbeddingModel();
     if (mounted) {
       setState(() {
         _embeddingModelReady = dir != null;
-        _embeddingModelPath = dir;
+        _embeddingModelPath = dir ?? inspection.dir;
+        _embeddingInspection = inspection;
       });
     }
   }
@@ -148,37 +163,217 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
     return true;
   }
 
+  static String _mbText(int bytes) =>
+      (bytes / (1024 * 1024)).toStringAsFixed(1);
+
+  String _progressText(ModelProgress p) {
+    final file = p.file != null ? ' ${p.file}' : '';
+    switch (p.phase) {
+      case ModelPhase.preparing:
+        return '正在检查模型目录...';
+      case ModelPhase.checking:
+        return '正在校验已有文件 (sha256)$file';
+      case ModelPhase.downloading:
+        return '正在下载$file  ${_mbText(p.fileBytesDone)} / ${_mbText(p.fileBytesTotal)} MB'
+            '  (总计 ${_mbText(p.overallBytesDone)} / ${_mbText(p.overallBytesTotal)} MB)';
+      case ModelPhase.verifying:
+        return '正在校验下载结果$file';
+      case ModelPhase.finishing:
+        return '正在收尾...';
+    }
+  }
+
+  /// Verifies every file (sha256) and downloads only what is missing or wrong.
+  /// Used for both "download" and "re-verify / update": valid files are left
+  /// alone, so running it on a healthy install changes nothing.
   Future<void> _downloadEmbeddingModel() async {
+    final ai = context.read<AppState>().aiService;
     setState(() {
       _isDownloadingEmbeddingModel = true;
-      _embeddingDownloadProgress = '正在启动下载脚本，从国内高速镜像拉取向量模型 (约 530MB)...';
+      _cancelEmbeddingDownload = false;
+      _embeddingDownloadFraction = null;
+      _embeddingDownloadProgress = '正在检查模型目录...';
+      _lastInstall = null;
     });
+    ModelInstallResult? result;
     try {
-      await _runDownloadScript(
-        candidates: const [
-          r'scripts\fetch_embedding_models.ps1',
-          r'D:\workspace\IdeaProjects\video_clip_manager\scripts\fetch_embedding_models.ps1',
-          r'D:\workspace\FlutterProjects\video_clip_manager\scripts\fetch_embedding_models.ps1',
-          r'D:\workspace\local-media-ai\scripts\fetch_embedding_models.ps1',
-        ],
-        scriptName: 'fetch_embedding_models.ps1',
-        extraArgs: const [
-          '-OutDir',
-          'models',
-          '-Mirror',
-          'https://hf-mirror.com',
-        ],
-        onOutput: (t) => setState(() => _embeddingDownloadProgress = t),
+      result = await ai.installEmbeddingModel(
+        isCancelled: () => _cancelEmbeddingDownload,
+        onProgress: (p) {
+          if (!mounted) return;
+          setState(() {
+            _embeddingDownloadProgress = _progressText(p);
+            _embeddingDownloadFraction = p.fraction;
+          });
+        },
       );
-      await _checkEmbeddingModelStatus();
+    } catch (e, st) {
+      debugPrint('EmbeddingGemma install crashed: $e\n$st');
       if (mounted) {
-        setState(() => _embeddingDownloadProgress = '下载完成并通过哈希校验，本地已就绪。');
+        setState(
+          () => _embeddingDownloadProgress =
+              '下载过程出现内部错误：${redactSecrets(e.toString())}',
+        );
       }
-    } catch (e) {
-      if (mounted) setState(() => _embeddingDownloadProgress = '下载异常: $e');
-    } finally {
-      if (mounted) setState(() => _isDownloadingEmbeddingModel = false);
     }
+    // The folder is the truth: re-read readiness from disk, never from the
+    // outcome of the attempt.
+    await _checkEmbeddingModelStatus();
+    if (!mounted) return;
+    setState(() {
+      _isDownloadingEmbeddingModel = false;
+      _embeddingDownloadFraction = null;
+      if (result != null) {
+        _lastInstall = result;
+        if (result.succeeded) {
+          _embeddingDownloadProgress = result.downloadedFiles.isEmpty
+              ? '已校验：所有 ${result.skippedFiles.length} 个文件完整，无需下载。'
+              : '已下载 ${result.downloadedFiles.length} 个文件并通过 sha256 校验，本地已就绪。';
+        } else if (result.failure != null) {
+          _embeddingDownloadProgress = null;
+        }
+      }
+    });
+  }
+
+  Future<void> _copyInstallLog() async {
+    final r = _lastInstall;
+    if (r == null) return;
+    final f = r.failure;
+    final text = [
+      if (f != null) ...[
+        'kind: ${f.kind.name}',
+        'message: ${f.message}',
+        if (f.file != null) 'file: ${f.file}',
+        if (f.targetPath != null) 'path: ${f.targetPath}',
+        if (f.url != null) 'url: ${f.url}',
+        if (f.httpStatus != null) 'http: ${f.httpStatus}',
+        if (f.osErrorCode != null) 'os errno: ${f.osErrorCode}',
+        if (f.technical != null) 'detail: ${f.technical}',
+        '',
+      ],
+      r.logText,
+    ].join('\n');
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已复制错误详情 (已隐藏凭证)')));
+    }
+  }
+
+  /// Failure box: what happened, which file, what to do, plus Retry/Details.
+  Widget _buildInstallFailure(AppColorExtension colors) {
+    final r = _lastInstall;
+    final f = r?.failure;
+    if (r == null || f == null) return const SizedBox.shrink();
+    final cancelled = f.kind == ModelFailureKind.cancelled;
+    final accent = cancelled ? colors.info : colors.danger;
+    final stillReady = r.isReady;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: accent.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SelectableText(
+            f.message,
+            style: TextStyle(fontSize: 12, height: 1.4, color: accent),
+          ),
+          const SizedBox(height: 4),
+          _caption(
+            colors,
+            stillReady
+                ? '现有模型文件完整，仍可正常使用，未受影响。'
+                : '现有的有效文件均已保留；重试只会补充缺失或损坏的部分。',
+          ),
+          if (f.file != null || f.targetPath != null) ...[
+            const SizedBox(height: 4),
+            SelectableText(
+              [
+                if (f.file != null) '文件: ${f.file}',
+                if (f.targetPath != null) '路径: ${f.targetPath}',
+              ].join('\n'),
+              style: TextStyle(fontSize: 11, color: colors.textSecondary),
+            ),
+          ],
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              FilledButton.tonalIcon(
+                icon: const Icon(Icons.replay, size: 16),
+                label: const Text('重试'),
+                onPressed: _isDownloadingEmbeddingModel
+                    ? null
+                    : _downloadEmbeddingModel,
+              ),
+              TextButton.icon(
+                icon: Icon(
+                  _showInstallDetails ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                ),
+                label: Text(_showInstallDetails ? '收起详情' : '错误详情'),
+                onPressed: () =>
+                    setState(() => _showInstallDetails = !_showInstallDetails),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.copy, size: 16),
+                label: const Text('复制'),
+                onPressed: _copyInstallLog,
+              ),
+            ],
+          ),
+          if (_showInstallDetails)
+            Container(
+              width: double.infinity,
+              constraints: const BoxConstraints(maxHeight: 160),
+              margin: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: colors.surfaceHighlight,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  [
+                    if (f.technical != null) f.technical!,
+                    r.logText,
+                  ].join('\n\n'),
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontFamily: 'Consolas',
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// One-line state of the model folder, derived from the size-only check.
+  String _embeddingStateSummary() {
+    final v = _embeddingInspection;
+    if (_embeddingModelReady) {
+      return '路径: $_embeddingModelPath\n所有 ${v?.reports.length ?? 0} 个文件齐全。'
+          '点击“重新校验”可逐文件核对 sha256。\n已支持自然语言秒搜关键帧画面 (HIT 徽章)。';
+    }
+    if (v == null) return '正在检查...';
+    if (!v.anyFilePresent && !v.hasUnreadable) {
+      return '约 530MB。用于在搜索框用自然语言查找画面，并高亮最佳帧。\n将下载到: ${v.dir}';
+    }
+    return '模型不完整 (${v.problems.length}/${v.reports.length} 个文件有问题)，'
+        '语义搜索不可用。点击“修复 / 补全下载”仅补充缺失或损坏的文件，已有的有效文件不会被改动。\n'
+        '路径: ${v.dir}\n${v.describeProblems()}';
   }
 
   Future<void> _downloadBuiltInModel() async {
@@ -571,32 +766,55 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
             _embeddingModelReady ? colors.success : colors.warning,
           ),
           children: [
-            _caption(
-              colors,
-              _embeddingModelReady
-                  ? '路径: $_embeddingModelPath\n已支持自然语言秒搜关键帧画面 (HIT 徽章)。'
-                  : '约 530MB。用于在搜索框用自然语言查找画面，并高亮最佳帧。',
-            ),
+            _caption(colors, _embeddingStateSummary()),
+            if (_isDownloadingEmbeddingModel) ...[
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: _embeddingDownloadFraction,
+                backgroundColor: colors.surfaceHighlight,
+                color: colors.primary,
+                minHeight: 4,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ],
             if (_embeddingDownloadProgress != null) ...[
               const SizedBox(height: 6),
               _caption(colors, _embeddingDownloadProgress!, color: colors.info),
             ],
+            _buildInstallFailure(colors),
             const SizedBox(height: 10),
-            FilledButton.tonalIcon(
-              icon: _isDownloadingEmbeddingModel
-                  ? _spinner()
-                  : Icon(
-                      _embeddingModelReady ? Icons.refresh : Icons.download,
-                      size: 16,
-                    ),
-              label: Text(
-                _isDownloadingEmbeddingModel
-                    ? '正在下载并校验...'
-                    : (_embeddingModelReady ? '重新校验 / 更新' : '一键下载 (国内镜像)'),
-              ),
-              onPressed: _isDownloadingEmbeddingModel
-                  ? null
-                  : _downloadEmbeddingModel,
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                FilledButton.tonalIcon(
+                  icon: _isDownloadingEmbeddingModel
+                      ? _spinner()
+                      : Icon(
+                          _embeddingModelReady ? Icons.refresh : Icons.download,
+                          size: 16,
+                        ),
+                  label: Text(
+                    _isDownloadingEmbeddingModel
+                        ? '正在下载并校验...'
+                        : _embeddingModelReady
+                        ? '重新校验'
+                        : (_embeddingInspection?.anyFilePresent ?? false)
+                        ? '修复 / 补全下载'
+                        : '一键下载 (国内镜像)',
+                  ),
+                  onPressed: _isDownloadingEmbeddingModel
+                      ? null
+                      : _downloadEmbeddingModel,
+                ),
+                if (_isDownloadingEmbeddingModel)
+                  TextButton(
+                    onPressed: _cancelEmbeddingDownload
+                        ? null
+                        : () => setState(() => _cancelEmbeddingDownload = true),
+                    child: Text(_cancelEmbeddingDownload ? '正在取消...' : '取消'),
+                  ),
+              ],
             ),
           ],
         ),

@@ -5,6 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'ai_model_downloader.dart';
+import 'ai_model_manifest.dart';
+import 'ai_model_verifier.dart';
+
 /// 诊断信息
 class AiDoctorInfo {
   final bool cliFound;
@@ -709,24 +713,83 @@ class AiService {
     return null;
   }
 
-  /// 检测多模态语义检索 (EmbeddingGemma 2 ONNX) 模型文件是否就绪
-  Future<String?> resolveEmbeddingModelDir() async {
-    final searchDirs = [
-      'models',
-      r'models\embeddinggemma2',
-      r'D:\workspace\IdeaProjects\video_clip_manager\models',
-      r'D:\workspace\FlutterProjects\video_clip_manager\models',
-      r'D:\workspace\local-media-ai\runtime\models',
-    ];
+  /// Folders searched for the EmbeddingGemma 2 model, in priority order.
+  /// Unchanged from earlier releases so existing installs keep working.
+  /// Download, verification, loading and the settings page all read this
+  /// list (or [embeddingInstallDir]); nothing else decides where the model is.
+  List<String> embeddingModelCandidateDirs() => const [
+    'models',
+    r'models\embeddinggemma2',
+    r'D:\workspace\IdeaProjects\video_clip_manager\models',
+    r'D:\workspace\FlutterProjects\video_clip_manager\models',
+    r'D:\workspace\local-media-ai\runtime\models',
+  ];
 
-    for (final dir in searchDirs) {
-      final tokenizer = File(p.join(dir, 'tokenizer.json'));
-      final onnxModel = File(p.join(dir, 'onnx', 'model_quantized.onnx'));
-      if (tokenizer.existsSync() && onnxModel.existsSync()) {
-        return Directory(dir).absolute.path;
-      }
+  static const ModelVerifier _modelVerifier = ModelVerifier();
+
+  /// True while [installEmbeddingModel] runs. Used to refuse actions that
+  /// would pull files out from under it (for example changing the model dir).
+  bool get isInstallingEmbeddingModel => _installingEmbeddingModel;
+  bool _installingEmbeddingModel = false;
+
+  /// 检测多模态语义检索 (EmbeddingGemma 2 ONNX) 模型是否就绪。
+  ///
+  /// A folder counts only when every file of the pinned manifest exists with
+  /// the expected size. Earlier releases accepted a folder that merely had two
+  /// files, which reported "ready" for half-finished downloads. The sha256
+  /// check is the (slow) explicit verify in [installEmbeddingModel].
+  Future<String?> resolveEmbeddingModelDir() async {
+    for (final dir in embeddingModelCandidateDirs()) {
+      if (!Directory(dir).existsSync()) continue;
+      final v = await _modelVerifier.verify(dir, embeddingGemmaManifest);
+      if (v.isComplete) return Directory(dir).absolute.path;
     }
     return null;
+  }
+
+  /// Folder a download goes to: the first candidate that already holds part of
+  /// the model (so a repair completes that install instead of starting a
+  /// second copy), otherwise the default `models` folder.
+  Future<String> embeddingInstallDir() async {
+    for (final dir in embeddingModelCandidateDirs()) {
+      if (!Directory(dir).existsSync()) continue;
+      final v = await _modelVerifier.verify(dir, embeddingGemmaManifest);
+      if (v.anyFilePresent) return Directory(dir).absolute.path;
+    }
+    return Directory(embeddingModelCandidateDirs().first).absolute.path;
+  }
+
+  /// Cheap state of the folder the model lives in (or would be installed to).
+  Future<ModelVerification> inspectEmbeddingModel() async {
+    final dir = await resolveEmbeddingModelDir() ?? await embeddingInstallDir();
+    return _modelVerifier.verify(dir, embeddingGemmaManifest);
+  }
+
+  /// Verifies sha256 of every file, downloads only what is missing or wrong
+  /// (resuming `.part` files) and re-measures the folder at the end.
+  /// Valid files are never rewritten. Only one install runs at a time.
+  Future<ModelInstallResult> installEmbeddingModel({
+    String mirror = 'https://hf-mirror.com',
+    void Function(ModelProgress)? onProgress,
+    bool Function()? isCancelled,
+    ModelDownloader? downloader,
+  }) async {
+    if (_installingEmbeddingModel) {
+      throw StateError('EmbeddingGemma 模型正在下载或校验中');
+    }
+    _installingEmbeddingModel = true;
+    try {
+      final dir = await embeddingInstallDir();
+      return await (downloader ?? ModelDownloader()).install(
+        manifest: embeddingGemmaManifest,
+        dir: dir,
+        mirror: mirror,
+        onProgress: onProgress,
+        isCancelled: isCancelled,
+      );
+    } finally {
+      _installingEmbeddingModel = false;
+    }
   }
 
   /// 检测指定 URL 的服务是否存活
