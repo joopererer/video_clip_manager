@@ -8,10 +8,6 @@ class AppSidebar extends StatelessWidget {
   final ValueChanged<int> onIndexChanged;
   final bool isCollapsed;
   final VoidCallback? onToggleCollapse;
-  final VoidCallback onOpenAiSettings;
-  final VoidCallback onOpenScraperSettings;
-  final VoidCallback onOpenAbout;
-  final VoidCallback? onOpenTheme;
   final VoidCallback onSwitchDb;
   final String currentDbName;
 
@@ -21,10 +17,6 @@ class AppSidebar extends StatelessWidget {
     required this.onIndexChanged,
     required this.isCollapsed,
     required this.onToggleCollapse,
-    required this.onOpenAiSettings,
-    required this.onOpenScraperSettings,
-    required this.onOpenAbout,
-    this.onOpenTheme,
     required this.onSwitchDb,
     required this.currentDbName,
   });
@@ -81,37 +73,6 @@ class AppSidebar extends StatelessWidget {
           _buildDatabaseIndicator(context, colors),
 
           Divider(color: colors.borderSubtle, height: 1.0),
-
-          // 底部工具与设置区
-          _buildActionItem(
-            context,
-            icon: Icons.auto_awesome_outlined,
-            label: 'AI 设置',
-            tooltip: 'AI 视觉与跨模态语义设置',
-            onTap: onOpenAiSettings,
-          ),
-          _buildActionItem(
-            context,
-            icon: Icons.tune_outlined,
-            label: '爬虫设置',
-            tooltip: '外部视频嗅探与抓取配置',
-            onTap: onOpenScraperSettings,
-          ),
-          if (onOpenTheme != null)
-            _buildActionItem(
-              context,
-              icon: Icons.palette_outlined,
-              label: '外观配色',
-              tooltip: '选择预设配色或自定义强调色',
-              onTap: onOpenTheme!,
-            ),
-          _buildActionItem(
-            context,
-            icon: Icons.info_outline,
-            label: '关于软件',
-            tooltip: '关于 Video Clip Manager',
-            onTap: onOpenAbout,
-          ),
 
           // 折叠/展开控制按钮
           _buildCollapseToggle(context, colors),
@@ -291,61 +252,6 @@ class AppSidebar extends StatelessWidget {
       message: '当前数据库: $currentDbName\n点击切换或打开新库',
       waitDuration: const Duration(milliseconds: 300),
       child: chip,
-    );
-  }
-
-  Widget _buildActionItem(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    final colors = context.appColors;
-
-    final item = InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      hoverColor: colors.surfaceElevated.withValues(alpha: 0.4),
-      child: Container(
-        height: 38,
-        padding: EdgeInsets.symmetric(
-          horizontal: isCollapsed ? 0 : AppSpacing.md,
-        ),
-        child: Row(
-          mainAxisAlignment: isCollapsed
-              ? MainAxisAlignment.center
-              : MainAxisAlignment.start,
-          children: [
-            Icon(icon, size: 18, color: colors.textMuted),
-            if (!isCollapsed) ...[
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodySecondary.copyWith(
-                    color: colors.textSecondary,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xs,
-        vertical: 1.0,
-      ),
-      child: Tooltip(
-        message: tooltip,
-        waitDuration: const Duration(milliseconds: 300),
-        child: item,
-      ),
     );
   }
 

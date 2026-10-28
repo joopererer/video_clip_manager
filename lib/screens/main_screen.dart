@@ -314,23 +314,6 @@ class _MainScreenState extends State<MainScreen> {
                               _userCollapsedOverride = !isSidebarCollapsed;
                             });
                           },
-                    onOpenAiSettings: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => const AiSettingsDialog(),
-                      );
-                    },
-                    onOpenScraperSettings: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const ExternalScrapersSettingsScreen(),
-                        ),
-                      );
-                    },
-                    onOpenAbout: _showAboutDialog,
-                    onOpenTheme: _showThemePicker,
                     onSwitchDb: () async {
                       final result = await appState.switchDatabase();
                       _showSnackBar(result);
