@@ -238,8 +238,9 @@ class VlmConnectionProbe {
   Map<String, String> _headers(String apiKey, {bool json = false}) {
     final h = <String, String>{};
     if (json) h['Content-Type'] = 'application/json';
-    if (apiKey.trim().isNotEmpty)
+    if (apiKey.trim().isNotEmpty) {
       h['Authorization'] = 'Bearer ${apiKey.trim()}';
+    }
     return h;
   }
 
