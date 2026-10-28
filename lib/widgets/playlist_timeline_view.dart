@@ -6,7 +6,7 @@ import '../utils/playlist_time.dart';
 import '../utils/timeline_layout.dart';
 
 /// Muted hues that read well on the dark surfaces. A clip always gets the same
-/// colour (see [_colorForClip]).
+/// colour (see [playlistClipColor]).
 const List<Color> _segmentColors = [
   Color(0xFF6C8CD5),
   Color(0xFF5FB49C),
@@ -18,7 +18,7 @@ const List<Color> _segmentColors = [
   Color(0xFFC2749A),
 ];
 
-Color _colorForClip(String clipId) {
+Color playlistClipColor(String clipId) {
   // FNV-1a so the colour does not depend on String.hashCode.
   var h = 0x811c9dc5;
   for (final unit in clipId.codeUnits) {
@@ -170,7 +170,7 @@ class _PlaylistTimelineViewState extends State<PlaylistTimelineView> {
   Widget _segment(AppColorExtension c, int index, double width, bool expanded) {
     final entry = widget.items[index];
     final selected = widget.selectedIndex == index;
-    final color = _colorForClip(entry.clip.id);
+    final color = playlistClipColor(entry.clip.id);
     final dragged = _dragging == index;
 
     Widget body = _SegmentBody(

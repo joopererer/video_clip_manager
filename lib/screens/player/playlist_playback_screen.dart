@@ -14,6 +14,10 @@ import '../../data/app_state.dart';
 import '../../widgets/custom_progress_bar.dart';
 import '../../services/preview_service.dart';
 import '../../services/screenshot_service.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
+import '../../utils/playlist_playback_layout.dart';
+import '../../widgets/playlist_timeline_view.dart' show playlistClipColor;
 
 // 播放模式枚举
 enum PlaybackMode {
@@ -95,6 +99,11 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
   List<PlaylistItemWithClip> _generatedPlaylist = []; // 预生成的播放列表
 
   bool _playerCreated = false;
+
+  // 播放队列滚动（当前项居中）
+  final ScrollController _queueScroll = ScrollController();
+  double? _lastQueueExtent;
+  String? _lastQueueClipId;
 
   @override
   void initState() {
@@ -441,13 +450,17 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       final file = File(clip.videoPath);
       final exists = await file.exists();
       if (!exists) {
-        print('Playlist: file not found: ${clip.videoPath}, aborting item initialization');
+        print(
+          'Playlist: file not found: ${clip.videoPath}, aborting item initialization',
+        );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('文件不存在: ${clip.videoPath.split('\\').last}'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('文件不存在: ${clip.videoPath.split('\\').last}'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
           setState(() {
             _isPlayerReady = false;
             _isPlayerFullyInitialized = false;
@@ -460,15 +473,21 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     }
 
     try {
-      await player.open(Media(clip.videoPath), play: false).timeout(Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10));
+      await player
+          .open(Media(clip.videoPath), play: false)
+          .timeout(
+            Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10),
+          );
     } on TimeoutException catch (te) {
       print('Playlist: open timed out for ${clip.videoPath}: $te');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('打开媒体超时: ${clip.videoPath.split('\\').last}'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 3),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('打开媒体超时: ${clip.videoPath.split('\\').last}'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
         setState(() {
           _isPlayerReady = false;
           _isPlayerFullyInitialized = false;
@@ -497,15 +516,21 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
           ? _pendingGlobalSeekTime!
           : startTime;
       try {
-        await player.seek(seekTarget).timeout(Duration(seconds: AppState.instance?.seekTimeoutSeconds ?? 10));
+        await player
+            .seek(seekTarget)
+            .timeout(
+              Duration(seconds: AppState.instance?.seekTimeoutSeconds ?? 10),
+            );
       } on TimeoutException catch (te) {
         print('Playlist: seek timed out: $te');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('定位超时'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('定位超时'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
         }
         return;
       } catch (e) {
@@ -518,15 +543,19 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
       // 开始播放
       try {
-        await player.play().timeout(Duration(seconds: AppState.instance?.playTimeoutSeconds ?? 5));
+        await player.play().timeout(
+          Duration(seconds: AppState.instance?.playTimeoutSeconds ?? 5),
+        );
       } on TimeoutException catch (te) {
         print('Playlist: play timed out: $te');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('播放启动超时'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('播放启动超时'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
         }
         return;
       } catch (e) {
@@ -1436,6 +1465,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     _positionSubscription?.cancel();
     _playingSubscription?.cancel();
     _focusNode.dispose(); // 释放焦点节点
+    _queueScroll.dispose();
 
     if (!_playerCreated) {
       super.dispose();
@@ -1468,23 +1498,31 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.appColors;
+    final title = '播放列表: ${widget.playlist.name}';
+
     if (!_playerCreated) {
       return Scaffold(
-        appBar: AppBar(title: Text('播放列表: ${widget.playlist.name}')),
+        backgroundColor: c.background,
+        appBar: AppBar(title: Text(title)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_playlistItems.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: Text('播放列表: ${widget.playlist.name}')),
+        backgroundColor: c.background,
+        appBar: AppBar(title: Text(title)),
         body: const Center(child: Text('播放列表为空，请先添加片段')),
       );
     }
 
     return Scaffold(
+      backgroundColor: c.background,
       appBar: AppBar(
-        title: Text('播放列表: ${widget.playlist.name}'),
+        toolbarHeight: AppSpacing.topToolbarHeight,
+        backgroundColor: c.sidebar,
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
           // 播放模式切换按钮
           IconButton(
@@ -1492,81 +1530,124 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
             icon: Icon(_getPlaybackModeIcon(), color: _getPlaybackModeColor()),
             tooltip: '播放模式: ${_getPlaybackModeText()} (M)',
           ),
-          // 详细信息切换按钮
-
           // 快捷键提示按钮
           IconButton(
-            onPressed: () {
-              setState(() {
-                _showHints = !_showHints;
-              });
-            },
+            onPressed: () => setState(() => _showHints = !_showHints),
             icon: Icon(
               _showHints ? Icons.keyboard : Icons.keyboard_outlined,
-              color: _showHints ? Colors.blue : Colors.grey,
+              color: _showHints ? c.primary : c.textSecondary,
             ),
             tooltip: 'Keyboard Shortcuts (F1)',
           ),
           // 进度条模式切换按钮
           IconButton(
-            onPressed: () {
-              setState(() {
-                _showGlobalProgress = !_showGlobalProgress;
-              });
-            },
+            onPressed: () =>
+                setState(() => _showGlobalProgress = !_showGlobalProgress),
             icon: Icon(
               _showGlobalProgress ? Icons.timeline : Icons.crop_square,
-              color: _showGlobalProgress ? Colors.blue : Colors.grey,
+              color: _showGlobalProgress ? c.primary : c.textSecondary,
             ),
-            tooltip: _showGlobalProgress ? '切换到片段进度' : '切换到全局进度',
+            tooltip: _showGlobalProgress ? '切换到片段进度 (P)' : '切换到全局进度 (P)',
           ),
+          // 播放队列显示切换
           IconButton(
-            icon: Icon(_showPlaylistInfo ? Icons.info : Icons.info_outline),
-            onPressed: () {
-              setState(() {
-                _showPlaylistInfo = !_showPlaylistInfo;
-              });
-            },
-            tooltip: '播放列表信息',
+            icon: Icon(
+              _showPlaylistInfo
+                  ? Icons.queue_music
+                  : Icons.queue_music_outlined,
+              color: _showPlaylistInfo ? c.primary : c.textSecondary,
+            ),
+            onPressed: () =>
+                setState(() => _showPlaylistInfo = !_showPlaylistInfo),
+            tooltip: '播放队列 (I)',
           ),
+          const SizedBox(width: AppSpacing.xs),
         ],
       ),
       body: RawKeyboardListener(
         focusNode: _focusNode, // 使用焦点节点
         onKey: _handleKeyPress,
-        child: Column(
-          children: [
-            // 播放器区域
-            Expanded(
-              flex: 3,
-              child: Card(
-                elevation: 4.0,
-                margin: const EdgeInsets.all(8.0),
-                clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  children: [
-                    GestureDetector(
-                      onTap: _togglePlayPause,
-                      child: _playerCreated
-                          ? Video(controller: controller)
-                          : const Center(child: CircularProgressIndicator()),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final layout = playbackLayoutFor(constraints.maxWidth);
+            final side = layout == PlaybackLayout.sideQueue;
+            // 同一棵 Flex 树在宽/窄布局间切换，Video 元素得以保留。
+            return Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Flex(
+                direction: side ? Axis.horizontal : Axis.vertical,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: _buildVideoPanel(c)),
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildControlPanel(c),
+                      ],
                     ),
-                    // 快捷键提示悬浮窗
-                    if (_showHints)
-                      Positioned(
-                        top: 16,
-                        right: 16,
+                  ),
+                  if (_showPlaylistInfo) ...[
+                    SizedBox(
+                      width: side ? AppSpacing.sm : 0,
+                      height: side ? 0 : AppSpacing.sm,
+                    ),
+                    SizedBox(
+                      width: side
+                          ? playbackSideQueueWidth(constraints.maxWidth)
+                          : null,
+                      height: side
+                          ? null
+                          : playbackBottomQueueHeight(constraints.maxHeight),
+                      child: _buildQueuePanel(c, layout),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoPanel(AppColorExtension c) {
+    return ClipRRect(
+      borderRadius: AppRadius.borderCard,
+      child: Container(
+        color: Colors.black,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _togglePlayPause,
+                child: Video(controller: controller),
+              ),
+            ),
+            // 快捷键提示悬浮窗
+            if (_showHints)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: Align(
+                      alignment: Alignment.topRight,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.topRight,
                         child: Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.all(AppSpacing.sm),
                           decoration: BoxDecoration(
                             color: Colors.black87,
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
+                              const Text(
                                 'Keyboard Shortcuts',
                                 style: TextStyle(
                                   color: Colors.white,
@@ -1574,7 +1655,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                                   fontSize: 14,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: AppSpacing.xs),
                               _buildShortcutHint('Space', 'Play/Pause'),
                               _buildShortcutHint('R', 'Replay'),
                               _buildShortcutHint('← / A', 'Previous'),
@@ -1582,6 +1663,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                               _buildShortcutHint('P', 'Toggle Progress Mode'),
                               _buildShortcutHint('M', 'Toggle Playback Mode'),
                               _buildShortcutHint('S', 'Toggle Mute'),
+                              _buildShortcutHint('I', 'Toggle Queue'),
                               _buildShortcutHint('Ctrl+1-9', 'Play Item 1-9'),
                               _buildShortcutHint('Ctrl+0', 'Play Item 10'),
                               _buildShortcutHint('F1', 'Toggle Hints'),
@@ -1589,145 +1671,181 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                           ),
                         ),
                       ),
-                  ],
+                    ),
+                  ),
                 ),
               ),
-            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // 播放列表信息区域
-            if (_showPlaylistInfo) ...[
-              Container(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 当前播放信息
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '当前播放: ${_currentItem?.clip.name ?? ""}',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Row(
-                                spacing: 8,
-                                children: [
-                                  Text(
-                                    '${_currentItemIndex + 1} / ${_generatedPlaylist.length}',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8, child: Text("|")),
-                                  // 添加播放模式信息
-                                  Text(
-                                    '播放模式: ${_getPlaybackModeText()}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: _getPlaybackModeColor(),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8, child: Text("|")),
-                                  // 添加全局播放进度
-                                  Text(
-                                    '全局进度: ${_formatDuration(_totalPlayedTime)} / ${_formatDuration(_totalDuration)} (${_getGlobalProgressPercentage()}%)',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.blue.shade600,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        // 播放控制按钮
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.skip_previous),
-                              onPressed: _canPlayPrevious()
-                                  ? _playPreviousItem
-                                  : null,
-                              tooltip: '上一个片段 (← / A)',
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                _isPlaying ? Icons.pause : Icons.play_arrow,
-                              ),
-                              onPressed: _togglePlayPause,
-                              tooltip: _isPlaying ? '暂停 (Space)' : '播放 (Space)',
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.skip_next),
-                              onPressed: _canPlayNext() ? _playNextItem : null,
-                              tooltip: '下一个片段 (→ / D)',
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.replay),
-                              onPressed: _replayCurrentItem,
-                              tooltip: '重播当前片段 (R)',
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                _isMuted ? Icons.volume_off : Icons.volume_up,
-                              ),
-                              onPressed: _toggleMute,
-                              tooltip: _isMuted ? '取消静音 (S)' : '静音 (S)',
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+  /// 当前信息 + 进度条 + 居中的传输控制。
+  Widget _buildControlPanel(AppColorExtension c) {
+    final clipDuration = _currentItem?.effectiveDuration ?? Duration.zero;
+    var clipPosition = _getCurrentItemRelativePosition();
+    if (clipPosition < Duration.zero) clipPosition = Duration.zero;
+    if (clipPosition > clipDuration) clipPosition = clipDuration;
 
-                    const SizedBox(height: 8),
+    Widget stat(String text, {Color? color}) => Text(
+      text,
+      style: TextStyle(
+        fontSize: 12,
+        color: color ?? c.textSecondary,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    );
 
-                    // 统一进度条（固定高度，避免跳动）
-                    Container(
-                      height: 40, // 固定高度
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      child: _showGlobalProgress
-                          ? _buildGlobalProgressBar()
-                          : _buildClipProgressBar(),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            // 播放列表轨道视图
-            Expanded(
-              flex: 2,
-              child: Container(
-                padding: const EdgeInsets.all(16.0),
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: AppRadius.borderCard,
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '播放列表轨道',
-                      style: const TextStyle(
+                      _currentItem?.clip.name ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
+                        color: c.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Expanded(child: _buildPlaylistTimeline()),
+                    const SizedBox(height: 2),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: 2,
+                      children: [
+                        stat(
+                          '${_currentItemIndex + 1} / ${_generatedPlaylist.length}',
+                        ),
+                        stat(
+                          '片段 ${_formatDuration(clipPosition)} / ${_formatDuration(clipDuration)}',
+                        ),
+                        stat(
+                          '全局 ${_formatDuration(_getDisplayTime())} / ${_formatDuration(_totalDuration)} (${_getGlobalProgressPercentage()}%)',
+                          color: c.primary,
+                        ),
+                      ],
+                    ),
                   ],
                 ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _buildModeBadge(c),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          // 统一进度条（固定高度，避免跳动）
+          SizedBox(
+            height: 40,
+            child: _showGlobalProgress
+                ? _buildGlobalProgressBar()
+                : _buildClipProgressBar(),
+          ),
+          _buildTransport(c),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeBadge(AppColorExtension c) {
+    final color = _getPlaybackModeColor();
+    return Tooltip(
+      message: '播放模式 (M)',
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xs,
+          vertical: AppSpacing.xxs,
+        ),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          borderRadius: AppRadius.borderRound,
+          border: Border.all(color: color.withValues(alpha: 0.5)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_getPlaybackModeIcon(), size: 16, color: color),
+            const SizedBox(width: AppSpacing.xxs),
+            Text(
+              _getPlaybackModeText(),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: color,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTransport(AppColorExtension c) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          iconSize: 24,
+          color: c.textSecondary,
+          icon: Icon(_isMuted ? Icons.volume_off : Icons.volume_up),
+          onPressed: _toggleMute,
+          tooltip: _isMuted ? '取消静音 (S)' : '静音 (S)',
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        IconButton(
+          iconSize: 30,
+          color: c.textPrimary,
+          icon: const Icon(Icons.skip_previous),
+          onPressed: _canPlayPrevious() ? _playPreviousItem : null,
+          tooltip: '上一个片段 (← / A)',
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        IconButton.filled(
+          iconSize: 32,
+          style: IconButton.styleFrom(
+            backgroundColor: c.primary,
+            foregroundColor: c.onPrimary,
+            fixedSize: const Size(52, 52),
+          ),
+          icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+          onPressed: _togglePlayPause,
+          tooltip: _isPlaying ? '暂停 (Space)' : '播放 (Space)',
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        IconButton(
+          iconSize: 30,
+          color: c.textPrimary,
+          icon: const Icon(Icons.skip_next),
+          onPressed: _canPlayNext() ? _playNextItem : null,
+          tooltip: '下一个片段 (→ / D)',
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        IconButton(
+          iconSize: 24,
+          color: c.textSecondary,
+          icon: const Icon(Icons.replay),
+          onPressed: _replayCurrentItem,
+          tooltip: '重播当前片段 (R)',
+        ),
+      ],
     );
   }
 
@@ -1759,183 +1877,252 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     );
   }
 
-  Widget _buildPlaylistTimeline() {
-    if (_playlistItems.isEmpty) {
-      return const Center(child: Text('暂无片段'));
+  void _scheduleQueueScroll(double extent) {
+    if (_lastQueueExtent != extent) {
+      _lastQueueExtent = extent;
+      _lastQueueClipId = null;
     }
+    final entry = _currentItem;
+    if (entry == null || _lastQueueClipId == entry.item.id) return;
+    _lastQueueClipId = entry.item.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _disposed || !_queueScroll.hasClients) return;
+      final index = _playlistItems.indexWhere((e) => identical(e, entry));
+      if (index < 0) return;
+      final offset = queueScrollOffsetFor(
+        index: index,
+        rowExtent: extent,
+        viewport: _queueScroll.position.viewportDimension,
+        itemCount: _playlistItems.length,
+      );
+      _queueScroll.animateTo(
+        offset,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  Widget _buildQueuePanel(AppColorExtension c, PlaybackLayout layout) {
+    final horizontal = layout == PlaybackLayout.bottomQueue;
+    final extent = horizontal ? 212.0 : 60.0;
+    _scheduleQueueScroll(extent);
 
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
+        color: c.surface,
+        borderRadius: AppRadius.borderCard,
+        border: Border.all(color: c.border),
       ),
-      child: ListView.builder(
-        itemCount: _playlistItems.length,
-        itemBuilder: (context, index) {
-          final itemWithClip = _playlistItems[index];
-          final isCurrentItem = _currentItem?.clip.id == itemWithClip.clip.id;
-          final isPlayed =
-              _playedItems.isNotEmpty &&
-              _playedItems.contains(_currentItemIndex);
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.xs,
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.queue_music, size: 18, color: c.textSecondary),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  '播放队列',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: c.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${_playlistItems.length} 段 · ${_formatDuration(_totalDuration)}',
+                  style: TextStyle(fontSize: 12, color: c.textMuted),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: c.borderSubtle),
+          Expanded(
+            child: ListView.builder(
+              controller: _queueScroll,
+              scrollDirection: horizontal ? Axis.horizontal : Axis.vertical,
+              itemExtent: extent,
+              itemCount: _playlistItems.length,
+              itemBuilder: (context, index) =>
+                  _buildQueueItem(c, index, horizontal: horizontal),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-          // 计算在预生成列表中的排序位置
-          final generatedIndex = _generatedPlaylist.indexWhere(
-            (item) => item.clip.id == itemWithClip.clip.id,
-          );
-          final sortOrder = generatedIndex >= 0 ? generatedIndex + 1 : null;
+  Widget _buildQueueItem(
+    AppColorExtension c,
+    int index, {
+    required bool horizontal,
+  }) {
+    final entry = _playlistItems[index];
+    final isCurrent = identical(_currentItem, entry);
+    final generatedIndex = _generatedPlaylist.indexWhere(
+      (e) => identical(e, entry),
+    );
+    final isPlayed =
+        !isCurrent &&
+        generatedIndex >= 0 &&
+        _playedItems.contains(generatedIndex);
+    final color = _getClipColor(entry.clip);
+    final hasCustomRange =
+        entry.item.customStartTime != null || entry.item.customEndTime != null;
+    final playOrder = generatedIndex >= 0 ? generatedIndex + 1 : null;
+    final showOrder = playOrder != null && playOrder != index + 1;
+    final duration = _formatDuration(entry.effectiveDuration);
 
-          return GestureDetector(
+    final IconData statusIcon;
+    final Color statusColor;
+    if (isCurrent) {
+      statusIcon = _isPlaying ? Icons.graphic_eq : Icons.pause_circle_outline;
+      statusColor = c.primary;
+    } else if (isPlayed) {
+      statusIcon = Icons.check_circle_outline;
+      statusColor = c.success;
+    } else {
+      statusIcon = Icons.play_arrow_rounded;
+      statusColor = c.textMuted;
+    }
+
+    final radius = BorderRadius.circular(AppRadius.sm);
+    return Padding(
+      padding: horizontal
+          ? EdgeInsets.fromLTRB(
+              AppSpacing.xs,
+              AppSpacing.xs,
+              index == _playlistItems.length - 1 ? AppSpacing.xs : 0,
+              AppSpacing.xs,
+            )
+          : const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xs,
+              vertical: AppSpacing.xxs / 2,
+            ),
+      child: Tooltip(
+        message: '${index + 1}. ${entry.clip.name}\n$duration',
+        waitDuration: const Duration(milliseconds: 600),
+        child: Material(
+          color: isCurrent ? c.surfaceHighlight : c.surfaceElevated,
+          shape: RoundedRectangleBorder(
+            borderRadius: radius,
+            side: BorderSide(
+              color: isCurrent ? c.primary : c.borderSubtle,
+              width: isCurrent ? 1.5 : 1,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
             onTap: () => _playItemAtIndex(index),
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 2),
-              decoration: BoxDecoration(
-                color: isCurrentItem
-                    ? _getClipColor(itemWithClip.clip).withValues(
-                        alpha: 0.3,
-                      ) // 当前播放项使用更深的颜色
-                    : _getClipColor(
-                        itemWithClip.clip,
-                      ).withValues(alpha: 0.1), // 其他项使用浅色背景
-                borderRadius: BorderRadius.circular(8),
-                border: isCurrentItem
-                    ? Border.all(
-                        color: _getClipColor(itemWithClip.clip),
-                        width: 2,
-                      )
-                    : null,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Row(
-                  children: [
-                    // 播放状态指示器
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: isCurrentItem
-                            ? _getClipColor(itemWithClip.clip)
-                            : isPlayed
-                            ? Colors.green.shade400
-                            : Colors.grey.shade400,
-                        shape: BoxShape.circle,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 4, color: color),
+                const SizedBox(width: AppSpacing.xs),
+                SizedBox(
+                  width: 22,
+                  child: Center(
+                    child: Text(
+                      '${index + 1}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isCurrent ? c.primary : c.textMuted,
                       ),
                     ),
-                    const SizedBox(width: 12),
-
-                    // 片段信息
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xxs),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.clip.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: isCurrent
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: isCurrent ? c.textPrimary : c.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
                         children: [
                           Text(
-                            itemWithClip.clip.name,
+                            duration,
                             style: TextStyle(
-                              fontWeight: isCurrentItem
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: isCurrentItem
-                                  ? Colors.blue.shade700
-                                  : Colors.black87,
-                              fontSize: isCurrentItem ? 14 : 13,
+                              fontSize: 11,
+                              color: c.textMuted,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                          Row(
-                            children: [
-                              Text(
-                                '时长: ${_formatDuration(itemWithClip.effectiveDuration)}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
+                          if (hasCustomRange) ...[
+                            const SizedBox(width: AppSpacing.xs),
+                            Tooltip(
+                              message: '自定义范围',
+                              child: Icon(
+                                Icons.tune,
+                                size: 12,
+                                color: c.warning,
+                              ),
+                            ),
+                          ],
+                          if (showOrder) ...[
+                            const SizedBox(width: AppSpacing.xs),
+                            Tooltip(
+                              message: '播放顺序 $playOrder',
+                              child: Container(
+                                constraints: const BoxConstraints(minWidth: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: c.primaryContainer,
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.xs,
+                                  ),
+                                ),
+                                child: Text(
+                                  '$playOrder',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: c.textPrimary,
+                                  ),
                                 ),
                               ),
-                              if (itemWithClip.item.customStartTime != null ||
-                                  itemWithClip.item.customEndTime != null) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 1,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.shade100,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                  child: Text(
-                                    '自定义',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.orange.shade700,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
+                            ),
+                          ],
                         ],
                       ),
-                    ),
-
-                    // 序号
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: isCurrentItem
-                            ? Colors.blue.shade100
-                            : Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '${index + 1}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: isCurrentItem
-                                ? Colors.blue.shade600
-                                : Colors.grey.shade600,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // 排序标记（始终显示，与数字标记区分）
-                    if (sortOrder != null) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        width: 18,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          color: Colors.deepPurple.shade100,
-                          borderRadius: BorderRadius.circular(2), // 正方形边框
-                          border: Border.all(
-                            color: Colors.deepPurple.shade400,
-                            width: 1,
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '$sortOrder',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.deepPurple.shade700,
-                            ),
-                          ),
-                        ),
-                      ),
                     ],
-                  ],
+                  ),
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xs,
+                  ),
+                  child: Icon(statusIcon, size: 18, color: statusColor),
+                ),
+              ],
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
@@ -1996,7 +2183,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
   }
 
   String _getGlobalProgressPercentage() {
-    if (_totalDuration.inSeconds == 0) {
+    if (_totalDuration.inMilliseconds == 0) {
       return '0';
     }
 
@@ -2035,14 +2222,10 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
       }
 
       // 计算当前轮次内的百分比
-      final percentage =
-          (currentRoundPlayedTime.inSeconds / _totalDuration.inSeconds) * 100;
-      return percentage.clamp(0.0, 100.0).toStringAsFixed(0);
+      return playbackPercent(currentRoundPlayedTime, _totalDuration).toString();
     } else {
       // 顺序和随机模式：使用原有的计算方式
-      final percentage =
-          (_totalPlayedTime.inSeconds / _totalDuration.inSeconds) * 100;
-      return percentage.clamp(0.0, 100.0).toStringAsFixed(0);
+      return playbackPercent(_totalPlayedTime, _totalDuration).toString();
     }
   }
 
@@ -2057,10 +2240,10 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
   Widget _buildGlobalProgressBar() {
     if (_generatedPlaylist.isEmpty) {
-      return const LinearProgressIndicator(
+      return LinearProgressIndicator(
         value: 0.0,
-        backgroundColor: Colors.grey,
-        valueColor: AlwaysStoppedAnimation<Color>(Colors.transparent),
+        backgroundColor: context.appColors.border,
+        valueColor: const AlwaysStoppedAnimation<Color>(Colors.transparent),
         minHeight: 6,
       );
     }
@@ -2073,7 +2256,11 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         // 时间显示
         Text(
           _formatDuration(_getDisplayTime()),
-          style: const TextStyle(fontFamily: 'monospace'),
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 12,
+            color: context.appColors.textSecondary,
+          ),
         ),
         const SizedBox(width: 8),
         // 彩色进度条
@@ -2087,7 +2274,7 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                   Container(
                     height: 8,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: context.appColors.border,
                       borderRadius: BorderRadius.circular(3),
                     ),
                     child: Stack(
@@ -2109,19 +2296,6 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
                       bottom: 20,
                       child: _buildThumbnailPreview(),
                     ),
-                    // 调试指示器
-                    Positioned(
-                      left: _hoverDx! - 2,
-                      top: -10,
-                      child: Container(
-                        width: 4,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
                   ],
                 ],
               );
@@ -2132,7 +2306,11 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
         // 时间显示
         Text(
           _formatDuration(_totalDuration),
-          style: const TextStyle(fontFamily: 'monospace'),
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 12,
+            color: context.appColors.textSecondary,
+          ),
         ),
       ],
     );
@@ -2140,10 +2318,10 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
   Widget _buildClipProgressBar() {
     if (_currentItem == null) {
-      return const LinearProgressIndicator(
+      return LinearProgressIndicator(
         value: 0.0,
-        backgroundColor: Colors.grey,
-        valueColor: AlwaysStoppedAnimation<Color>(Colors.transparent),
+        backgroundColor: context.appColors.border,
+        valueColor: const AlwaysStoppedAnimation<Color>(Colors.transparent),
         minHeight: 6,
       );
     }
@@ -2511,38 +2689,6 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     }
   }
 
-  Color _getClipColor(VideoClip clip) {
-    // 使用与 playlist_timeline_view 相同的颜色计算逻辑
-    final List<Color> userDefinedTimelineColors = [
-      Colors.blue.shade400,
-      Colors.green.shade400,
-      Colors.orange.shade400,
-      Colors.purple.shade400,
-      Colors.red.shade400,
-      Colors.teal.shade400,
-      Colors.indigo.shade400,
-      Colors.pink.shade400,
-      Colors.blue.shade600,
-      Colors.green.shade600,
-      Colors.orange.shade600,
-      Colors.purple.shade600,
-      Colors.red.shade600,
-      Colors.teal.shade600,
-      Colors.indigo.shade600,
-      Colors.pink.shade600,
-      Colors.blue.shade300,
-      Colors.green.shade300,
-      Colors.orange.shade300,
-      Colors.purple.shade300,
-      Colors.red.shade300,
-      Colors.teal.shade300,
-      Colors.indigo.shade300,
-      Colors.pink.shade300,
-    ];
-
-    final hash = clip.id.hashCode.abs();
-    final colorIndex =
-        (hash * 7 + hash ~/ 7) % userDefinedTimelineColors.length;
-    return userDefinedTimelineColors[colorIndex];
-  }
+  /// 与播放列表时间轴使用同一调色板，同一片段在各处颜色一致。
+  Color _getClipColor(VideoClip clip) => playlistClipColor(clip.id);
 }
