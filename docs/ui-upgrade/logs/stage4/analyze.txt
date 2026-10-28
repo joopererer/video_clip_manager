@@ -1,0 +1,706 @@
+Analyzing video_clip_manager...                                 
+
+   info - The import of 'dart:collection' is unnecessary because all of the used elements are also provided by the import of 'package:collection/collection.dart' - lib\data\app_state.dart:2:8 - unnecessary_import
+warning - Unused import: 'dart:convert' - lib\data\app_state.dart:3:8 - unused_import
+   info - The imported package 'collection' isn't a dependency of the importing package - lib\data\app_state.dart:6:8 - depend_on_referenced_packages
+   info - Don't invoke 'print' in production code - lib\main.dart:20:5 - avoid_print
+warning - Unused import: 'package:url_launcher/url_launcher.dart' - lib\screens\add_online_video_screen.dart:2:8 - unused_import
+   info - Constructors for public widgets should have a named 'key' parameter - lib\screens\add_online_video_screen.dart:16:7 - use_key_in_widget_constructors
+   info - Invalid use of a private type in a public API - lib\screens\add_online_video_screen.dart:18:3 - library_private_types_in_public_api
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\add_online_video_screen.dart:216:48 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\add_online_video_screen.dart:247:48 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\add_online_video_screen.dart:250:50 - deprecated_member_use
+   info - Statements in an if should be enclosed in a block - lib\screens\add_online_video_screen.dart:284:43 - curly_braces_in_flow_control_structures
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\add_online_video_screen.dart:339:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\add_online_video_screen.dart:373:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\add_online_video_screen.dart:376:49 - deprecated_member_use
+   info - Don't invoke 'print' in production code - lib\screens\add_online_video_screen.dart:779:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\add_online_video_screen.dart:780:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\add_online_video_screen.dart:781:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:87:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:99:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:103:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:126:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:137:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:144:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:153:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:168:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:185:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:207:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:216:9 - avoid_print
+warning - The operand can't be 'null', so the condition is always 'false' - lib\screens\player\clip_playback_screen.dart:224:31 - unnecessary_null_comparison
+warning - The '!' will have no effect because the receiver can't be null - lib\screens\player\clip_playback_screen.dart:234:30 - unnecessary_non_null_assertion
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:238:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:244:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:249:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:254:7 - avoid_print
+warning - The operand can't be 'null', so the condition is always 'false' - lib\screens\player\clip_playback_screen.dart:260:31 - unnecessary_null_comparison
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:272:9 - avoid_print
+warning - The '!' will have no effect because the receiver can't be null - lib\screens\player\clip_playback_screen.dart:279:30 - unnecessary_non_null_assertion
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:283:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:285:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:314:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:330:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:337:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:344:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:350:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:353:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:359:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:372:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:377:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:379:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:384:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:391:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:399:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:425:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:427:7 - avoid_print
+   info - Don't use 'BuildContext's across async gaps - lib\screens\player\clip_playback_screen.dart:603:32 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\player\clip_playback_screen.dart:613:32 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\player\clip_playback_screen.dart:622:30 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\player\clip_playback_screen.dart:633:28 - use_build_context_synchronously
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:651:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\clip_playback_screen.dart:654:7 - avoid_print
+   info - 'RawKeyEvent' is deprecated and shouldn't be used. Use KeyEvent instead. This feature was deprecated after v3.18.0-2.0.pre - lib\screens\player\clip_playback_screen.dart:659:24 - deprecated_member_use
+   info - 'RawKeyDownEvent' is deprecated and shouldn't be used. Use KeyDownEvent instead. This feature was deprecated after v3.18.0-2.0.pre - lib\screens\player\clip_playback_screen.dart:660:18 - deprecated_member_use
+   info - 'RawKeyboardListener' is deprecated and shouldn't be used. Use KeyboardListener instead. This feature was deprecated after v3.18.0-2.0.pre - lib\screens\player\clip_playback_screen.dart:734:12 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\player\clip_playback_screen.dart:912:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\player\clip_playback_screen.dart:914:61 - deprecated_member_use
+   info - Use a 'SizedBox' to add whitespace to a layout - lib\screens\player\clip_playback_screen.dart:1031:13 - sized_box_for_whitespace
+   info - Use a 'SizedBox' to add whitespace to a layout - lib\screens\player\clip_playback_screen.dart:1129:18 - sized_box_for_whitespace
+   info - Use a 'SizedBox' to add whitespace to a layout - lib\screens\player\clip_playback_screen.dart:1159:18 - sized_box_for_whitespace
+   info - Use a 'SizedBox' to add whitespace to a layout - lib\screens\player\clip_playback_screen.dart:1192:18 - sized_box_for_whitespace
+   info - The private field _coverPreviewTimestamp could be 'final' - lib\screens\player\online_clip_editor_screen.dart:75:7 - prefer_final_fields
+warning - The value of the field '_clipsListTimestamp' isn't used - lib\screens\player\online_clip_editor_screen.dart:76:7 - unused_field
+   info - Unnecessary braces in a string interpolation - lib\screens\player\online_clip_editor_screen.dart:132:18 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:138:7 - avoid_print
+   info - 'surfaceVariant' is deprecated and shouldn't be used. Use surfaceContainerHighest instead. This feature was deprecated after v3.18.0-0.1.pre - lib\screens\player\online_clip_editor_screen.dart:244:52 - deprecated_member_use
+warning - The declaration '_showStreamSelectionDialog' isn't referenced - lib\screens\player\online_clip_editor_screen.dart:320:24 - unused_element
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:449:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:560:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:561:7 - avoid_print
+warning - The value of the local variable 'videoWithAudio' isn't used - lib\screens\player\online_clip_editor_screen.dart:567:15 - unused_local_variable
+   info - Unnecessary braces in a string interpolation - lib\screens\player\online_clip_editor_screen.dart:589:48 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:621:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:636:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:645:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:651:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:681:17 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\screens\player\online_clip_editor_screen.dart:697:68 - unnecessary_brace_in_string_interps
+warning - The operand can't be 'null', so the condition is always 'true' - lib\screens\player\online_clip_editor_screen.dart:861:16 - unnecessary_null_comparison
+warning - The operand can't be 'null', so the condition is always 'false' - lib\screens\player\online_clip_editor_screen.dart:888:16 - unnecessary_null_comparison
+warning - The value of the local variable 'thumbnailService' isn't used - lib\screens\player\online_clip_editor_screen.dart:929:17 - unused_local_variable
+warning - The value of the local variable 'coverTime' isn't used - lib\screens\player\online_clip_editor_screen.dart:930:17 - unused_local_variable
+   info - Don't use 'BuildContext's across async gaps - lib\screens\player\online_clip_editor_screen.dart:996:34 - use_build_context_synchronously
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:1005:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:1008:7 - avoid_print
+   info - 'RawKeyEvent' is deprecated and shouldn't be used. Use KeyEvent instead. This feature was deprecated after v3.18.0-2.0.pre - lib\screens\player\online_clip_editor_screen.dart:1111:24 - deprecated_member_use
+   info - 'RawKeyDownEvent' is deprecated and shouldn't be used. Use KeyDownEvent instead. This feature was deprecated after v3.18.0-2.0.pre - lib\screens\player\online_clip_editor_screen.dart:1112:18 - deprecated_member_use
+   info - 'RawKeyboardListener' is deprecated and shouldn't be used. Use KeyboardListener instead. This feature was deprecated after v3.18.0-2.0.pre - lib\screens\player\online_clip_editor_screen.dart:1185:12 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\player\online_clip_editor_screen.dart:1856:60 - deprecated_member_use
+warning - The '!' will have no effect because the receiver can't be null - lib\screens\player\online_clip_editor_screen.dart:1868:63 - unnecessary_non_null_assertion
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:1979:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:1988:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:1989:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:2011:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:2012:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:2013:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:2037:9 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\screens\player\online_clip_editor_screen.dart:2040:23 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\screens\player\online_clip_editor_screen.dart:2040:38 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:2053:7 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\screens\player\online_clip_editor_screen.dart:2079:25 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\screens\player\online_clip_editor_screen.dart:2079:40 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:2086:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\online_clip_editor_screen.dart:2090:5 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\screens\player\online_clip_editor_screen.dart:2093:26 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\screens\player\online_clip_editor_screen.dart:2105:18 - unnecessary_brace_in_string_interps
+warning - The value of the field '_currentItemDuration' isn't used - lib\screens\player\playlist_playback_screen.dart:77:12 - unused_field
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:118:9 - avoid_print
+   info - 'RawKeyEvent' is deprecated and shouldn't be used. Use KeyEvent instead. This feature was deprecated after v3.18.0-2.0.pre - lib\screens\player\playlist_playback_screen.dart:124:24 - deprecated_member_use
+   info - 'RawKeyDownEvent' is deprecated and shouldn't be used. Use KeyDownEvent instead. This feature was deprecated after v3.18.0-2.0.pre - lib\screens\player\playlist_playback_screen.dart:129:18 - deprecated_member_use
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:133:11 - avoid_print
+   info - 'isControlPressed' is deprecated and shouldn't be used. Use HardwareKeyboard.instance.isControlPressed instead. This feature was deprecated after v3.18.0-2.0.pre - lib\screens\player\playlist_playback_screen.dart:186:21 - deprecated_member_use
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:225:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:228:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:370:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:394:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:398:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:416:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:427:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:428:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:429:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:430:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:453:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:472:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:482:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:498:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:525:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:537:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:550:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:562:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:609:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:612:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:660:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:673:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:676:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:679:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:685:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:688:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:691:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:694:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:699:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:707:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:708:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:717:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:719:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:734:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:741:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:754:17 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:757:17 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:760:17 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:775:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:779:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:782:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:797:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:802:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:806:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:813:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:825:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:831:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:842:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:849:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:861:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:867:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:871:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:874:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:875:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:890:7 - avoid_print
+   info - Don't use 'BuildContext's across async gaps - lib\screens\player\playlist_playback_screen.dart:895:28 - use_build_context_synchronously
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:926:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:938:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:945:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:952:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:960:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:961:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:976:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1012:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1015:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1018:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1024:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1026:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1028:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1030:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1038:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1041:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1046:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1050:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1055:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1057:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1062:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1065:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1083:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1087:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1117:5 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\screens\player\playlist_playback_screen.dart:1118:81 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1120:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1133:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1134:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1139:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1141:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1158:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1160:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1169:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1182:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1186:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1197:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1199:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1202:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1205:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1206:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1209:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1211:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1215:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1217:7 - avoid_print
+warning - The declaration '_generateRandomPlaylistExcludingLast' isn't referenced - lib\screens\player\playlist_playback_screen.dart:1222:8 - unused_element
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1231:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1232:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1237:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1239:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1256:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1258:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1268:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1281:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1285:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1296:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1299:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1300:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1303:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1305:7 - avoid_print
+warning - The declaration '_restoreDefaultPlaylistWithCurrentItem' isn't referenced - lib\screens\player\playlist_playback_screen.dart:1375:8 - unused_element
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1478:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1480:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1484:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1489:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:1491:11 - avoid_print
+   info - 'RawKeyboardListener' is deprecated and shouldn't be used. Use KeyboardListener instead. This feature was deprecated after v3.18.0-2.0.pre - lib\screens\player\playlist_playback_screen.dart:1567:13 - deprecated_member_use
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:2150:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:2153:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:2351:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:2357:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:2369:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:2469:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:2498:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\screens\player\playlist_playback_screen.dart:2505:5 - avoid_print
+   info - Statements in an if should be enclosed in a block - lib\screens\settings\settings_screen.dart:84:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\settings\settings_screen.dart:86:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\settings\settings_screen.dart:88:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\settings\settings_screen.dart:90:7 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\settings\settings_screen.dart:92:7 - curly_braces_in_flow_control_structures
+warning - Unused import: '../../widgets/online_video_add_dialog.dart' - lib\screens\tabs\videos_tab.dart:11:8 - unused_import
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\tabs\videos_tab.dart:603:36 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\tabs\videos_tab.dart:607:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\tabs\videos_tab.dart:613:30 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\tabs\videos_tab.dart:626:26 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\tabs\videos_tab.dart:639:11 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\tabs\videos_tab.dart:644:28 - use_build_context_synchronously
+   info - Unnecessary braces in a string interpolation - lib\screens\tabs\videos_tab.dart:654:15 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\screens\tabs\videos_tab.dart:656:15 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\services\audio_detection_service.dart:41:21 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\services\audio_detection_service.dart:43:37 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\services\audio_detection_service.dart:43:62 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\services\audio_detection_service.dart:45:41 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\services\audio_detection_service.dart:47:41 - unnecessary_brace_in_string_interps
+warning - Unused import: 'dart:typed_data' - lib\services\audio_video_merger_service.dart:2:8 - unused_import
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:21:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:22:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:25:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:38:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:42:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:54:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:58:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:71:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:75:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:79:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:93:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:104:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:108:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:109:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:115:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:118:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:122:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:145:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:148:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:188:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:191:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:239:7 - avoid_print
+warning - The value of the local variable 'process' isn't used - lib\services\audio_video_merger_service.dart:242:13 - unused_local_variable
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:250:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:272:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:274:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\audio_video_merger_service.dart:278:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\config_service.dart:29:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\config_service.dart:162:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\config_service.dart:184:7 - avoid_print
+   info - Unnecessary escape in string literal - lib\services\delta_engine.dart:35:32 - unnecessary_string_escapes
+   info - Unnecessary escape in string literal - lib\services\delta_engine.dart:35:43 - unnecessary_string_escapes
+   info - Unnecessary escape in string literal - lib\services\delta_engine.dart:35:55 - unnecessary_string_escapes
+   info - Unnecessary escape in string literal - lib\services\delta_engine.dart:35:70 - unnecessary_string_escapes
+   info - Unnecessary escape in string literal - lib\services\delta_engine.dart:51:45 - unnecessary_string_escapes
+   info - Unnecessary escape in string literal - lib\services\delta_engine.dart:51:57 - unnecessary_string_escapes
+warning - Unused import: 'dart:convert' - lib\services\enhanced_multi_source_service.dart:1:8 - unused_import
+warning - Unused import: 'package:http/http.dart' - lib\services\enhanced_multi_source_service.dart:2:8 - unused_import
+warning - Unused import: 'dart:io' - lib\services\enhanced_multi_source_service.dart:3:8 - unused_import
+warning - The value of the field '_timeoutSeconds' isn't used - lib\services\enhanced_multi_source_service.dart:10:20 - unused_field
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:14:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:30:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:36:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:104:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:117:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:138:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:155:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:180:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:197:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:203:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:215:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:235:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:251:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:256:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:268:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:288:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:304:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:309:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:321:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:341:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:357:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\enhanced_multi_source_service.dart:364:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:13:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:24:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:27:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:30:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:40:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:45:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:171:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:176:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:179:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:184:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:185:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:189:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:196:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:206:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:211:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:225:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:239:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:250:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:256:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:259:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:262:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:275:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:280:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:292:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:299:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:302:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:310:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:426:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:429:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:435:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:451:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:452:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:459:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:470:17 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:477:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:480:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:481:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:486:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:492:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:495:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\external_scraper_service.dart:503:7 - avoid_print
+warning - Unused import: 'dart:convert' - lib\services\hybrid_video_sniffer_service.dart:1:8 - unused_import
+warning - Unused import: 'dart:io' - lib\services\hybrid_video_sniffer_service.dart:2:8 - unused_import
+warning - Unused import: 'package:http/http.dart' - lib\services\hybrid_video_sniffer_service.dart:5:8 - unused_import
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:15:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:20:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:25:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:28:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:32:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:35:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:45:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:51:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:61:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:106:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:166:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:177:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\hybrid_video_sniffer_service.dart:205:7 - avoid_print
+warning - Unused import: 'dart:convert' - lib\services\multi_source_search_service.dart:1:8 - unused_import
+warning - Unused import: 'package:http/http.dart' - lib\services\multi_source_search_service.dart:2:8 - unused_import
+warning - Unused import: 'dart:io' - lib\services\multi_source_search_service.dart:3:8 - unused_import
+warning - The value of the field '_timeoutSeconds' isn't used - lib\services\multi_source_search_service.dart:31:20 - unused_field
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:35:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:45:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:55:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:65:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:75:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:86:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:88:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:141:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:149:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:153:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:155:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:166:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:169:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:191:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\multi_source_search_service.dart:213:7 - avoid_print
+warning - Unused import: 'dart:convert' - lib\services\online_video_cache_service.dart:1:8 - unused_import
+   info - Don't invoke 'print' in production code - lib\services\online_video_cache_service.dart:43:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\online_video_cache_service.dart:170:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\online_video_cache_service.dart:207:7 - avoid_print
+warning - Unused import: 'dart:convert' - lib\services\online_video_service.dart:2:8 - unused_import
+warning - Unused import: 'package:http/http.dart' - lib\services\online_video_service.dart:3:8 - unused_import
+warning - Unused import: '../data/models.dart' - lib\services\platform_support.dart:4:8 - unused_import
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:111:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:116:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:212:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:237:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:239:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:241:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:245:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:251:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:505:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:510:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:515:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:516:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:525:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:526:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:546:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:557:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:568:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:575:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:634:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:685:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:717:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:754:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:777:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:783:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:790:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:794:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:797:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:811:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:812:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:814:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:817:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:820:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:827:7 - avoid_print
+warning - The declaration '_fetchTitleFromPage' isn't referenced - lib\services\platform_support.dart:832:19 - unused_element
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:865:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:870:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:876:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:878:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:883:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:909:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:914:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:947:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1054:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1059:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1064:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1067:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1073:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1078:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1081:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1084:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1121:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1126:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1145:13 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\services\platform_support.dart:1151:32 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\services\platform_support.dart:1153:43 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\services\platform_support.dart:1155:44 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1158:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\platform_support.dart:1164:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:91:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:100:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:140:19 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:148:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:153:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:163:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:169:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:171:7 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\services\preview_service.dart:179:26 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:193:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:195:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:208:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:212:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:236:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:240:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:256:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:264:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:268:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:293:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:300:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:336:7 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\services\preview_service.dart:337:40 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:353:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:372:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:375:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:390:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:392:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:395:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:399:7 - avoid_print
+warning - The '!' will have no effect because the receiver can't be null - lib\services\preview_service.dart:422:62 - unnecessary_non_null_assertion
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:491:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:493:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:511:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:513:7 - avoid_print
+   info - Use 'whereType' to select elements of a given type - lib\services\preview_service.dart:530:31 - prefer_iterable_wheretype
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:543:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:552:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:558:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:563:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:566:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:573:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:580:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:587:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:590:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:597:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:599:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:602:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:608:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:615:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:622:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:625:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:632:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:639:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:645:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:651:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:654:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:657:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:666:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:672:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:678:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:683:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:694:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:699:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:705:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:713:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:718:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:724:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:738:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:746:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:749:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:786:7 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\services\preview_service.dart:787:40 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:796:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:803:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:812:9 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\services\preview_service.dart:813:82 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:821:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:839:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:843:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:848:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:854:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:859:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:866:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:873:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:878:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:1012:7 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\services\preview_service.dart:1031:22 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\services\preview_service.dart:1031:42 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\services\preview_service.dart:1033:22 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:1054:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:1063:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:1075:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:1081:7 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\services\preview_service.dart:1082:53 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:1087:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:1100:5 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\services\preview_service.dart:1101:84 - unnecessary_brace_in_string_interps
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:1103:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:1112:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\preview_service.dart:1158:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:41:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:57:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:69:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:81:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:91:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:100:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:123:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:129:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:137:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:147:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:150:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:154:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:156:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:160:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:171:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:186:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:188:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:192:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:203:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:212:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:223:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:230:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:232:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:243:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:253:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:265:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:277:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:283:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:295:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:303:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:307:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:315:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\screenshot_service.dart:319:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:133:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:149:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:155:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:160:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:168:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:186:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:190:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:195:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:207:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:239:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:251:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:257:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:269:17 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:283:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:286:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:300:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:311:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:315:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:322:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:330:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:338:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:347:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:359:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:371:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:377:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:386:17 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:390:19 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:395:19 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:398:17 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:406:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:408:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:410:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:412:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:415:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:425:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:437:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:441:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:474:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:485:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:495:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:499:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:506:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:509:7 - avoid_print
+warning - Dead code - lib\services\third_party_database_service.dart:509:7 - dead_code
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:519:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:525:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:550:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:558:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:643:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:649:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:657:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:678:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:686:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:699:15 - avoid_print
+warning - The operand can't be 'null', so the condition is always 'true' - lib\services\third_party_database_service.dart:710:23 - unnecessary_null_comparison
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:718:7 - avoid_print
+warning - The declaration '_getTitleFromDetailPage' isn't referenced - lib\services\third_party_database_service.dart:724:26 - unused_element
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:757:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:771:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:787:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:796:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:804:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:814:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:818:19 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:829:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:835:19 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:853:17 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:857:21 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:872:17 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:876:21 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:891:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:901:19 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:910:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:916:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:920:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:940:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:961:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:972:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:982:19 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\third_party_database_service.dart:995:7 - avoid_print
+   info - Unnecessary braces in a string interpolation - lib\services\third_party_database_service.dart:1040:21 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\services\third_party_database_service.dart:1042:23 - unnecessary_brace_in_string_interps
+   info - Unnecessary braces in a string interpolation - lib\services\third_party_database_service.dart:1044:24 - unnecessary_brace_in_string_interps
+   info - The member 'dispose' overrides an inherited member but isn't annotated with '@override' - lib\services\unified_video_player.dart:358:16 - annotate_overrides
+warning - Unused import: 'dart:io' - lib\services\video_metadata_cache.dart:2:8 - unused_import
+   info - Don't invoke 'print' in production code - lib\services\video_sniffer_service.dart:28:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\video_sniffer_service.dart:33:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\video_sniffer_service.dart:63:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\video_sniffer_service.dart:65:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\video_sniffer_service.dart:70:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\video_sniffer_service.dart:206:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\video_sniffer_service.dart:434:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\video_sniffer_service.dart:475:7 - avoid_print
+warning - The value of the local variable 'jsonData' isn't used - lib\services\video_sniffer_service.dart:498:21 - unused_local_variable
+   info - Don't invoke 'print' in production code - lib\services\video_sniffer_service.dart:502:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\services\video_sniffer_service.dart:508:7 - avoid_print
+warning - The value of the local variable 'jsonData' isn't used - lib\services\video_sniffer_service.dart:533:21 - unused_local_variable
