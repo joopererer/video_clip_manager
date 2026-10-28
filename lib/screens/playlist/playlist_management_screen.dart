@@ -450,8 +450,14 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
         height: 72,
         showDuration: true,
         showNames: true,
+        showScale: true,
         selectedIndex: _selectedIndex,
         onItemTap: _selectAndReveal,
+        enableReorder: true,
+        onReorder: (from, finalIndex) => setState(() {
+          _draft?.moveTo(from, finalIndex);
+          _selectedIndex = null;
+        }),
       ),
     );
   }
