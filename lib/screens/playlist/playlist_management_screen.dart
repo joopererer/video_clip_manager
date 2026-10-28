@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../data/app_state.dart';
 import '../../data/models.dart';
+import '../../utils/playlist_draft.dart';
+import '../../utils/playlist_time.dart';
 import '../../widgets/clip_thumbnail.dart';
 import '../../widgets/playlist_timeline_view.dart';
 import '../player/playlist_playback_screen.dart';
@@ -17,132 +19,78 @@ class PlaylistManagementScreen extends StatefulWidget {
 }
 
 class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
-  // 原始状态（从 AppState 获取的真实数据）
-  List<PlaylistItemWithClip> _originalItems = [];
-
-  // 编辑状态（用户正在编辑的副本）
-  List<PlaylistItemWithClip> _editingItems = [];
-
-  final List<String> _removeClipIds = [];
-
-  // 是否处于编辑模式
-  final bool _isEditing = false;
-
-  // 是否有未保存的更改
-  bool _hasChanges = false;
+  // 事务草稿：所有编辑只发生在内存中，Save 时一次性提交完整列表。
+  PlaylistDraft? _draft;
 
   int? _selectedItemIndex;
 
-  // 创建一个 getter 来计算编辑状态下的总时长
-  Duration get _currentEditingTotalDuration {
-    if (_editingItems.isEmpty) {
-      return Duration.zero;
+  // 草稿尚未加载前使用的空视图
+  List<PlaylistItemWithClip> get _editingItems => _draft?.items ?? const [];
+
+  // 是否有未保存的更改
+  bool get _hasChanges => _draft?.isDirty ?? false;
+
+  // 草稿的总时长（毫秒精度的有效时长之和）
+  Duration get _currentEditingTotalDuration =>
+      _draft?.totalDuration ?? Duration.zero;
+
+  Playlist? _storedPlaylist(AppState appState) {
+    for (final p in appState.playlists) {
+      if (p.id == widget.playlist.id) return p;
     }
-    // 使用 fold 方法累加所有片段的有效时长
-    return _editingItems.fold(
-      Duration.zero,
-      (previousValue, item) => previousValue + item.effectiveDuration,
-    );
+    return null;
+  }
+
+  PlaylistDraft _newDraftFromStore(AppState appState) {
+    final stored = _storedPlaylist(appState) ?? widget.playlist;
+    return PlaylistDraft.from(items: stored.items, clips: appState.clips);
   }
 
   @override
   void initState() {
     super.initState();
-    // 延迟初始化，确保 context 可用
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _refreshItems();
-    });
-  }
-
-  void _refreshItems() {
-    if (!mounted) return;
-    final appState = context.read<AppState>();
-    _originalItems = appState.getPlaylistItemsWithClips(widget.playlist.id);
-
-    // 如果不在编辑模式，同步编辑状态
-    if (!_isEditing) {
-      _editingItems = List.from(_originalItems);
-      _hasChanges = false;
-    }
-
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  void _refreshFromExternalChanges() {
-    if (!mounted) return;
-    final appState = context.read<AppState>();
-    final newItems = appState.getPlaylistItemsWithClips(widget.playlist.id);
-
-    // 检查是否有外部变化
-    if (_originalItems.length != newItems.length ||
-        !_originalItems.every(
-          (item) => newItems.any((newItem) => newItem.item.id == item.item.id),
-        )) {
-      setState(() {
-        _originalItems = newItems;
-        // 如果不在编辑模式，同步编辑状态
-        if (!_isEditing) {
-          _editingItems = List.from(_originalItems);
-          _hasChanges = false;
-        }
-      });
-    }
+    _draft = _newDraftFromStore(context.read<AppState>());
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 只在依赖项变化时检查外部变化，避免拖拽时被干扰
-    if (_originalItems.isNotEmpty && !_hasChanges && mounted) {
-      _refreshFromExternalChanges();
+    // 没有未保存编辑时，跟随 AppState 的外部变化；有编辑时保持草稿不被覆盖。
+    final appState = context.watch<AppState>();
+    final draft = _draft;
+    if (draft == null || draft.isDirty) return;
+    final stored = _storedPlaylist(appState);
+    if (stored != null && draft.isStale(stored.items)) {
+      _draft = _newDraftFromStore(appState);
     }
   }
 
-  String _formatDuration(Duration duration) {
-    final minutes = duration.inMinutes;
-    final seconds = duration.inSeconds % 60;
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
-  }
+  String _formatDuration(Duration duration) => formatPlaylistDuration(duration);
 
   void _onReorder(int oldIndex, int newIndex) {
-    setState(() {
-      if (newIndex > oldIndex) {
-        newIndex -= 1;
-      }
-      final item = _editingItems.removeAt(oldIndex);
-      _editingItems.insert(newIndex, item);
-      _hasChanges = true;
-    });
+    setState(() => _draft?.reorder(oldIndex, newIndex));
   }
 
   void _saveChanges() {
+    final draft = _draft;
+    if (draft == null) return;
     final appState = context.read<AppState>();
+    final stored = _storedPlaylist(appState);
+    if (stored == null) return;
 
-    // 从 AppState 中移除播放列表项
-    for (String removeId in _removeClipIds) {
-      appState.removePlaylistItem(widget.playlist.id, removeId);
-      _originalItems.removeWhere((item) => item.item.id == removeId);
+    // 保存前确认外部没有改动列表，否则会覆盖其他入口添加/删除的片段。
+    if (draft.isStale(stored.items)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('播放列表已在别处被修改，请重置后再编辑')));
+      return;
     }
 
-    // 计算新的顺序并应用到 AppState
-    for (int i = 0; i < _editingItems.length; i++) {
-      final currentIndex = _originalItems.indexWhere(
-        (item) => item.item.id == _editingItems[i].item.id,
-      );
-      if (currentIndex != i) {
-        appState.reorderPlaylistItems(widget.playlist.id, currentIndex, i);
-        break; // 一次只处理一个移动
-      }
-    }
+    // 一次性提交完整顺序。name / description / createdAt 不传，保持不变。
+    appState.updatePlaylist(widget.playlist.id, items: draft.commit());
 
-    // 更新本地状态
-    setState(() {
-      _originalItems = List.from(_editingItems);
-      _removeClipIds.clear();
-      _hasChanges = false;
-    });
+    // 以已保存的数据重新建立草稿基线（重置将回到刚保存的状态）
+    setState(() => _draft = _newDraftFromStore(appState));
 
     ScaffoldMessenger.of(
       context,
@@ -150,11 +98,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
   }
 
   void _resetChanges() {
-    setState(() {
-      _editingItems = List.from(_originalItems);
-      _removeClipIds.clear();
-      _hasChanges = false;
-    });
+    setState(() => _draft?.reset());
 
     ScaffoldMessenger.of(
       context,
@@ -163,12 +107,6 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 监听 AppState 变化
-    context.watch<AppState>();
-
-    // 检查外部变化
-    _refreshFromExternalChanges();
-
     return Scaffold(
       appBar: AppBar(
         title: Text('管理播放列表: ${widget.playlist.name}'),
@@ -475,7 +413,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
                   size: 18, // 稍微减小图标
                   color: Colors.red,
                 ),
-                onPressed: () => _removeClipFromPlaylist(itemWithClip),
+                onPressed: () => _removeClipFromPlaylist(itemWithClip, index),
                 constraints: const BoxConstraints(
                   minWidth: 36,
                   minHeight: 36,
@@ -488,7 +426,7 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
     );
   }
 
-  void _removeClipFromPlaylist(PlaylistItemWithClip itemWithClip) {
+  void _removeClipFromPlaylist(PlaylistItemWithClip itemWithClip, int index) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -504,13 +442,8 @@ class _PlaylistManagementScreenState extends State<PlaylistManagementScreen> {
           ElevatedButton(
             onPressed: () {
               // 从编辑状态中移除
-              setState(() {
-                _editingItems.removeWhere(
-                  (item) => item.item.id == itemWithClip.item.id,
-                );
-                _removeClipIds.add(itemWithClip.item.id);
-                _hasChanges = true;
-              });
+              // 按行位置移除，避免旧数据中重复/空 id 误删多项
+              setState(() => _draft?.removeAt(index));
               Navigator.of(context).pop();
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
