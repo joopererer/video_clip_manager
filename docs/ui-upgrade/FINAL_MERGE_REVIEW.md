@@ -2,13 +2,14 @@
 
 分支：`feat/dark-ui-workspace`  
 目标分支：`master`  
+审查日期：2026-10-29  
 状态：审查完成，未执行合并、推送、Release 或 destructive Git 操作。
 
 ## 1. Git 状态
 
 - 当前分支：`feat/dark-ui-workspace`
 - 工作区：干净
-- 相对 `origin/feat/dark-ui-workspace`：领先 29 个提交
+- 相对 `origin/feat/dark-ui-workspace`：领先 32 个提交
 - 合并基点：`c7011b2`（v1.0.1 merge）
 
 ## 2. 阶段与 AI 稳定性提交覆盖
@@ -27,6 +28,7 @@
 - `83c4aed` fix(ai): clarify online indexing skip and add regression tests
 - `53fdafb` docs(ai): record manual acceptance and leftover investigations
 - `5378bb9` test(settings): add controlled model directory migration rollback tests
+- `ecd063f` docs: add final merge review before master merge
 
 ## 3. 无关文件与大文件检查
 
@@ -53,7 +55,7 @@
 ## 6. 文档与提交记录
 
 - `AI_STABILITY_AND_UX_REPORT.md` 已更新测试数量、用户人工验收结果、未测试项、提交哈希、遗留问题调查与测试结果。
-- 文档日期为 `2026-06-16`，与当前审查日期一致。
+- 文档日期为 `2026-10-29`，与当前审查日期一致。
 
 ## 7. 语义搜索 Hit 审查
 
