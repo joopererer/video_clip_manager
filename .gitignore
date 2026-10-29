@@ -46,4 +46,5 @@ app.*.map.json
 
 # Local ML model weights and packaged release artifacts
 /models/
+/video_clip_manager-*.zip
 /video_clip_manager-windows-x64.zip
