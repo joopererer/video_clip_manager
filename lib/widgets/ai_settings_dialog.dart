@@ -1,11 +1,14 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../data/app_state.dart';
 import '../services/ai_model_downloader.dart';
+import '../services/ai_model_manifest.dart';
 import '../services/ai_model_verifier.dart';
 import '../services/vlm_connection_probe.dart';
 import '../theme/app_colors.dart';
@@ -44,6 +47,7 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
   String? _embeddingDownloadProgress;
   double? _embeddingDownloadFraction;
   bool _cancelEmbeddingDownload = false;
+  bool _modelDirBusy = false;
 
   /// Cheap (size-only) state of the model folder, refreshed after each action.
   ModelVerification? _embeddingInspection;
@@ -124,6 +128,162 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
         _localModelsReady = models != null;
         _localModelPath = models?['model'];
       });
+    }
+  }
+
+  Future<void> _chooseModelDir() async {
+    final appState = context.read<AppState>();
+    final ai = appState.aiService;
+    if (_isDownloadingEmbeddingModel ||
+        appState.isIndexingEmbeddings ||
+        ai.isInstallingEmbeddingModel) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('模型正在下载、推理或构建特征，请完成后再切换目录')));
+      return;
+    }
+    final picked = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: '选择 EmbeddingGemma 模型目录',
+    );
+    if (picked == null || !mounted) return;
+
+    // 验证存在性与读写权限
+    final dir = Directory(picked);
+    if (!await dir.exists()) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('目录不存在，请重新选择')));
+      }
+      return;
+    }
+    final probe = File(p.join(picked, '.vcm_write_test'));
+    try {
+      await probe.writeAsString('ok');
+      await probe.delete();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('目录不可写，请选择有写入权限的文件夹')));
+      }
+      return;
+    }
+
+    final current = _embeddingModelPath;
+    if (current != null && p.equals(current, picked)) return;
+
+    final hasExisting = current != null && Directory(current).existsSync();
+    String choice = 'use';
+    if (!mounted) return;
+    if (hasExisting) {
+      choice =
+          await showDialog<String>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('切换模型目录'),
+              content: const Text(
+                '检测到已有模型文件。请选择：\n'
+                '• 仅使用新路径：不复制文件\n'
+                '• 复制现有模型：将旧目录文件复制到新目录并校验\n'
+                '• 取消：保持原目录',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop('cancel'),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop('use'),
+                  child: const Text('仅使用新路径'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(ctx).pop('copy'),
+                  child: const Text('复制现有模型'),
+                ),
+              ],
+            ),
+          ) ??
+          'cancel';
+      if (choice == 'cancel') return;
+    }
+
+    final oldDir = current;
+    final copied = <String>[];
+    setState(() => _modelDirBusy = true);
+    try {
+      if (choice == 'copy' && oldDir != null) {
+        await _copyModelDir(oldDir, picked, created: copied);
+        final v = await ModelVerifier().verify(picked, embeddingGemmaManifest);
+        if (!v.isComplete) {
+          throw StateError('copy verification failed');
+        }
+      }
+      await appState.setAiModelDir(picked);
+      await _checkEmbeddingModelStatus();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('模型目录已更新')));
+      }
+    } catch (e) {
+      // 回滚已复制文件与配置，保留旧目录和目标目录中原有文件
+      for (final path in copied.reversed) {
+        try {
+          final f = File(path);
+          if (await f.exists()) await f.delete();
+        } catch (_) {}
+      }
+      if (oldDir != null) await appState.setAiModelDir(oldDir);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('切换失败：$e，已保留旧目录')));
+      }
+    } finally {
+      if (mounted) setState(() => _modelDirBusy = false);
+    }
+  }
+
+  Future<void> _restoreDefaultModelDir() async {
+    final appState = context.read<AppState>();
+    if (_isDownloadingEmbeddingModel ||
+        appState.isIndexingEmbeddings ||
+        appState.aiService.isInstallingEmbeddingModel) {
+      return;
+    }
+    await appState.setAiModelDir(null);
+    await _checkEmbeddingModelStatus();
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已恢复默认模型目录')));
+    }
+  }
+
+  Future<void> _copyModelDir(
+    String from,
+    String to, {
+    required List<String> created,
+  }) async {
+    final fromDir = Directory(from);
+    final toDir = Directory(to);
+    if (!await toDir.exists()) await toDir.create(recursive: true);
+    await for (final entity in fromDir.list(
+      recursive: true,
+      followLinks: false,
+    )) {
+      if (entity is File) {
+        final rel = p.relative(entity.path, from: from);
+        final dest = File(p.join(to, rel));
+        // Never overwrite a file that already exists in the target directory.
+        if (await dest.exists()) {
+          throw FileSystemException('目标目录已存在同名文件，拒绝覆盖', dest.path);
+        }
+        await dest.parent.create(recursive: true);
+        await entity.copy(dest.path);
+        created.add(dest.path);
+      }
     }
   }
 
@@ -814,6 +974,43 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
                         : () => setState(() => _cancelEmbeddingDownload = true),
                     child: Text(_cancelEmbeddingDownload ? '正在取消...' : '取消'),
                   ),
+              ],
+            ),
+          ],
+        ),
+        _section(
+          colors: colors,
+          icon: Icons.folder_outlined,
+          accent: colors.info,
+          title: '模型目录 (仅应用内 EmbeddingGemma)',
+          children: [
+            _caption(
+              colors,
+              '此目录仅用于 Video Clip Manager 自身管理的 EmbeddingGemma 模型，'
+              '不涉及 LM Studio/Ollama 外部服务管理的模型。',
+            ),
+            const SizedBox(height: 6),
+            SelectableText(
+              _embeddingModelPath ?? '(默认)',
+              style: TextStyle(fontSize: 11.5, color: colors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                OutlinedButton.icon(
+                  icon: _modelDirBusy
+                      ? _spinner()
+                      : const Icon(Icons.folder_open, size: 16),
+                  label: const Text('浏览'),
+                  onPressed: _modelDirBusy ? null : _chooseModelDir,
+                ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.restore, size: 16),
+                  label: const Text('恢复默认'),
+                  onPressed: _modelDirBusy ? null : _restoreDefaultModelDir,
+                ),
               ],
             ),
           ],
