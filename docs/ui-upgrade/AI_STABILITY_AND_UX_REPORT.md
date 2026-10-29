@@ -8,7 +8,7 @@
 
 - `dart format`：已对本轮修改的 Dart 文件执行格式化（仅修改文件）。
 - `flutter analyze`：无 error；1453 项均为 info/warning（与基线一致）。
-- `flutter test`：通过，394 项全部通过（`All tests passed!`）。
+- `flutter test`：通过，396 项全部通过（`All tests passed!`）。
 - `flutter build windows --debug`：成功。
 - `flutter build windows --release`：成功。
 - 模型文件校验：`models/` 下 10 个 EmbeddingGemma 2 文件按 `models/embeddinggemma2_onnx_manifest.json` 的尺寸与 SHA-256 全量校验通过（约 541.8 MB）。
@@ -166,24 +166,50 @@ AI 提帧与向量索引：
 - Widget rebuild 使用当前状态渲染，不重置音量。
 - 未创建额外 Player，未改变播放器生命周期。
 
-## 11. 人工验收覆盖状态
+## 11. 用户人工验收结果（2026-06-16）
 
-- Ollama/LM Studio 连接：Ollama 由现有功能支持；LM Studio 依据用户本机诊断为服务未启动/端口不可达，程序提供明确引导。未在本机 LM Studio 环境复测。
-- EmbeddingGemma 校验与失败提示：自动化测试覆盖，真实下载未在本会话执行。
-- 真实视频提帧与向量索引：单元测试覆盖，未执行真实视频端到端。
-- 四个播放器音量调节与静音恢复：共享组件已接入，预览自动化通过；其它三个为代码接入，未人工 UI 验证。
-- 自定义模型目录切换、重启保持、失败回滚：代码实现与构建通过，未人工 UI 验证。
-- 原始视频与播放列表播放功能：自动化测试通过。
+已通过：
 
-## 12. 未验证项目与后续风险
+1. Ollama 正常连接；LM Studio 未启动时错误提示清晰。
+2. EmbeddingGemma 校验能够显示实际状态或错误原因。
+3. 真实本地视频成功生成片段特征向量。
+4. 四个播放器音量滑块及静音恢复正常。
+5. AI 模型目录修改后，重启仍保持配置，已有模型可识别。
+6. Windows Release 正常运行，无新增明显播放问题。
 
-- 未执行真实 LM Studio/Ollama 人工连接测试（LM Studio 本机服务不可达）。
-- 未执行真实 EmbeddingGemma 下载（约 542MB）与真实视频向量索引端到端。
-- 未捕获 Windows 运行截图；建议在 Debug/Release 构建上手动截图放入 `docs/ui-upgrade/screenshots/`。
-- 音量控件在极窄窗口（<320px）可能拥挤，建议 UI 人工检查。
-- 自定义目录复制大模型（~542MB）耗时较长，UI 无进度条，仅完成后提示；失败时保留旧目录但可能留下空目录。
-- `dart format` 仅作用于修改文件，未全量格式化。
-- 媒体打开后播放器是否重置音量未做自动化验证，需人工确认。
+未测试（不标记为通过）：
+
+- 缺失/损坏视频的索引失败隔离。
+- 模型目录迁移失败后的回滚。
+
+## 12. 本轮遗留问题调查与测试
+
+### A. 在线片段索引跳过
+
+- `indexAllClips` 仅处理本地视频；在线片段在候选列表阶段即被计为 `skipped`。
+- 这是预期限制，不是分类错误：当前实现不会下载或提帧在线媒体。
+- 在线片段不会进入本地向量索引；语义搜索时仅使用已缓存帧，通常没有新增在线帧。
+- 已改善提示文案，明确“当前仅索引本地视频，不会下载或提帧在线媒体”。
+- 未引入网络视频下载或并发提帧功能。
+
+### B. 语义搜索 Hit 标记
+
+- 追踪链路：`performSemanticSearch` → `_semanticScores[clip.id]` → `getFilteredClips` → `clip.copyWith(hitTimestampMs: ...)` → `ClipCard` / `ClipListRow` / `ClipThumbnail`。
+- `getFilteredClips` 已在语义命中时写入 `hitTimestampMs`；新增回归测试 `test/semantic_hit_regression_test.dart` 验证有/无 Hit 两种状态。
+- 未发现数据映射回归；UI 已显示 Hit 时间戳与 `HIT` 标记。
+- 普通文本搜索与逐帧语义搜索保持区分：无语义分数时不会伪造 Hit 时间戳。
+
+### C. 缺失媒体与模型迁移失败安全
+
+- 新增 `test/index_failure_isolation_test.dart`，验证一个片段索引失败时其他有效片段仍可处理，失败原因准确记录，已生成缓存保留。
+- 模型目录迁移失败回滚仍以代码路径审查为主；因 FilePicker 交互未建立自动化 UI 测试，暂不标记为已测试。
+
+## 13. 仍未验证项目
+
+- 缺失/损坏视频索引失败隔离的人工 UI 验证。
+- 模型目录迁移失败后的回滚人工验证。
+- 媒体打开后播放器是否重置音量的人工验证。
+- Windows 运行截图尚未采集。
 
 ## 13. 结论
 
