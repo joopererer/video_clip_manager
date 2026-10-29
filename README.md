@@ -1,7 +1,7 @@
 # Video Clip Manager
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.1-blue.svg?cacheSeconds=2592000" />
+  <img src="https://img.shields.io/badge/version-1.1.0-blue.svg?cacheSeconds=2592000" />
   <img src="https://img.shields.io/badge/Flutter-3.41+-02569B?logo=flutter" />
   <img src="https://img.shields.io/badge/Dart-3.11+-0175C2?logo=dart" />
   <img src="https://img.shields.io/badge/AI-EmbeddingGemma%202-8E24AA" />
@@ -111,11 +111,49 @@ flutter build macos --release
 flutter build linux --release
 ```
 
+### Windows 发布包内容与首次运行
+
+发布包是一个完整目录（不是单个 EXE），解压后直接运行 `video_clip_manager.exe`：
+
+| 内容 | 说明 |
+| --- | --- |
+| `video_clip_manager.exe` | 主程序（版本资源 = `pubspec.yaml` 的版本号） |
+| `flutter_windows.dll`、`data/` | Flutter 运行时与已编译资源，**不可缺** |
+| `libmpv-2.dll`、`media_kit_*_plugin.dll` | 播放内核，删除后无法播放 |
+| `onnxruntime.dll` | 向量推理运行时 |
+| `d3dcompiler_47.dll`、`libEGL.dll`、`libGLESv2.dll`、`vk_swiftshader.dll`、`vulkan-1.dll`、`zlib.dll` | 图形与解压依赖 |
+| 插件 DLL（`desktop_drop`、`url_launcher_windows`、`volume_controller` 等） | 拖拽、外链、音量等能力 |
+
+**包内不包含任何 AI 模型权重。** 因此：
+
+- 视频管理、播放、片段截取、播放列表、关键词筛选开箱即用；
+- 「AI 语义搜索」需要 EmbeddingGemma 2（约 530MB），在 **设置 → AI 设置 → 语义检索模型** 里点「一键下载」或「修复 / 补全下载」，模型默认落在程序目录下的 `models/`（也可自定义目录）；
+- 帧提取与推理还需要独立的 `local-media-ai.exe` sidecar（放在程序同目录或系统 `PATH` 中）以及 FFmpeg。缺少时应用不会崩溃，而是给出明确的缺失提示与处理建议。
+
 ---
 
 ## 📝 版本更新历史 (Changelog)
 
-### v1.0.1 (当前版本)
+### v1.1.0 (当前版本)
+- **界面与交互**：
+  - 🎨 深色工作区全面落地：响应式 Shell（可折叠侧栏 + 顶栏 + 三页导航）、网格 / 列表两种片段视图、统一的卡片悬停 / 焦点 / 右键交互；
+  - 🎬 「原始视频」双击 / 播放按钮直接打开**原始视频预览**（不再误入剪辑器），支持播放暂停、进度条、静音还原、全屏与「创建片段」；
+  - 📚 播放列表工作台：可编排、连播与跨片段跳转，M3U8 在线源在片段库与播放列表中都可用；
+  - 🔊 播放器与剪辑器新增音量滑杆与静音切换（取消静音时恢复原音量）。
+- **AI 语义搜索**：
+  - 🎯 搜索结果直接显示**真实余弦相似度 Score**（三位小数，明确标注"不是准确率"），并新增「相关度最高」排序，存在语义分数时默认启用；
+  - ⚡ 明确区分「关键词筛选」与「AI 语义搜索」：输入即筛选，按 `Enter` 或点击搜索框 ✨ 才执行 AI 检索，状态条与结果横幅全程可见；
+  - 🧹 修改搜索词后旧 HIT 与 Score 立即清除，迟到的请求结果整体丢弃，不再出现新旧混排；
+  - 🛠️ AI 设置新增「语义检索模型 (EmbeddingGemma 2)」区块：模型状态（已就绪 / 未下载 / 不完整）、模型目录切换（可复制既有模型）、一键下载与「修复 / 补全下载」（sha256 校验，只补缺失或损坏的文件）。
+- **关于与更新**：
+  - ℹ️ 「关于」显示真实打包版本（v1.1.0 · 构建 3）、仓库地址、许可证入口与 Releases 页面，不再硬编码版本号；
+  - 🔄 新增非侵入式「检查更新」：读取 GitHub 最新正式 Release 并按 SemVer 比较，仅在远端版本更高时提示，失败完全静默、不阻塞启动、不上传任何数据；
+  - 🏷️ 版本链路统一为 `pubspec.yaml` → Windows 版本资源，EXE 属性与「关于」不会各写一套。
+- **工程与文档**：
+  - ✅ 测试从 398 项增加到 461 项（新增搜索状态、Score 展示、检索质量、更新检查、版本一致性、关于对话框、无模型指引等）；
+  - 📄 补充 `LICENSE`（MIT），新增语义检索质量审计与评估集、Logo 候选、发布准备与验收报告。
+
+### v1.0.1
 - **新特性**：
   - ✨ 接入 EmbeddingGemma 2 多模态 768 维图文语义向量检索，支持自然语言画面秒搜；
   - 🎯 实现最佳匹配关键帧悬停高亮（Hit Keyframe Scrubbing）与金色 HIT 徽章；
