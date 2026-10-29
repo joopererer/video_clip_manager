@@ -137,8 +137,8 @@ Windows 实机驱动脚本：`docs/ui-upgrade/scripts/capture_v1_1_windows.ps1`�
 1. **真实语义检索**：开发环境没有 sidecar 二进制与 EmbeddingGemma 2 模型（`D:\workspace\local-media-ai\target` 为空），因此 `自行车` / `短裤` 的真实分数分布尚未填表；需要用户在装有模型的机器上按 `semantic_eval/README.md` 记录。
 2. **Windows 实机截图**：本次会话无法抓取真实窗口画面（`CopyFromScreen` 报 `handle is invalid`，Flutter 也只在 UIA 客户端请求后异步填充语义树，本次只看到 `Window / Pane(FLUTTERVIEW)`）。因此"真实应用里的搜索状态、About、更新入口"是**用生产 widget 渲染的截图 + 自动化断言**证明的，不是实机像素截图，需用户人工复核一次。
 3. **真实更新检查**：仓库目前没有任何 Release，`/releases/latest` 会返回 404；该分支已被"尚未发布任何正式版本"覆盖（单测），但真实网络下的成功路径尚未在实机验证。
-4. **Logo**：视觉判断与最终选择待用户确认；ICO 生产与 Runner 接入尚未执行。
-5. **许可证文件**：README 声明 MIT，但仓库根目录没有 `LICENSE` 文件；About 的许可证入口指向 `blob/master/LICENSE`（当前会 404）。发布前建议补上 LICENSE 文件或改为指向仓库首页。
+4. **Logo**：用户本轮选择**暂不改动图标**，`app_icon.ico` 保持现状；候选与接入流程仍保留在 `logo/LOGO_CANDIDATES.md`，后续确认后再导出 ICO 并接入 Runner。
+5. **许可证文件**：已补 `LICENSE`（MIT，`Copyright (c) 2026 joopererer`），README 与 About 的 `blob/master/LICENSE` 链接在合并到 `master` 后即可正常打开。
 6. 播放界面的「相关度最高」排序退化为稳定顺序（播放页不持有语义分数），语义命中时间与分数不受影响。
 
 ## 10. 提交
