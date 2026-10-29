@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_typography.dart';
+import '../../utils/search_mode.dart';
 
 class AppHeader extends StatelessWidget {
   final String title;
@@ -22,6 +23,10 @@ class AppHeader extends StatelessWidget {
   final String? searchStatus;
   final bool isNarrow;
 
+  /// Number of clips that currently carry a semantic score, used for the mode
+  /// badge and the result count in the search guidance.
+  final int semanticResultCount;
+
   const AppHeader({
     super.key,
     required this.title,
@@ -41,11 +46,22 @@ class AppHeader extends StatelessWidget {
     this.onOpenTheme,
     this.searchStatus,
     this.isNarrow = false,
+    this.semanticResultCount = 0,
   });
+
+  SearchMode _mode() => resolveSearchMode(
+    query: searchController.text,
+    isSemanticSearching: isSemanticSearching,
+    semanticResultCount:
+        semanticResultCount > 0
+            ? semanticResultCount
+            : (hasSemanticScores ? 1 : 0),
+  );
 
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
+    final mode = _mode();
 
     return Container(
       height: AppSpacing.topToolbarHeight,
@@ -84,8 +100,8 @@ class AppHeader extends StatelessWidget {
                   style: const TextStyle(fontSize: 13),
                   decoration: InputDecoration(
                     hintText: isNarrow
-                        ? '搜索名称、标签或 AI 语义…'
-                        : '搜索标题、笔记、标签，按回车启动 AI 跨模态语义检索…',
+                        ? '输入关键词，Enter 或 ✨ 执行 AI 语义搜索…'
+                        : '输入关键词实时筛选，按 Enter 或点击 ✨ 进行 AI 语义搜索…',
                     hintStyle: AppTypography.caption.copyWith(
                       color: colors.textMuted,
                     ),
@@ -117,31 +133,117 @@ class AppHeader extends StatelessWidget {
 
           const SizedBox(width: AppSpacing.sm),
 
-          // 搜索辅助状态提示（当存在时）
-          if (searchStatus != null && !isNarrow) ...[
-            Container(
-              constraints: const BoxConstraints(maxWidth: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: colors.primaryContainer.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(AppRadius.xs),
-              ),
-              child: Text(
-                searchStatus!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: colors.primaryHover,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-          ],
+          // 搜索模式与操作提示（关键词筛选 / AI 语义检索中 / AI 语义结果）
+          _buildSearchModeChip(context, colors, mode),
 
           // 右侧操作工具栏
           _buildActionButtons(context, colors),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchModeChip(
+    BuildContext context,
+    AppColorExtension colors,
+    SearchMode mode,
+  ) {
+    final label = searchModeLabel(
+      mode,
+      semanticResultCount:
+          semanticResultCount > 0 ? semanticResultCount : 1,
+    );
+    final hint = isSemanticSearching
+        ? (searchStatus ?? searchActionHint(SearchMode.semanticLoading))
+        : searchActionHint(mode);
+
+    final accent = isSemanticMode(mode) ? colors.primary : colors.textSecondary;
+
+    if (isNarrow) {
+      return Tooltip(
+        message: '$label · $hint',
+        child: Padding(
+          padding: const EdgeInsets.only(right: AppSpacing.xs),
+          child: isSemanticSearching
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(
+                  isSemanticMode(mode)
+                      ? Icons.auto_awesome
+                      : Icons.keyboard_return,
+                  size: 16,
+                  color: accent,
+                ),
+        ),
+      );
+    }
+
+    return Container(
+      key: const Key('search-mode-chip'),
+      constraints: const BoxConstraints(maxWidth: 240),
+      margin: const EdgeInsets.only(right: AppSpacing.xs),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isSemanticMode(mode)
+            ? colors.primaryContainer.withValues(alpha: 0.55)
+            : colors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AppRadius.xs),
+        border: Border.all(
+          color: isSemanticMode(mode)
+              ? colors.primary.withValues(alpha: 0.5)
+              : colors.borderSubtle,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isSemanticSearching)
+            const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(strokeWidth: 1.8),
+            )
+          else
+            Icon(
+              isSemanticMode(mode) ? Icons.auto_awesome : Icons.keyboard_return,
+              size: 13,
+              color: accent,
+            ),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  key: const Key('search-mode-label'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    height: 1.15,
+                    fontWeight: FontWeight.w700,
+                    color: accent,
+                  ),
+                ),
+                Text(
+                  hint,
+                  key: const Key('search-action-hint'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    height: 1.15,
+                    color: colors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -169,7 +271,7 @@ class AppHeader extends StatelessWidget {
               size: 17,
               color: hasSemanticScores ? colors.warning : colors.primary,
             ),
-            tooltip: '执行 AI 跨模态语义检索',
+            tooltip: '点击 ✨ 或按 Enter 执行 AI 语义搜索',
             onPressed: onTriggerSemanticSearch,
             visualDensity: VisualDensity.compact,
           ),

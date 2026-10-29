@@ -6,15 +6,19 @@ import 'package:flutter/material.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as path;
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../app_info.dart';
 import '../data/app_state.dart';
 import '../data/models.dart';
 import '../services/preview_service.dart';
 import '../services/screenshot_service.dart';
+import '../services/update_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../utils/toast_utils.dart';
+import '../widgets/about_dialog.dart';
 import '../widgets/ai_settings_dialog.dart';
 import '../widgets/common/app_header.dart';
 import '../widgets/common/app_sidebar.dart';
@@ -45,6 +49,40 @@ class _MainScreenState extends State<MainScreen> {
       () => setState(() => _searchQuery = _searchController.text),
     );
     _startGlobalPreGeneration();
+    unawaited(_checkForUpdatesSilently());
+  }
+
+  static const String _updateCheckAtPrefsKey = 'update_check_at_ms';
+  static const Duration _updateCheckInterval = Duration(hours: 12);
+  bool _updateNoticeShown = false;
+
+  /// 非侵入式的启动更新检查：最多每 12 小时一次，失败静默，绝不阻塞启动。
+  Future<void> _checkForUpdatesSilently() async {
+    try {
+      await Future<void>.delayed(const Duration(seconds: 8));
+      if (!mounted) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final lastCheckMs = prefs.getInt(_updateCheckAtPrefsKey) ?? 0;
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      if (nowMs - lastCheckMs < _updateCheckInterval.inMilliseconds) return;
+
+      final version = await AppInfo.load();
+      final result = await UpdateService().checkForUpdate(
+        currentVersion: version.semver,
+      );
+      if (!result.ok) return;
+      await prefs.setInt(_updateCheckAtPrefsKey, nowMs);
+
+      if (!mounted || !result.updateAvailable || _updateNoticeShown) return;
+      _updateNoticeShown = true;
+      ToastUtils.showInfo(
+        context,
+        '发现新版本 v${result.latest!.version}，可在「关于」中查看更新说明',
+      );
+    } catch (_) {
+      // 网络失败或偏好读取失败都不影响应用启动
+    }
   }
 
   /// 启动全局预览预生成
@@ -124,6 +162,12 @@ class _MainScreenState extends State<MainScreen> {
     if (trimmed.isEmpty) return;
 
     final appState = context.read<AppState>();
+    // 输入框里的文字即本次语义检索的目标词
+    appState.syncSearchQueryText(query);
+
+    // 重复 Enter / 重复点击 ✨ 不发起并发请求
+    if (appState.isSemanticSearching) return;
+
     final modelDir = await appState.aiService.resolveEmbeddingModelDir();
     if (modelDir == null) {
       if (!mounted) return;
@@ -222,49 +266,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _showAboutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.info_outline, color: AppColors.primary),
-            SizedBox(width: 8),
-            Text('关于 Video Clip Manager'),
-          ],
-        ),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Video Clip Manager',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            Text('版本: 1.0.1 (Dark Media Workspace)'),
-            SizedBox(height: 4),
-            Text('作者: AI Assistant'),
-            SizedBox(height: 4),
-            Text('说明: 现代深色高性能本地与在线视频片段管理工作台'),
-            SizedBox(height: 8),
-            Text('核心能力:', style: TextStyle(fontWeight: FontWeight.bold)),
-            SizedBox(height: 4),
-            Text('• 视频精准软剪切与无损片段标记'),
-            Text('• 播放列表时间轴编排与事务编辑'),
-            Text('• 多色系标签分类与星级评分系统'),
-            Text('• 全局后台缩略图异步秒级预生成'),
-            Text('• 本地 EmbeddingGemma 2 离线跨模态语义检索'),
-            Text('• 在线流媒体解析与外部平台元数据嗅探'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('关闭'),
-          ),
-        ],
-      ),
-    );
+    showDialog(context: context, builder: (context) => const AppAboutDialog());
   }
 
   String _getTitleForTab(int index) {
@@ -331,6 +333,8 @@ class _MainScreenState extends State<MainScreen> {
                           title: _getTitleForTab(_currentTabIndex),
                           searchController: _searchController,
                           onSearchChanged: (val) {
+                            // 关键词筛选实时生效；查询词一变，旧语义结果与 HIT 立即失效
+                            context.read<AppState>().syncSearchQueryText(val);
                             setState(() {
                               _searchQuery = val;
                             });
@@ -347,6 +351,7 @@ class _MainScreenState extends State<MainScreen> {
                           },
                           isSemanticSearching: appState.isSemanticSearching,
                           hasSemanticScores: appState.semanticScores.isNotEmpty,
+                          semanticResultCount: appState.semanticScores.length,
                           onTriggerSemanticSearch: () =>
                               _executeSemanticSearch(_searchQuery),
                           onRefreshThumbnails: () async {

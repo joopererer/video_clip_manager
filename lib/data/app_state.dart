@@ -45,14 +45,72 @@ class AppState extends ChangeNotifier {
   Map<String, MaxSimResult> get semanticScores =>
       Map.unmodifiable(_semanticScores);
 
+  /// The query that produced the currently displayed semantic results.
+  /// Null when no semantic result is being displayed.
+  String? _semanticQuery;
+  String? get semanticQuery => _semanticQuery;
+
+  /// Current search box text, kept in sync by the UI so an in-flight semantic
+  /// request can detect that the user already changed the query.
+  String _searchQueryText = '';
+  String get searchQueryText => _searchQueryText;
+
+  /// Bumped whenever the displayed results become stale (query edited, results
+  /// cleared). An in-flight request that finishes with an outdated token must
+  /// not write scores or HIT timestamps.
+  int _semanticResultToken = 0;
+
   @visibleForTesting
-  void debugSetSemanticScores(Map<String, MaxSimResult> scores) {
+  void debugSetSemanticScores(Map<String, MaxSimResult> scores, {String? query}) {
     _semanticScores
       ..clear()
       ..addAll(scores);
+    if (scores.isNotEmpty) {
+      _semanticQuery = query ?? (_semanticQuery ?? '');
+    }
   }
   String? _lastSemanticError;
   String? get lastSemanticError => _lastSemanticError;
+
+  /// True when semantic results are displayed for a query that is no longer in
+  /// the search box. Guards the UI against showing stale HIT markers/scores.
+  bool get hasStaleSemanticResults =>
+      _semanticScores.isNotEmpty &&
+      _semanticQuery != null &&
+      !_sameQuery(_semanticQuery!, _searchQueryText);
+
+  static bool _sameQuery(String a, String b) =>
+      a.trim().toLowerCase() == b.trim().toLowerCase();
+
+  /// Called by the search box on every keystroke with the raw text.
+  ///
+  /// Keyword filtering stays live; semantic results (score + HIT) belong to the
+  /// previous query and are dropped as soon as the text no longer matches.
+  void syncSearchQueryText(String query) {
+    final changed = !_sameQuery(_searchQueryText, query);
+    _searchQueryText = query;
+    if (!changed) return;
+    // Any text change invalidates results that are still being computed.
+    _semanticResultToken++;
+    if (_semanticScores.isNotEmpty) {
+      _clearSemanticState();
+      notifyListeners();
+      return;
+    }
+    if (_semanticQuery != null) {
+      _semanticQuery = null;
+      notifyListeners();
+    }
+  }
+
+  void _clearSemanticState() {
+    _semanticScores.clear();
+    _semanticQuery = null;
+    _searchStatus = null;
+    _lastSemanticError = null;
+    // Invalidate any in-flight request for the previous query.
+    _semanticResultToken++;
+  }
 
   // 全局特征索引库状态
   bool _isIndexingEmbeddings = false;
@@ -739,7 +797,8 @@ class AppState extends ChangeNotifier {
 
     final clipWithThumbnail = clip.copyWith(thumbnailPath: thumbnailFileName);
 
-    _clips.add(clipWithThumbnail);
+    // HIT 时间戳只属于当前搜索结果，不写入用户数据库
+    _clips.add(clipWithThumbnail.withoutSemanticHit());
     _generateOriginalVideosIfNeeded();
     notifyListeners();
     _scheduleSave();
@@ -796,7 +855,8 @@ class AppState extends ChangeNotifier {
   Future<void> updateClip(VideoClip updatedClip) async {
     final index = _clips.indexWhere((c) => c.id == updatedClip.id);
     if (index != -1) {
-      _clips[index] = updatedClip;
+      // HIT 时间戳只属于当前搜索结果，不写入用户数据库
+      _clips[index] = updatedClip.withoutSemanticHit();
       notifyListeners();
       _scheduleSave();
     }
@@ -805,7 +865,7 @@ class AppState extends ChangeNotifier {
   void updateClipSilently(VideoClip updatedClip) {
     final index = _clips.indexWhere((c) => c.id == updatedClip.id);
     if (index != -1) {
-      _clips[index] = updatedClip;
+      _clips[index] = updatedClip.withoutSemanticHit();
       _hasUnsavedChanges = true;
       notifyListeners();
     }
@@ -855,6 +915,10 @@ class AppState extends ChangeNotifier {
   }
 
   /// 执行跨片段语义检索
+  ///
+  /// 手动触发模式：只有 Enter / ✨ 按钮会调用本方法。重复触发在搜索进行中
+  /// 会被忽略，避免并发重复请求；结果要么在完成时整体生效，要么因查询词已
+  /// 改变而整体丢弃，不会出现半新半旧的 HIT。
   Future<void> performSemanticSearch({
     required String query,
     required String modelDir,
@@ -863,17 +927,30 @@ class AppState extends ChangeNotifier {
   }) async {
     final trimmed = query.trim();
     if (trimmed.isEmpty) {
-      _semanticScores.clear();
-      _lastSemanticError = null;
-      _searchStatus = null;
+      _clearSemanticState();
       notifyListeners();
       return;
     }
 
+    // 防止重复 Enter / 重复点击 ✨ 导致的并发请求
+    if (_isSemanticSearching) {
+      debugPrint('[AppState] performSemanticSearch ignored: already searching');
+      return;
+    }
+
+    final token = ++_semanticResultToken;
+    _searchQueryText = trimmed;
     _lastSemanticError = null;
     _isSemanticSearching = true;
     _searchStatus = '正在将查询词转化为 768 维语义向量...';
+    // 旧查询的分数与 HIT 立即失效，检索期间不展示过期命中
+    _semanticScores.clear();
+    _semanticQuery = null;
     notifyListeners();
+
+    final scores = <String, MaxSimResult>{};
+
+    bool superseded() => token != _semanticResultToken;
 
     try {
       final queryVec = await _aiService.embedText(
@@ -882,10 +959,10 @@ class AppState extends ChangeNotifier {
         modelDir: modelDir,
         ortLib: ortLib,
       );
-
-      _semanticScores.clear();
+      if (superseded()) return;
 
       for (int i = 0; i < _clips.length; i++) {
+        if (superseded()) return;
         final clip = _clips[i];
 
         // 1. 优先加载磁盘中的母视频帧池缓存
@@ -920,6 +997,7 @@ class AppState extends ChangeNotifier {
               '[AppState] Auto-sync clip frames on search error: $syncErr',
             );
           }
+          if (superseded()) return;
         }
 
         // 3. 计算 MaxSim 相似度
@@ -929,13 +1007,21 @@ class AppState extends ChangeNotifier {
             frames: frames,
           );
           if (maxSim.score >= minScore) {
-            _semanticScores[clip.id] = maxSim;
+            scores[clip.id] = maxSim;
           }
         }
       }
+
+      if (superseded()) return;
+      _semanticScores
+        ..clear()
+        ..addAll(scores);
+      _semanticQuery = trimmed;
     } catch (e) {
-      _lastSemanticError = e.toString().replaceFirst('Exception: ', '');
-      debugPrint('[AppState] performSemanticSearch error: $e');
+      if (!superseded()) {
+        _lastSemanticError = e.toString().replaceFirst('Exception: ', '');
+        debugPrint('[AppState] performSemanticSearch error: $e');
+      }
     } finally {
       _isSemanticSearching = false;
       _searchStatus = null;
@@ -1155,9 +1241,10 @@ class AppState extends ChangeNotifier {
 
   /// 清除语义检索结果
   void clearSemanticSearch() {
-    if (_semanticScores.isNotEmpty) {
-      _semanticScores.clear();
-      _searchStatus = null;
+    if (_semanticScores.isNotEmpty ||
+        _semanticQuery != null ||
+        _lastSemanticError != null) {
+      _clearSemanticState();
       notifyListeners();
     }
   }
@@ -1198,7 +1285,10 @@ class AppState extends ChangeNotifier {
         if (semHit != null) {
           filtered.add(clip.copyWith(hitTimestampMs: semHit.hitTimestampMs));
         } else {
-          filtered.add(clip);
+          // 没有当前查询的语义命中时不显示任何 HIT（含历史数据中残留的时间戳）
+          filtered.add(
+            clip.hitTimestampMs == null ? clip : clip.withoutSemanticHit(),
+          );
         }
       }
     }
