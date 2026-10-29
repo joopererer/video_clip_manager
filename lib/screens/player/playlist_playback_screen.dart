@@ -17,6 +17,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../utils/media_source.dart';
 import '../../utils/playlist_playback_layout.dart';
+import '../../widgets/common/volume_control.dart';
 import '../../widgets/playlist_timeline_view.dart' show playlistClipColor;
 
 // 播放模式枚举
@@ -80,6 +81,8 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
   bool _showHints = false; // 控制提示显示
   bool _showGlobalProgress = false; // 控制进度条模式：false=片段进度，true=全局进度
   bool _isMuted = false; // 静音状态
+  double _volume = 100;
+  double _volumeBeforeMute = 100;
 
   // 新增：全局进度条交互状态
   bool _isHoveringGlobalProgress = false;
@@ -216,17 +219,25 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
 
   // 切换静音状态
   void _toggleMute() {
-    setState(() {
-      _isMuted = !_isMuted;
-    });
-
     if (_isMuted) {
-      player.setVolume(0);
-      print('Playlist: Audio muted');
+      _setVolume(_volumeBeforeMute > 0 ? _volumeBeforeMute : 100);
     } else {
-      player.setVolume(100);
-      print('Playlist: Audio unmuted');
+      _volumeBeforeMute = _volume > 0 ? _volume : 100;
+      _setVolume(0);
     }
+  }
+
+  void _setVolume(double v) {
+    setState(() {
+      if (v > 0) {
+        _volumeBeforeMute = v;
+        _isMuted = false;
+      } else {
+        _isMuted = true;
+      }
+      _volume = v;
+    });
+    player.setVolume(v);
   }
 
   // 切换播放模式
@@ -1812,12 +1823,11 @@ class _PlaylistPlaybackScreenState extends State<PlaylistPlaybackScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        IconButton(
-          iconSize: 24,
-          color: c.textSecondary,
-          icon: Icon(_isMuted ? Icons.volume_off : Icons.volume_up),
-          onPressed: _toggleMute,
-          tooltip: _isMuted ? '取消静音 (S)' : '静音 (S)',
+        VolumeControl(
+          volume: _isMuted ? 0 : _volume,
+          muted: _isMuted,
+          onVolumeChanged: _setVolume,
+          onToggleMute: _toggleMute,
         ),
         const SizedBox(width: AppSpacing.xs),
         IconButton(

@@ -11,6 +11,7 @@ import '../../services/preview_service.dart';
 import '../../services/screenshot_service.dart';
 import '../../utils/media_source.dart';
 import '../../utils/preview_source.dart';
+import '../../widgets/common/volume_control.dart';
 import 'preview_playback.dart';
 
 /// What the user asked for when the preview closed.
@@ -125,6 +126,7 @@ class _VideoPreviewDialogState extends State<VideoPreviewDialog> {
   int? _videoH;
 
   bool _muted = false;
+  double _volume = 100;
   double _volumeBeforeMute = 100;
 
   bool _scrubbing = false;
@@ -326,18 +328,31 @@ class _VideoPreviewDialogState extends State<VideoPreviewDialog> {
     if (playback == null || _closing) return;
     try {
       if (_muted) {
-        await playback.setVolume(
-          _volumeBeforeMute > 0 ? _volumeBeforeMute : 100,
-        );
-        _muted = false;
+        await _setVolume(_volumeBeforeMute > 0 ? _volumeBeforeMute : 100);
       } else {
-        _volumeBeforeMute = playback.volume > 0 ? playback.volume : 100;
-        await playback.setVolume(0);
-        _muted = true;
+        _volumeBeforeMute = _volume > 0 ? _volume : 100;
+        await _setVolume(0);
       }
-      _changed();
     } catch (e) {
       debugPrint('VideoPreviewDialog: mute failed: $e');
+    }
+  }
+
+  Future<void> _setVolume(double v) async {
+    final playback = _playback;
+    if (playback == null || _closing) return;
+    try {
+      if (v > 0) {
+        _volumeBeforeMute = v;
+        _muted = false;
+      } else {
+        _muted = true;
+      }
+      _volume = v;
+      await playback.setVolume(v);
+      _changed();
+    } catch (e) {
+      debugPrint('VideoPreviewDialog: volume failed: $e');
     }
   }
 
@@ -643,11 +658,11 @@ class _VideoPreviewDialogState extends State<VideoPreviewDialog> {
               icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
               onPressed: ready ? _togglePlay : null,
             ),
-            IconButton(
-              tooltip: _muted ? 'Unmute' : 'Mute',
-              color: fg,
-              icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
-              onPressed: ready ? _toggleMute : null,
+            VolumeControl(
+              volume: _muted ? 0 : _volume,
+              muted: _muted,
+              onVolumeChanged: (v) => unawaited(_setVolume(v)),
+              onToggleMute: () => unawaited(_toggleMute()),
             ),
             const Spacer(),
             IconButton(

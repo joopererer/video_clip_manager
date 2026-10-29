@@ -24,6 +24,7 @@ import '../../widgets/clip_editor/clip_list_panel.dart';
 import '../../widgets/clip_editor/clip_properties_panel.dart';
 import '../../widgets/clip_editor_key_handler.dart';
 import '../../widgets/clip_range_timeline.dart';
+import '../../widgets/common/volume_control.dart';
 import '../../widgets/timecode_field.dart';
 
 String formatDuration(Duration d) {
@@ -88,6 +89,8 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
   final _keyFocusNode = FocusNode(debugLabel: 'clip-editor-shortcuts');
   final ItemScrollController _itemScrollController = ItemScrollController();
   bool _isMuted = false;
+  double _volume = 100;
+  double _volumeBeforeMute = 100;
   bool _showHints = false;
   int _sideTab = 0;
 
@@ -265,8 +268,25 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
   }
 
   void _toggleMute() {
-    setState(() => _isMuted = !_isMuted);
-    player.setVolume(_isMuted ? 0 : 100);
+    if (_isMuted) {
+      _setVolume(_volumeBeforeMute > 0 ? _volumeBeforeMute : 100);
+    } else {
+      _volumeBeforeMute = _volume > 0 ? _volume : 100;
+      _setVolume(0);
+    }
+  }
+
+  void _setVolume(double v) {
+    setState(() {
+      if (v > 0) {
+        _volumeBeforeMute = v;
+        _isMuted = false;
+      } else {
+        _isMuted = true;
+      }
+      _volume = v;
+    });
+    player.setVolume(v);
   }
 
   Future<void> _previewClip(Duration start, Duration end) async {
@@ -1374,10 +1394,11 @@ class _ClipEditorScreenState extends State<ClipEditorScreen> {
                   : null,
             ),
             const SizedBox(width: 8),
-            IconButton(
-              tooltip: _isMuted ? 'Unmute (S)' : 'Mute (S)',
-              icon: Icon(_isMuted ? Icons.volume_off : Icons.volume_up),
-              onPressed: _toggleMute,
+            VolumeControl(
+              volume: _isMuted ? 0 : _volume,
+              muted: _isMuted,
+              onVolumeChanged: _setVolume,
+              onToggleMute: _toggleMute,
             ),
           ],
         ),
