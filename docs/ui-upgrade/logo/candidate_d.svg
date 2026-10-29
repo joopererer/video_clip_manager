@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img"
+     aria-label="Video Clip Manager film strip icon">
+  <rect x="0" y="0" width="256" height="256" rx="56" fill="#171A20" />
+  <g transform="matrix(1 0.02 -0.02 1 3 -4)">
+  <rect x="4" y="74" width="248" height="108" rx="12" fill="#2A2F3A" stroke="#404756" stroke-width="1.6" />
+  <rect x="12" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="12" y="166" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="30" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="30" y="166" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="48" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="48" y="166" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="66" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="66" y="166" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="84" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="84" y="166" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="102" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="102" y="166" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="120" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="120" y="166" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="138" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="138" y="166" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="156" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="156" y="166" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="174" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="174" y="166" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="192" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="192" y="166" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="210" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="210" y="166" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="228" y="82" width="11" height="7" rx="2" fill="#171A20" />
+    <rect x="228" y="166" width="11" height="7" rx="2" fill="#171A20" />
+  <rect x="14" y="98" width="52" height="58" rx="4" fill="#343A48" stroke="#5E677A" stroke-width="1.2" />
+  <rect x="74" y="98" width="52" height="58" rx="4" fill="#343A48" stroke="#5E677A" stroke-width="1.2" />
+  <rect x="134" y="98" width="52" height="58" rx="4" fill="#8B7CF6" stroke="#A9A0FA" stroke-width="2.4" />
+    <rect x="137" y="101" width="46" height="52" rx="2.4" fill="#BCB2FF" opacity="0.35" />
+  <rect x="194" y="98" width="52" height="58" rx="4" fill="#343A48" stroke="#5E677A" stroke-width="1.2" />
+  </g>
+</svg>
