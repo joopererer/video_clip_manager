@@ -8,7 +8,7 @@
 
 - `dart format`：已对本轮修改的 Dart 文件执行格式化（仅修改文件）。
 - `flutter analyze`：无 error；1453 项均为 info/warning（与基线一致）。
-- `flutter test`：通过，396 项全部通过（`All tests passed!`）。
+- `flutter test`：通过，398 项全部通过（`All tests passed!`）。
 - `flutter build windows --debug`：成功。
 - `flutter build windows --release`：成功。
 - 模型文件校验：`models/` 下 10 个 EmbeddingGemma 2 文件按 `models/embeddinggemma2_onnx_manifest.json` 的尺寸与 SHA-256 全量校验通过（约 541.8 MB）。

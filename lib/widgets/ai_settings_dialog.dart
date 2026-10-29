@@ -213,13 +213,16 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
     setState(() => _modelDirBusy = true);
     try {
       if (choice == 'copy' && oldDir != null) {
-        await _copyModelDir(oldDir, picked, created: copied);
-        final v = await ModelVerifier().verify(picked, embeddingGemmaManifest);
-        if (!v.isComplete) {
-          throw StateError('copy verification failed');
-        }
+        await migrateEmbeddingModelDirectory(
+          from: oldDir,
+          to: picked,
+          appState: appState,
+          previousDir: oldDir,
+          copied: copied,
+        );
+      } else {
+        await appState.setAiModelDir(picked);
       }
-      await appState.setAiModelDir(picked);
       await _checkEmbeddingModelStatus();
       if (mounted) {
         ScaffoldMessenger.of(
@@ -227,14 +230,6 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
         ).showSnackBar(const SnackBar(content: Text('模型目录已更新')));
       }
     } catch (e) {
-      // 回滚已复制文件与配置，保留旧目录和目标目录中原有文件
-      for (final path in copied.reversed) {
-        try {
-          final f = File(path);
-          if (await f.exists()) await f.delete();
-        } catch (_) {}
-      }
-      if (oldDir != null) await appState.setAiModelDir(oldDir);
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -261,31 +256,7 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
     }
   }
 
-  Future<void> _copyModelDir(
-    String from,
-    String to, {
-    required List<String> created,
-  }) async {
-    final fromDir = Directory(from);
-    final toDir = Directory(to);
-    if (!await toDir.exists()) await toDir.create(recursive: true);
-    await for (final entity in fromDir.list(
-      recursive: true,
-      followLinks: false,
-    )) {
-      if (entity is File) {
-        final rel = p.relative(entity.path, from: from);
-        final dest = File(p.join(to, rel));
-        // Never overwrite a file that already exists in the target directory.
-        if (await dest.exists()) {
-          throw FileSystemException('目标目录已存在同名文件，拒绝覆盖', dest.path);
-        }
-        await dest.parent.create(recursive: true);
-        await entity.copy(dest.path);
-        created.add(dest.path);
-      }
-    }
-  }
+  // _copyModelDir moved to top-level copyEmbeddingModelDirectory for testability.
 
   /// 运行 PowerShell 下载脚本，实时回传输出；成功返回 true。
   Future<bool> _runDownloadScript({
@@ -1332,5 +1303,61 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
         ],
       ],
     );
+  }
+}
+
+@visibleForTesting
+Future<void> copyEmbeddingModelDirectory(
+  String from,
+  String to, {
+  required List<String> created,
+}) async {
+  final fromDir = Directory(from);
+  final toDir = Directory(to);
+  if (!await toDir.exists()) await toDir.create(recursive: true);
+  await for (final entity in fromDir.list(
+    recursive: true,
+    followLinks: false,
+  )) {
+    if (entity is File) {
+      final rel = p.relative(entity.path, from: from);
+      final dest = File(p.join(to, rel));
+      if (await dest.exists()) {
+        throw FileSystemException('目标目录已存在同名文件，拒绝覆盖', dest.path);
+      }
+      await dest.parent.create(recursive: true);
+      await entity.copy(dest.path);
+      created.add(dest.path);
+    }
+  }
+}
+
+@visibleForTesting
+Future<void> migrateEmbeddingModelDirectory({
+  required String from,
+  required String to,
+  required AppState appState,
+  required String? previousDir,
+  required List<String> copied,
+}) async {
+  try {
+    await copyEmbeddingModelDirectory(from, to, created: copied);
+    final verification = await ModelVerifier().verify(
+      to,
+      embeddingGemmaManifest,
+    );
+    if (!verification.isComplete) {
+      throw StateError('copy verification failed');
+    }
+    await appState.setAiModelDir(to);
+  } catch (_) {
+    for (final path in copied.reversed) {
+      try {
+        final file = File(path);
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+    await appState.setAiModelDir(previousDir);
+    rethrow;
   }
 }
