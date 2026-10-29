@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img"
+     aria-label="Video Clip Manager film strip icon">
+  <rect x="0" y="0" width="256" height="256" rx="56" fill="#171A20" />
+  <rect x="14" y="60" width="228" height="136" rx="12" fill="#2A2F3A" stroke="#404756" stroke-width="1.6" />
+  <rect x="22" y="68" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="22" y="180" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="44" y="68" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="44" y="180" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="66" y="68" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="66" y="180" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="88" y="68" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="88" y="180" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="110" y="68" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="110" y="180" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="132" y="68" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="132" y="180" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="154" y="68" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="154" y="180" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="176" y="68" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="176" y="180" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="198" y="68" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="198" y="180" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="220" y="68" width="13" height="9" rx="2" fill="#171A20" />
+    <rect x="220" y="180" width="13" height="9" rx="2" fill="#171A20" />
+  <rect x="22" y="88" width="90" height="80" rx="6" fill="#343A48" stroke="#5E677A" stroke-width="1.2" />
+  <rect x="144" y="88" width="90" height="80" rx="6" fill="#8B7CF6" stroke="#A9A0FA" stroke-width="2.4" />
+    <rect x="147" y="91" width="84" height="74" rx="3.5999999999999996" fill="#BCB2FF" opacity="0.35" />
+</svg>

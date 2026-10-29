@@ -117,6 +117,28 @@ class VideoClip extends Equatable {
     );
   }
 
+  /// A copy without the transient semantic HIT timestamp.
+  ///
+  /// HIT is a view-only artifact of the current semantic search result set; it
+  /// must never be written back to the user database, otherwise an old search
+  /// keeps showing a HIT marker after the query changed or the app restarted.
+  VideoClip withoutSemanticHit() => VideoClip(
+    id: id,
+    name: name,
+    videoPath: videoPath,
+    startTime: startTime,
+    endTime: endTime,
+    coverFrameTime: coverFrameTime,
+    tags: tags,
+    notes: notes,
+    rating: rating,
+    isFavorite: isFavorite,
+    thumbnailPath: thumbnailPath,
+    aiSummary: aiSummary,
+    aiScene: aiScene,
+    aiActions: aiActions,
+  );
+
   @override
   List<Object?> get props => [
     id,

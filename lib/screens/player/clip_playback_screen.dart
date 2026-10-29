@@ -509,6 +509,10 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
           return durationB.compareTo(durationA);
         });
         break;
+      case SortOption.relevance:
+        // 播放界面不持有语义分数（分数只存在于 ClipsTab 的检索结果中），
+        // 相关度排序在这里退化为稳定顺序，命中时间与分数不受影响。
+        break;
     }
 
     return sortedClips;

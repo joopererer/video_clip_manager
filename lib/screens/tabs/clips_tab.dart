@@ -4,10 +4,12 @@ import 'package:provider/provider.dart';
 
 import '../../data/app_state.dart';
 import '../../data/models.dart';
+import '../../services/delta_engine.dart';
 import '../../services/preview_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_typography.dart';
+import '../../utils/search_mode.dart';
 import '../../utils/tag_utils.dart';
 import '../../widgets/add_to_playlist_dialog.dart';
 import '../../widgets/clip_card.dart';
@@ -24,7 +26,8 @@ enum SortOption {
   ratingAsc('评分 (从低到高)', Icons.star),
   ratingDesc('评分 (从高到低)', Icons.star),
   durationAsc('时长 (从短到长)', Icons.timer),
-  durationDesc('时长 (从长到短)', Icons.timer);
+  durationDesc('时长 (从长到短)', Icons.timer),
+  relevance('相关度最高', Icons.auto_awesome);
 
   const SortOption(this.label, this.icon);
   final String label;
@@ -54,8 +57,16 @@ class ClipsTab extends StatefulWidget {
 }
 
 class _ClipsTabState extends State<ClipsTab> {
-  SortOption _currentSortOption = SortOption.dateAddedDesc;
+  /// User-chosen sort. Null means "follow the default for the current mode",
+  /// which is relevance while semantic results are displayed.
+  SortOption? _sortOverride;
   String? _selectedClipId;
+
+  SortOption _effectiveSortOption(AppState appState) =>
+      _sortOverride ??
+      (appState.semanticScores.isNotEmpty
+          ? SortOption.relevance
+          : SortOption.dateAddedDesc);
 
   @override
   Widget build(BuildContext context) {
@@ -71,12 +82,20 @@ class _ClipsTabState extends State<ClipsTab> {
       selectedFavorite: widget.selectedFavorite ?? appState.selectedFavorite,
     );
 
-    // 应用排序规则
-    final sortedClips = _sortClips(filteredClips);
+    // 应用排序规则（语义结果默认按真实相似度降序）
+    final sortedClips = _sortClips(
+      filteredClips,
+      _effectiveSortOption(appState),
+      appState.semanticScores,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // 语义检索状态条（检索中 / 结果摘要）
+        if (appState.isSemanticSearching || appState.semanticScores.isNotEmpty)
+          _buildSemanticBanner(context, appState),
+
         // 顶部控制与筛选工具条
         _buildToolbar(context, appState, sortedClips.length, allClips.length),
 
@@ -89,6 +108,86 @@ class _ClipsTabState extends State<ClipsTab> {
               : _buildListView(context, appState, sortedClips),
         ),
       ],
+    );
+  }
+
+  Widget _buildSemanticBanner(BuildContext context, AppState appState) {
+    final colors = context.appColors;
+    final isSearching = appState.isSemanticSearching;
+    final count = appState.semanticScores.length;
+    final query = appState.semanticQuery ?? widget.searchQuery;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer.withValues(alpha: 0.35),
+        border: Border(
+          bottom: BorderSide(
+            color: colors.primary.withValues(alpha: 0.35),
+            width: 1.0,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (isSearching)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            Icon(Icons.auto_awesome, size: 16, color: colors.primary),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isSearching
+                      ? 'AI 语义检索中…「$query」'
+                      : semanticResultHeadline(query, count),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: colors.primaryHover,
+                  ),
+                ),
+                Text(
+                  isSearching
+                      ? (appState.searchStatus ?? '正在比对视频画面特征，请稍候…')
+                      : '已使用 AI 语义分析视频画面内容，显示最相关的片段及命中时间，可按相关度排序。',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption.copyWith(
+                    color: colors.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (!isSearching)
+            TextButton.icon(
+              onPressed: appState.clearSemanticSearch,
+              icon: const Icon(Icons.close, size: 15),
+              label: const Text('清除 AI 结果', style: TextStyle(fontSize: 11.5)),
+              style: TextButton.styleFrom(
+                foregroundColor: colors.textSecondary,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -129,7 +228,7 @@ class _ClipsTabState extends State<ClipsTab> {
             mainAxisSize: MainAxisSize.min,
             children: [
               // 排序下拉
-              _buildSortDropdown(context, colors),
+              _buildSortDropdown(context, colors, appState),
 
               const SizedBox(width: AppSpacing.sm),
 
@@ -273,7 +372,14 @@ class _ClipsTabState extends State<ClipsTab> {
     );
   }
 
-  Widget _buildSortDropdown(BuildContext context, AppColorExtension colors) {
+  Widget _buildSortDropdown(
+    BuildContext context,
+    AppColorExtension colors,
+    AppState appState,
+  ) {
+    final hasSemantic = appState.semanticScores.isNotEmpty;
+    final effective = _effectiveSortOption(appState);
+
     return Container(
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -284,7 +390,7 @@ class _ClipsTabState extends State<ClipsTab> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<SortOption>(
-          value: _currentSortOption,
+          value: effective,
           icon: Icon(
             Icons.arrow_drop_down,
             color: colors.textSecondary,
@@ -294,6 +400,27 @@ class _ClipsTabState extends State<ClipsTab> {
           borderRadius: BorderRadius.circular(AppRadius.md),
           style: TextStyle(color: colors.textPrimary, fontSize: 12.5),
           items: SortOption.values.map((option) {
+            // 相关度排序只在存在真实语义分数时才有意义
+            if (option == SortOption.relevance && !hasSemantic) {
+              return DropdownMenuItem<SortOption>(
+                value: option,
+                enabled: false,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(option.icon, size: 14, color: colors.textMuted),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${option.label} (需 AI 语义结果)',
+                      style: TextStyle(
+                        color: colors.textMuted,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
             return DropdownMenuItem<SortOption>(
               value: option,
               child: Row(
@@ -308,7 +435,7 @@ class _ClipsTabState extends State<ClipsTab> {
           }).toList(),
           onChanged: (newVal) {
             if (newVal != null) {
-              setState(() => _currentSortOption = newVal);
+              setState(() => _sortOverride = newVal);
             }
           },
         ),
@@ -464,9 +591,11 @@ class _ClipsTabState extends State<ClipsTab> {
           itemCount: clips.length,
           itemBuilder: (context, index) {
             final clip = clips[index];
+            final score = appState.semanticScores[clip.id]?.score;
             return ClipCard(
               key: ValueKey(clip.id),
               clip: clip,
+              semanticScore: score,
               isSelected: _selectedClipId == clip.id,
               onSelect: () => setState(() => _selectedClipId = clip.id),
               onPlay: () => _playClip(context, clip),
@@ -496,9 +625,11 @@ class _ClipsTabState extends State<ClipsTab> {
       itemCount: clips.length,
       itemBuilder: (context, index) {
         final clip = clips[index];
+        final score = appState.semanticScores[clip.id]?.score;
         return ClipListRow(
           key: ValueKey(clip.id),
           clip: clip,
+          semanticScore: score,
           isSelected: _selectedClipId == clip.id,
           onSelect: () => setState(() => _selectedClipId = clip.id),
           onPlay: () => _playClip(context, clip),
@@ -586,10 +717,14 @@ class _ClipsTabState extends State<ClipsTab> {
   }
 
   // 排序算法实现
-  List<VideoClip> _sortClips(List<VideoClip> clips) {
+  List<VideoClip> _sortClips(
+    List<VideoClip> clips,
+    SortOption option,
+    Map<String, MaxSimResult> semanticScores,
+  ) {
     final sorted = List<VideoClip>.from(clips);
 
-    switch (_currentSortOption) {
+    switch (option) {
       case SortOption.nameAsc:
         sorted.sort(
           (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
@@ -626,6 +761,25 @@ class _ClipsTabState extends State<ClipsTab> {
           return durB.compareTo(durA);
         });
         break;
+      case SortOption.relevance:
+        if (semanticScores.isEmpty) break;
+        // 严格按实际相似度降序；没有语义分数的关键词命中排在最后。
+        final originalOrder = {
+          for (var i = 0; i < sorted.length; i++) sorted[i].id: i,
+        };
+        sorted.sort((a, b) {
+          final scoreA = semanticScores[a.id]?.score;
+          final scoreB = semanticScores[b.id]?.score;
+          if (scoreA == null && scoreB == null) {
+            return originalOrder[a.id]!.compareTo(originalOrder[b.id]!);
+          }
+          if (scoreA == null) return 1;
+          if (scoreB == null) return -1;
+          final byScore = scoreB.compareTo(scoreA);
+          if (byScore != 0) return byScore;
+          return originalOrder[a.id]!.compareTo(originalOrder[b.id]!);
+        });
+        break;
     }
 
     return sorted;
@@ -653,7 +807,7 @@ class _ClipsTabState extends State<ClipsTab> {
             selectedTags: widget.selectedTags,
             selectedRating: widget.selectedRating,
             selectedFavorite: widget.selectedFavorite,
-            currentSortOption: _currentSortOption,
+            currentSortOption: _effectiveSortOption(appState),
             initialSeekTime: clip.hitTimestampMs != null
                 ? Duration(milliseconds: clip.hitTimestampMs!)
                 : null,
