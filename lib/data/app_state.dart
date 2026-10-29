@@ -44,6 +44,13 @@ class AppState extends ChangeNotifier {
   String? get searchStatus => _searchStatus;
   Map<String, MaxSimResult> get semanticScores =>
       Map.unmodifiable(_semanticScores);
+
+  @visibleForTesting
+  void debugSetSemanticScores(Map<String, MaxSimResult> scores) {
+    _semanticScores
+      ..clear()
+      ..addAll(scores);
+  }
   String? _lastSemanticError;
   String? get lastSemanticError => _lastSemanticError;
 
@@ -997,7 +1004,7 @@ class AppState extends ChangeNotifier {
 
       if (candidates.isEmpty) {
         _indexingStatus = skipped > 0
-            ? '暂无需要索引的本地片段 (已跳过 $skipped 个在线片段)。'
+            ? '暂无需要索引的本地片段 (已跳过 $skipped 个在线片段，当前仅索引本地视频)。'
             : '暂无需要索引的本地片段。';
         return;
       }
@@ -1142,7 +1149,7 @@ class AppState extends ChangeNotifier {
     } else {
       parts.add('构建完成：成功 $ok 个，失败 ${failures.length} 个。已成功的缓存均已保留，再次点击会重试失败项。');
     }
-    if (skipped > 0) parts.add('已跳过 $skipped 个在线片段。');
+    if (skipped > 0) parts.add('已跳过 $skipped 个在线片段（当前仅索引本地视频，不会下载或提帧在线媒体）。');
     return parts.join('\n');
   }
 
