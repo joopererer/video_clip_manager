@@ -17,7 +17,7 @@
 | 冲突 | 无 |
 | 功能分支 | `feat/v1.1-release-polish` 保留（未删除） |
 | 当前 HEAD | `fcfbfd5 docs(release): align README with v1.1.0 and add release notes` |
-| 与远端关系 | `master` 领先 `origin/master` **47** 个提交（含本报告提交），**未推送** |
+| 与远端关系 | `master` 领先 `origin/master`，**未推送**（合并后的全部 v1.1.0 提交都在本地，其中若干为纯文档提交） |
 
 合并后又追加了 3 个提交（都在 `master` 上，非功能分支）：
 
@@ -147,7 +147,7 @@ Windows 的"文档"目录由 Shell 已知文件夹决定，**不受重定向的 
 已执行：本地 `master` 合并（`--no-ff`）、本地构建、本地 ZIP 打包、Release Notes 与报告编写、文档/测试的小幅提交。
 
 **未执行**：
-- `git push`（`master` 领先 `origin/master` 47 个提交）
+- `git push`（`master` 领先 `origin/master`，全部 v1.1.0 提交仍在本地）
 - 创建 GitHub Release
 - 推送任何 Git tag
 - 上传发布 ZIP
@@ -157,7 +157,7 @@ Windows 的"文档"目录由 Shell 已知文件夹决定，**不受重定向的 
 
 ## 9. 等待授权后的下一步
 
-1. 决定是否推送 `master`（47 个提交）。
+1. 决定是否推送 `master`（落后 0 个、领先全部 v1.1.0 提交）。
 2. 起 tag（建议 `v1.1.0`）并创建 GitHub Release，附件上传 `video_clip_manager-v1.1.0-windows-x64.zip`，正文使用 `V1_1_RELEASE_NOTES.md`。
 3. Release 上线后，实测一次「关于 → 检查更新」的成功路径，并把结果补进本文件。
 4. 如需彻底验证"无模型新环境"，在一台干净的 Windows 机器/虚拟机上解压运行，确认 AI 设置的下载引导与普通播放均正常。
