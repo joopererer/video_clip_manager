@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:collection';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:collection/collection.dart';
@@ -14,6 +12,7 @@ import '../services/thumbnail_service.dart';
 import '../services/video_metadata_service.dart';
 import 'data_service.dart';
 import 'models.dart';
+import '../services/ai_failure.dart';
 import '../services/ai_service.dart';
 import '../services/delta_engine.dart';
 import '../services/frame_embedding_pool.dart';
@@ -43,7 +42,15 @@ class AppState extends ChangeNotifier {
   bool get isSemanticSearching => _isSemanticSearching;
   String? _searchStatus;
   String? get searchStatus => _searchStatus;
-  Map<String, MaxSimResult> get semanticScores => Map.unmodifiable(_semanticScores);
+  Map<String, MaxSimResult> get semanticScores =>
+      Map.unmodifiable(_semanticScores);
+
+  @visibleForTesting
+  void debugSetSemanticScores(Map<String, MaxSimResult> scores) {
+    _semanticScores
+      ..clear()
+      ..addAll(scores);
+  }
   String? _lastSemanticError;
   String? get lastSemanticError => _lastSemanticError;
 
@@ -55,11 +62,43 @@ class AppState extends ChangeNotifier {
   String? _indexingStatus;
   String? get indexingStatus => _indexingStatus;
 
+  /// Clips that could not be indexed in the last run, with stage and reason.
+  /// Cleared at the start of the next run; failed clips are simply attempted
+  /// again, while clips that already have all frames cached cost nothing.
+  List<ClipIndexFailure> _indexFailures = const [];
+  List<ClipIndexFailure> get indexFailures => _indexFailures;
+  int _indexedOkCount = 0;
+  int _indexedSkippedCount = 0;
+  int get lastIndexOkCount => _indexedOkCount;
+  int get lastIndexSkippedCount => _indexedSkippedCount;
+
   // VLM 视觉大模型配置
   String get vlmMode => _prefs.getString('vlm_mode') ?? 'ollama';
-  String get vlmApiUrl => _prefs.getString('vlm_api_url') ?? 'http://localhost:11434/v1';
+  String get vlmApiUrl =>
+      _prefs.getString('vlm_api_url') ?? 'http://localhost:11434/v1';
   String get vlmApiKey => _prefs.getString('vlm_api_key') ?? '';
   String get vlmModel => _prefs.getString('vlm_model') ?? 'qwen2-vl:2b';
+
+  /// User-selected folder for the in-app EmbeddingGemma model. `null` means
+  /// the built-in default candidates. Stored in SharedPreferences, so the
+  /// business database JSON schema is untouched.
+  String? get aiModelDir => _prefs.getString('ai_model_dir');
+
+  Future<void> setAiModelDir(String? dir) async {
+    final text = dir?.trim();
+    if (text == null || text.isEmpty) {
+      await _prefs.remove('ai_model_dir');
+      try {
+        _aiService.customEmbeddingModelDir = null;
+      } catch (_) {}
+    } else {
+      await _prefs.setString('ai_model_dir', text);
+      try {
+        _aiService.customEmbeddingModelDir = text;
+      } catch (_) {}
+    }
+    notifyListeners();
+  }
 
   Future<void> saveVlmConfig({
     required String mode,
@@ -77,7 +116,7 @@ class AppState extends ChangeNotifier {
   List<VideoClip> _clips = [];
   List<OriginalVideo> _originalVideos = [];
   List<Playlist> _playlists = [];
-  
+
   // 新增：在线视频相关状态
   List<OnlineVideo> _onlineVideos = [];
   List<OnlineVideoClip> _onlineVideoClips = [];
@@ -104,11 +143,11 @@ class AppState extends ChangeNotifier {
       UnmodifiableListView(_originalVideos);
   UnmodifiableListView<Playlist> get playlists =>
       UnmodifiableListView(_playlists);
-  
+
   // 新增：在线视频相关的getter
-  UnmodifiableListView<OnlineVideo> get onlineVideos => 
+  UnmodifiableListView<OnlineVideo> get onlineVideos =>
       UnmodifiableListView(_onlineVideos);
-  UnmodifiableListView<OnlineVideoClip> get onlineVideoClips => 
+  UnmodifiableListView<OnlineVideoClip> get onlineVideoClips =>
       UnmodifiableListView(_onlineVideoClips);
 
   bool get isLoading => _isLoading;
@@ -130,12 +169,18 @@ class AppState extends ChangeNotifier {
     required SharedPreferences prefs,
     required PathService pathService,
     required ThumbnailService thumbnailService,
+    AiService? aiService,
   }) : _prefs = prefs,
        _pathService = pathService,
        _thumbnailService = thumbnailService {
     _dataService = DataService(pathService: _pathService);
     _videoMetadataService = VideoMetadataService();
-    _aiService = AiService();
+    _aiService = aiService ?? AiService();
+    try {
+      _aiService.customEmbeddingModelDir = _prefs.getString('ai_model_dir');
+    } catch (_) {
+      // Test doubles may not implement this optional setter.
+    }
     _framePool = FrameEmbeddingPool();
     _deltaEngine = DeltaEngine(pool: _framePool, aiService: _aiService);
     _clipsIsGridView = _prefs.getBool('clipsIsGridView') ?? false;
@@ -147,7 +192,8 @@ class AppState extends ChangeNotifier {
     _openTimeoutSeconds = _prefs.getInt('timeout_open_seconds') ?? 10;
     _seekTimeoutSeconds = _prefs.getInt('timeout_seek_seconds') ?? 10;
     _playTimeoutSeconds = _prefs.getInt('timeout_play_seconds') ?? 5;
-    _screenshotTimeoutSeconds = _prefs.getInt('timeout_screenshot_seconds') ?? 15;
+    _screenshotTimeoutSeconds =
+        _prefs.getInt('timeout_screenshot_seconds') ?? 15;
     _markReadyDelayMs = _prefs.getInt('mark_ready_delay_ms') ?? 300;
 
     // 设置静态实例
@@ -592,6 +638,8 @@ class AppState extends ChangeNotifier {
         _currentDbPath!,
       );
       _hasUnsavedChanges = false;
+    } catch (e) {
+      debugPrint('[AppState] save failed: $e');
     } finally {
       _isSaving = false;
       notifyListeners();
@@ -628,7 +676,11 @@ class AppState extends ChangeNotifier {
   void deleteOriginalVideo(String videoId) {
     _originalVideos.removeWhere((v) => v.id == videoId);
     // 同时删除相关的片段
-    _clips.removeWhere((c) => c.videoPath == _originalVideos.firstWhereOrNull((v) => v.id == videoId)?.path);
+    _clips.removeWhere(
+      (c) =>
+          c.videoPath ==
+          _originalVideos.firstWhereOrNull((v) => v.id == videoId)?.path,
+    );
     notifyListeners();
     _scheduleSave();
   }
@@ -802,8 +854,6 @@ class AppState extends ChangeNotifier {
     await _save();
   }
 
-
-
   /// 执行跨片段语义检索
   Future<void> performSemanticSearch({
     required String query,
@@ -866,7 +916,9 @@ class AppState extends ChangeNotifier {
               ortLib: ortLib,
             );
           } catch (syncErr) {
-            debugPrint('[AppState] Auto-sync clip frames on search error: $syncErr');
+            debugPrint(
+              '[AppState] Auto-sync clip frames on search error: $syncErr',
+            );
           }
         }
 
@@ -923,45 +975,182 @@ class AppState extends ChangeNotifier {
     _indexingStatus = '准备构建语义特征向量库...';
     notifyListeners();
 
-    try {
-      final modelDir = await _aiService.resolveEmbeddingModelDir() ?? 'models';
-      final localClips = _clips.where((c) =>
-          !c.videoPath.startsWith('http://') &&
-          !c.videoPath.startsWith('https://') &&
-          File(c.videoPath).existsSync()).toList();
+    final failures = <ClipIndexFailure>[];
+    var okCount = 0;
+    var skipped = 0;
+    _indexFailures = const [];
+    _indexedOkCount = 0;
+    _indexedSkippedCount = 0;
+    AiStageException? stoppedBy;
 
-      if (localClips.isEmpty) {
-        _indexingStatus = '暂无需要索引的本地片段。';
+    try {
+      final modelDir = await _aiService.resolveEmbeddingModelDir();
+      if (modelDir == null) {
+        _indexingStatus = '语义检索模型未就绪或不完整，请先在上方点击“一键下载 / 修复”。';
         return;
       }
 
-      for (int i = 0; i < localClips.length; i++) {
-        final clip = localClips[i];
-        _indexingProgress = (i + 1) / localClips.length;
-        _indexingStatus = '正在提取关键帧特征 (${i + 1}/${localClips.length}): ${clip.name}';
-        notifyListeners();
-        onProgress?.call(i + 1, localClips.length, clip.name);
+      // Online sources are not indexed (unchanged behaviour); they are counted
+      // so the summary can say so.
+      final candidates = <VideoClip>[];
+      for (final c in _clips) {
+        if (c.videoPath.startsWith('http://') ||
+            c.videoPath.startsWith('https://')) {
+          skipped++;
+        } else {
+          candidates.add(c);
+        }
+      }
 
-        // 先载入磁盘已有记录
-        if (_framePool.getCachedTimestamps(clip.videoPath).isEmpty) {
-          await _framePool.loadFromDisk(clip.videoPath);
+      if (candidates.isEmpty) {
+        _indexingStatus = skipped > 0
+            ? '暂无需要索引的本地片段 (已跳过 $skipped 个在线片段，当前仅索引本地视频)。'
+            : '暂无需要索引的本地片段。';
+        return;
+      }
+
+      // One failing clip never stops the others. Only a failure that would hit
+      // every clip the same way (sidecar, FFmpeg, ONNX or model missing) ends
+      // the run early, so the same error is not repeated hundreds of times.
+      for (int i = 0; i < candidates.length; i++) {
+        final clip = candidates[i];
+        _indexingProgress = (i + 1) / candidates.length;
+        _indexingStatus =
+            '正在提取关键帧特征 (${i + 1}/${candidates.length}): ${clip.name}';
+        notifyListeners();
+        onProgress?.call(i + 1, candidates.length, clip.name);
+
+        final startMs = clip.startTime.inMilliseconds;
+        final endMs = clip.endTime.inMilliseconds;
+        AiStageException? err;
+        try {
+          if (!await File(clip.videoPath).exists()) {
+            throw AiStageException(
+              stage: AiStage.extraction,
+              kind: AiFailureKind.sourceMissing,
+              message: describeAiFailure(
+                AiStage.extraction,
+                AiFailureKind.sourceMissing,
+                videoPath: clip.videoPath,
+              ),
+              videoPath: clip.videoPath,
+              startMs: startMs,
+              endMs: endMs,
+            );
+          }
+
+          final sourceDuration = _originalVideos
+              .firstWhereOrNull((v) => v.path == clip.videoPath)
+              ?.duration;
+          final range = resolveClipIndexRange(
+            startMs: startMs,
+            endMs: endMs,
+            videoDurationMs: sourceDuration?.inMilliseconds,
+          );
+          if (!range.isUsable) {
+            throw AiStageException(
+              stage: AiStage.extraction,
+              kind: range.problem!,
+              message: describeAiFailure(
+                AiStage.extraction,
+                range.problem!,
+                videoPath: clip.videoPath,
+              ),
+              videoPath: clip.videoPath,
+              startMs: startMs,
+              endMs: endMs,
+            );
+          }
+
+          // Existing cache first, so a failure below cannot cost earlier work.
+          if (_framePool.getCachedTimestamps(clip.videoPath).isEmpty) {
+            await _framePool.loadFromDisk(clip.videoPath);
+          }
+          await _deltaEngine.syncClipRange(
+            videoPathOrUrl: clip.videoPath,
+            startMs: range.startMs,
+            endMs: range.endMs,
+            modelDir: modelDir,
+          );
+          okCount++;
+        } on AiStageException catch (e) {
+          err = e;
+        } catch (e, st) {
+          debugPrint('[AppState] indexAllClips unexpected error: $e\n$st');
+          err = AiStageException(
+            stage: AiStage.internal,
+            kind: AiFailureKind.unknown,
+            message: '程序内部错误：$e',
+            detail: tailForLog('$e\n$st'),
+            videoPath: clip.videoPath,
+            startMs: startMs,
+            endMs: endMs,
+          );
         }
 
-        // 增量规划与同步
-        await _deltaEngine.syncClipRange(
-          videoPathOrUrl: clip.videoPath,
-          startMs: clip.startTime.inMilliseconds,
-          endMs: clip.endTime.inMilliseconds,
-          modelDir: modelDir,
-        );
+        if (err != null) {
+          debugPrint(
+            '[AppState] index failed for "${clip.name}": ${err.report()}',
+          );
+          failures.add(
+            ClipIndexFailure(
+              clipId: clip.id,
+              clipName: clip.name,
+              videoPath: clip.videoPath,
+              startMs: err.startMs ?? startMs,
+              endMs: err.endMs ?? endMs,
+              stage: err.stage,
+              kind: err.kind,
+              message: err.message,
+              report: err.report(),
+            ),
+          );
+          if (err.isEnvironmental) {
+            stoppedBy = err;
+            break;
+          }
+        }
       }
-      _indexingStatus = '所有本地片段语义向量构建完成！';
-    } catch (e) {
-      _indexingStatus = '索引构建中断: $e';
+
+      _indexFailures = List.unmodifiable(failures);
+      _indexedOkCount = okCount;
+      _indexedSkippedCount = skipped;
+      _indexingStatus = _summarizeIndexRun(
+        total: candidates.length,
+        ok: okCount,
+        skipped: skipped,
+        failures: failures,
+        stoppedBy: stoppedBy,
+      );
+    } catch (e, st) {
+      debugPrint('[AppState] indexAllClips aborted: $e\n$st');
+      _indexFailures = List.unmodifiable(failures);
+      _indexingStatus = '索引构建出现程序内部错误：$e';
     } finally {
       _isIndexingEmbeddings = false;
       notifyListeners();
     }
+  }
+
+  String _summarizeIndexRun({
+    required int total,
+    required int ok,
+    required int skipped,
+    required List<ClipIndexFailure> failures,
+    AiStageException? stoppedBy,
+  }) {
+    final parts = <String>[];
+    if (stoppedBy != null) {
+      parts.add(
+        '已停止：${stoppedBy.stageLabel}环节出现会影响所有片段的问题。\n${stoppedBy.message}',
+      );
+    } else if (failures.isEmpty) {
+      parts.add('所有本地片段语义向量构建完成！($ok 个片段)');
+    } else {
+      parts.add('构建完成：成功 $ok 个，失败 ${failures.length} 个。已成功的缓存均已保留，再次点击会重试失败项。');
+    }
+    if (skipped > 0) parts.add('已跳过 $skipped 个在线片段（当前仅索引本地视频，不会下载或提帧在线媒体）。');
+    return parts.join('\n');
   }
 
   /// 清除语义检索结果
@@ -988,7 +1177,8 @@ class AppState extends ChangeNotifier {
     final filtered = <VideoClip>[];
 
     for (final clip in _clips) {
-      final textMatch = query.isEmpty ||
+      final textMatch =
+          query.isEmpty ||
           clip.name.toLowerCase().contains(query) ||
           (clip.notes?.toLowerCase().contains(query) ?? false) ||
           (clip.aiSummary?.toLowerCase().contains(query) ?? false) ||
@@ -1146,13 +1336,13 @@ class AppState extends ChangeNotifier {
   }
 
   // --- 在线视频管理方法 ---
-  
+
   /// 添加在线视频
   Future<void> addOnlineVideo(OnlineVideo video) async {
     if (_onlineVideos.any((v) => v.id == video.id)) {
       throw Exception('Online video with ID ${video.id} already exists');
     }
-    
+
     _onlineVideos.add(video);
     notifyListeners();
     _scheduleSave();
@@ -1187,7 +1377,7 @@ class AppState extends ChangeNotifier {
     if (_onlineVideoClips.any((c) => c.id == clip.id)) {
       throw Exception('Online video clip with ID ${clip.id} already exists');
     }
-    
+
     _onlineVideoClips.add(clip);
     notifyListeners();
     _scheduleSave();
@@ -1225,72 +1415,75 @@ class AppState extends ChangeNotifier {
   /// 获取所有标签（包括在线片段的标签）
   UnmodifiableListView<String> get allTags {
     final allTagsSet = <String>{};
-    
+
     // 添加本地片段标签
     for (final clip in _clips) {
       allTagsSet.addAll(clip.tags);
     }
-    
+
     // 添加在线片段标签
     for (final clip in _onlineVideoClips) {
       allTagsSet.addAll(clip.tags);
     }
-    
+
     return UnmodifiableListView(allTagsSet.toList()..sort());
   }
 
   /// 获取混合片段列表（本地片段 + 在线片段）
   List<dynamic> getMixedClips() {
     final List<dynamic> mixedClips = [];
-    
+
     // 添加本地片段
     for (final clip in _clips) {
       mixedClips.add({
         'type': 'local',
         'clip': clip,
-        'video': _originalVideos.firstWhereOrNull((v) => v.path == clip.videoPath),
+        'video': _originalVideos.firstWhereOrNull(
+          (v) => v.path == clip.videoPath,
+        ),
       });
     }
-    
+
     // 添加在线片段
     for (final clip in _onlineVideoClips) {
       mixedClips.add({
         'type': 'online',
         'clip': clip,
-        'video': _onlineVideos.firstWhereOrNull((v) => v.id == clip.onlineVideoId),
+        'video': _onlineVideos.firstWhereOrNull(
+          (v) => v.id == clip.onlineVideoId,
+        ),
       });
     }
-    
+
     return mixedClips;
   }
 
   /// 获取混合视频列表（本地视频 + 在线视频）
   List<dynamic> getMixedVideos({String? searchQuery}) {
     final List<dynamic> mixedVideos = [];
-    
+
     // 添加本地视频
     for (final video in _originalVideos) {
-      if (searchQuery == null || searchQuery.isEmpty || 
+      if (searchQuery == null ||
+          searchQuery.isEmpty ||
           video.name.toLowerCase().contains(searchQuery.toLowerCase())) {
-        mixedVideos.add({
-          'type': 'local',
-          'video': video,
-        });
+        mixedVideos.add({'type': 'local', 'video': video});
       }
     }
-    
+
     // 添加在线视频
     for (final video in _onlineVideos) {
-      if (searchQuery == null || searchQuery.isEmpty || 
+      if (searchQuery == null ||
+          searchQuery.isEmpty ||
           video.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
-          (video.description?.toLowerCase().contains(searchQuery.toLowerCase()) ?? false)) {
-        mixedVideos.add({
-          'type': 'online',
-          'video': video,
-        });
+          (video.description?.toLowerCase().contains(
+                searchQuery.toLowerCase(),
+              ) ??
+              false)) {
+        mixedVideos.add({'type': 'online', 'video': video});
       }
     }
-    
+
     return mixedVideos;
   }
 

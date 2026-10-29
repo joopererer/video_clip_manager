@@ -1,0 +1,115 @@
+The Dart VM service is listening on http://127.0.0.1:55807/InEq9gxikLI=/
+package:media_kit_libs_windows_video registered.
+MainScreen: _startGlobalPreGeneration called
+ScreenshotService: initialized
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\SAMPLE_UI_VERIFICATION.json
+media_kit: NativeReferenceHolder: Allocated 2489717673360
+PreviewService: Cache directory initialized: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\PreviewCache
+media_kit: ANGLESurfaceManager: Direct3D Feature Level: 11_0
+1 1
+media_kit: VideoOutput: Create Texture: 2490226356592
+Cannot load nvcuda.dll
+media_kit: VideoOutput: Using H/W rendering.
+VideoOutput.Resize
+{handle: 2490006603840, id: 2490226356592, rect: {height: 0, left: 0, top: 0, width: 0}}
+NativeVideoController: Texture ID: 2490226356592
+media_kit: ANGLESurfaceManager: Direct3D Feature Level: 11_0
+1 1
+media_kit: VideoOutput: Create Texture: 2490510870688
+Cannot load nvcuda.dll
+media_kit: VideoOutput: Using H/W rendering.
+VideoOutput.Resize
+{handle: 2490008964448, id: 2490510870688, rect: {height: 0, left: 0, top: 0, width: 0}}
+NativeVideoController: Texture ID: 2490510870688
+MainScreen: Found 3 unique videos (2 original + 6 clips)
+MainScreen: Loading existing cache first...
+PreviewService: Loading existing cache files...
+PreviewService: Loaded 2 cached keyframes for hash 3948380cdedee0ecd9facb3b16e914d2
+PreviewService: Loaded 2 cached keyframes for hash 8b18dccda52f3b61c3f019addb26ee33
+PreviewService: Cache loading completed
+MainScreen: Starting global pre-generation for 3 videos
+PreviewService: Starting global pre-generation for 3 videos
+PreviewService: Video paths: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4, D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4, D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4
+PreviewService: Processing video 1/3: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4
+PreviewService: _isVideoSkipped - checking D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4, failureCount: 0, maxFailures: 3
+PreviewService: Not skipping D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4 (failureCount: 0 < 3)
+PreviewService: Failure info for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4: {failureCount: 0, isSkipped: false, lastFailureTime: null, timeUntilReset: 0:00:00.000000}
+PreviewService: _isVideoSkipped - checking D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4, failureCount: 0, maxFailures: 3
+PreviewService: Not skipping D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4 (failureCount: 0 < 3)
+PreviewService: Checking cache for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4...
+PreviewService: _hasSufficientCache - checking for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4
+PreviewService: _hasSufficientCache - video hash: 8b18dccda52f3b61c3f019addb26ee33
+PreviewService: _hasSufficientCache - total files in cache: 4
+PreviewService: _hasSufficientCache - found cache file: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\PreviewCache\8b18dccda52f3b61c3f019addb26ee33_0.png
+PreviewService: _hasSufficientCache - found cache file: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\PreviewCache\8b18dccda52f3b61c3f019addb26ee33_5.png
+PreviewService: _hasSufficientCache - cache count for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4: 2
+PreviewService: _hasSufficientCache - result: false (need >= 10, have 2)
+PreviewService: Cache check result for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4: false
+PreviewService: Starting pre-generation for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4
+PreviewService: Starting pre-generation for video: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4
+PreviewService: Video file size: 0.31 MB
+PreviewService: Opening video: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4
+640 360
+media_kit: VideoOutput: Free Texture: 2490510870688
+media_kit: ANGLESurfaceManager: Direct3D Feature Level: 11_0
+media_kit: VideoOutput: Create Texture: 2490508813856
+VideoOutput.Resize
+{handle: 2490008964448, id: 2490508813856, rect: {height: 360, left: 0, top: 0, width: 640}}
+PreviewService: Video duration: 6 seconds
+PreviewService: Video length: 0 minutes, interval: 5s, max keyframes: 30
+PreviewService: Will generate 2 keyframes for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4
+PreviewService: Generating keyframe 1/2 (50.0%) at 0s for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4
+PreviewService: Loaded preview from cache: 8b18dccda52f3b61c3f019addb26ee33_0.png
+PreviewService: Using cached keyframe at 0s for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4
+PreviewService: Generating keyframe 2/2 (100.0%) at 5s for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4
+PreviewService: Loaded preview from cache: 8b18dccda52f3b61c3f019addb26ee33_5.png
+PreviewService: Using cached keyframe at 5s for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4
+PreviewService: Completed pre-generation for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_0_测试素材.mp4 - 2 keyframes generated
+PreviewService: Processing video 2/3: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4
+PreviewService: _isVideoSkipped - checking D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4, failureCount: 0, maxFailures: 3
+PreviewService: Not skipping D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4 (failureCount: 0 < 3)
+PreviewService: Failure info for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4: {failureCount: 0, isSkipped: false, lastFailureTime: null, timeUntilReset: 0:00:00.000000}
+PreviewService: _isVideoSkipped - checking D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4, failureCount: 0, maxFailures: 3
+PreviewService: Not skipping D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4 (failureCount: 0 < 3)
+PreviewService: Checking cache for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4...
+PreviewService: _hasSufficientCache - checking for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4
+PreviewService: _hasSufficientCache - video hash: 3948380cdedee0ecd9facb3b16e914d2
+PreviewService: _hasSufficientCache - total files in cache: 4
+PreviewService: _hasSufficientCache - found cache file: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\PreviewCache\3948380cdedee0ecd9facb3b16e914d2_0.png
+PreviewService: _hasSufficientCache - found cache file: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\PreviewCache\3948380cdedee0ecd9facb3b16e914d2_5.png
+PreviewService: _hasSufficientCache - cache count for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4: 2
+PreviewService: _hasSufficientCache - result: false (need >= 10, have 2)
+PreviewService: Cache check result for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4: false
+PreviewService: Starting pre-generation for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4
+PreviewService: Starting pre-generation for video: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4
+PreviewService: Video file size: 0.35 MB
+PreviewService: Opening video: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4
+PreviewService: Video duration: 6 seconds
+PreviewService: Video length: 0 minutes, interval: 5s, max keyframes: 30
+PreviewService: Will generate 2 keyframes for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4
+PreviewService: Generating keyframe 1/2 (50.0%) at 0s for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4
+PreviewService: Loaded preview from cache: 3948380cdedee0ecd9facb3b16e914d2_0.png
+PreviewService: Using cached keyframe at 0s for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4
+PreviewService: Generating keyframe 2/2 (100.0%) at 5s for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4
+PreviewService: Loaded preview from cache: 3948380cdedee0ecd9facb3b16e914d2_5.png
+PreviewService: Using cached keyframe at 5s for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4
+PreviewService: Completed pre-generation for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\sample_1_测试素材.mp4 - 2 keyframes generated
+PreviewService: Processing video 3/3: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4
+PreviewService: _isVideoSkipped - checking D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4, failureCount: 0, maxFailures: 3
+PreviewService: Not skipping D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4 (failureCount: 0 < 3)
+PreviewService: Failure info for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4: {failureCount: 0, isSkipped: false, lastFailureTime: null, timeUntilReset: 0:00:00.000000}
+PreviewService: _isVideoSkipped - checking D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4, failureCount: 0, maxFailures: 3
+PreviewService: Not skipping D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4 (failureCount: 0 < 3)
+PreviewService: Checking cache for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4...
+PreviewService: _hasSufficientCache - checking for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4
+PreviewService: _hasSufficientCache - video hash: 922a076f874c32f15d7f5b41f4eff1f0
+PreviewService: _hasSufficientCache - total files in cache: 4
+PreviewService: _hasSufficientCache - cache count for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4: 0
+PreviewService: _hasSufficientCache - result: false (need >= 10, have 0)
+PreviewService: Cache check result for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4: false
+PreviewService: Starting pre-generation for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4
+PreviewService: Starting pre-generation for video: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4
+PreviewService: Video file does not exist: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4
+PreviewService: Recorded failure for D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\vcm-stage2-desktop-pk9wcl_y\missing.mp4 (count: 1/3)
+PreviewService: Current failure records: {922a076f874c32f15d7f5b41f4eff1f0: {failureCount: 1, lastFailureTime: 2026-10-27T18:21:40.326774, timeUntilReset: 23:59:59.998995}}
+PreviewService: Global pre-generation completed

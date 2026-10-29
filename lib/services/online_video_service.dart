@@ -13,12 +13,12 @@ class OnlineVideoService {
       // 使用平台支持提取信息
       final platformSupport = PlatformFactory.getPlatformByUrl(url);
       final videoInfo = await platformSupport.extractVideoInfo(url);
-      
+
       // 验证必要信息
       if (videoInfo.title.isEmpty) {
         throw Exception('Failed to extract video title');
       }
-      
+
       return OnlineVideo(
         id: videoInfo.id,
         url: url,
@@ -35,7 +35,8 @@ class OnlineVideoService {
   }
 
   /// 下载视频到本地
-  static Future<String> downloadVideo(OnlineVideo video, {
+  static Future<String> downloadVideo(
+    OnlineVideo video, {
     Duration? startTime,
     Duration? endTime,
   }) async {
@@ -46,19 +47,18 @@ class OnlineVideoService {
         await downloadsDir.create(recursive: true);
       }
 
-      final fileName = '${video.id}_${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final fileName =
+          '${video.id}_${DateTime.now().millisecondsSinceEpoch}.mp4';
       final localPath = path.join(downloadsDir.path, fileName);
 
       // 使用yt-dlp下载视频
-      final List<String> args = [
-        '-o', localPath,
-        '--no-playlist',
-      ];
+      final List<String> args = ['-o', localPath, '--no-playlist'];
 
       // 如果指定了时间段，添加裁剪参数
       if (startTime != null && endTime != null) {
         args.addAll([
-          '--download-sections', '*${startTime.inSeconds}-${endTime.inSeconds}',
+          '--download-sections',
+          '*${startTime.inSeconds}-${endTime.inSeconds}',
         ]);
       }
 

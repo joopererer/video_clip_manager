@@ -49,7 +49,8 @@ class _OnlineVideoAddDialogState extends State<OnlineVideoAddDialog> {
       final toolsAvailable = await OnlineVideoService.checkExternalTools();
       if (!toolsAvailable) {
         setState(() {
-          _errorMessage = 'External tools not available. Please install yt-dlp and Python.';
+          _errorMessage =
+              'External tools not available. Please install yt-dlp and Python.';
           _isLoading = false;
         });
         return;
@@ -57,7 +58,7 @@ class _OnlineVideoAddDialogState extends State<OnlineVideoAddDialog> {
 
       // 提取视频信息
       final video = await OnlineVideoService.extractVideoInfo(url);
-      
+
       // 添加到应用状态
       final appState = context.read<AppState>();
       await appState.addOnlineVideo(video);
@@ -125,22 +126,32 @@ class _OnlineVideoAddDialogState extends State<OnlineVideoAddDialog> {
               Row(
                 children: [
                   Icon(
-                    OnlineVideoService.supportsEmbeddedPlayback(_detectedPlatform!)
+                    OnlineVideoService.supportsEmbeddedPlayback(
+                          _detectedPlatform!,
+                        )
                         ? Icons.check_circle
                         : Icons.warning,
-                    color: OnlineVideoService.supportsEmbeddedPlayback(_detectedPlatform!)
+                    color:
+                        OnlineVideoService.supportsEmbeddedPlayback(
+                          _detectedPlatform!,
+                        )
                         ? Colors.green
                         : Colors.orange,
                     size: 16,
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    OnlineVideoService.supportsEmbeddedPlayback(_detectedPlatform!)
+                    OnlineVideoService.supportsEmbeddedPlayback(
+                          _detectedPlatform!,
+                        )
                         ? 'Supports embedded playback'
                         : 'Requires external player',
                     style: TextStyle(
                       fontSize: 12,
-                      color: OnlineVideoService.supportsEmbeddedPlayback(_detectedPlatform!)
+                      color:
+                          OnlineVideoService.supportsEmbeddedPlayback(
+                            _detectedPlatform!,
+                          )
                           ? Colors.green
                           : Colors.orange,
                     ),
@@ -179,7 +190,9 @@ class _OnlineVideoAddDialogState extends State<OnlineVideoAddDialog> {
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
-              children: OnlineVideoService.getSupportedPlatforms().map((platform) {
+              children: OnlineVideoService.getSupportedPlatforms().map((
+                platform,
+              ) {
                 return Chip(
                   label: Text(OnlineVideoService.getPlatformName(platform)),
                   avatar: Text(OnlineVideoService.getPlatformIcon(platform)),

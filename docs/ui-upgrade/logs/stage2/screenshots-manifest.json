@@ -1,0 +1,58 @@
+{
+  "type": "Native Windows desktop client-area captures; NOT widget-test screenshots",
+  "entrypoint": "test/fixtures/stage2_desktop_fixture.dart (calls production main)",
+  "data": "Synthetic FFmpeg test-pattern video and sample JSON; in-memory preferences",
+  "flutter_exceptions": 0,
+  "render_overflow_messages": 0,
+  "screenshots": [
+    {
+      "file": "docs/ui-upgrade/screenshots/stage2/windows/01_clips_grid_1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "dpi": 96,
+      "sha256": "ded44f52040c753b0665d7a87f9bf181162f9a92169d35f91f6abac7d49d0e2f"
+    },
+    {
+      "file": "docs/ui-upgrade/screenshots/stage2/windows/02_clips_list_1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "dpi": 96,
+      "sha256": "9ea763db87ccb821b4c77b2ccb892e2dc3aef852af887476087ffef2c7095c26"
+    },
+    {
+      "file": "docs/ui-upgrade/screenshots/stage2/windows/03_narrow_collapsed_900x700.png",
+      "width": 900,
+      "height": 700,
+      "dpi": 96,
+      "sha256": "63fd477c64c7b415f9820479d48288b71c18ef5b18c892854e44a41f786c9127"
+    },
+    {
+      "file": "docs/ui-upgrade/screenshots/stage2/windows/04_card_hover_1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "dpi": 96,
+      "sha256": "06cb91193b6f13671c7aa73b1aa8ffdb734a9c2a018ab6a48857d3563322b69e"
+    },
+    {
+      "file": "docs/ui-upgrade/screenshots/stage2/windows/05_search_and_favorite_filter_1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "dpi": 96,
+      "sha256": "e9358679add0c902434e3127777b33c3f6bfb559c552e0a61dc71f7396969da8"
+    },
+    {
+      "file": "docs/ui-upgrade/screenshots/stage2/windows/06_original_videos_navigation_1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "dpi": 96,
+      "sha256": "365d3f2ac4ad37506d64a2bf4a35a229afbc85b4bf923c9b18b431e9feb54a0c"
+    },
+    {
+      "file": "docs/ui-upgrade/screenshots/stage2/windows/07_playlists_navigation_1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "dpi": 96,
+      "sha256": "5c790e1a375c72d2bff6e8b8dbbee42dc9939ad88d5252ee1404dcd49bae85c4"
+    }
+  ]
+}

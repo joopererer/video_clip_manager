@@ -1,0 +1,13 @@
+{
+  "baseline": "1993962",
+  "unchanged_files": {
+    "lib/main.dart": true,
+    "lib/data/app_state.dart": true,
+    "lib/data/models.dart": true,
+    "lib/services/screenshot_service.dart": true,
+    "lib/services/preview_service.dart": true,
+    "lib/services/thumbnail_service.dart": true,
+    "pubspec.yaml": true,
+    "pubspec.lock": true
+  }
+}

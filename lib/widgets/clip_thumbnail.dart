@@ -15,6 +15,7 @@ class ClipThumbnail extends StatefulWidget {
   final double? width;
   final double? height;
   final BoxFit fit;
+  final Color? backgroundColor;
 
   const ClipThumbnail({
     super.key,
@@ -22,6 +23,7 @@ class ClipThumbnail extends StatefulWidget {
     this.width,
     this.height,
     this.fit = BoxFit.cover,
+    this.backgroundColor,
   });
 
   @override
@@ -39,7 +41,8 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
   @override
   void initState() {
     super.initState();
-    final isOnline = widget.clip.videoPath.startsWith('http://') ||
+    final isOnline =
+        widget.clip.videoPath.startsWith('http://') ||
         widget.clip.videoPath.startsWith('https://');
 
     if (isOnline) {
@@ -94,7 +97,8 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
     if (width <= 0) return;
     final ratio = (localPosition.dx / width).clamp(0.0, 1.0);
     final clipDuration = widget.clip.endTime - widget.clip.startTime;
-    final targetTime = widget.clip.startTime +
+    final targetTime =
+        widget.clip.startTime +
         Duration(milliseconds: (clipDuration.inMilliseconds * ratio).round());
 
     final frame = PreviewService().getNearestKeyframe(
@@ -164,7 +168,7 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
           child: Container(
             width: widget.width,
             height: widget.height,
-            color: Colors.grey.shade300,
+            color: widget.backgroundColor ?? Colors.grey.shade300,
             child: Stack(
               children: [
                 // 主缩略图 / 悬停预览图 / 命中关键帧
@@ -176,14 +180,14 @@ class _ClipThumbnailState extends State<ClipThumbnail> {
                           gaplessPlayback: true,
                         )
                       : (hitFrame != null
-                          ? Image.memory(
-                              hitFrame,
-                              fit: widget.fit,
-                              gaplessPlayback: true,
-                            )
-                          : (fullThumbPath == null
-                              ? _buildPlaceholder()
-                              : _buildImage(fullThumbPath))),
+                            ? Image.memory(
+                                hitFrame,
+                                fit: widget.fit,
+                                gaplessPlayback: true,
+                              )
+                            : (fullThumbPath == null
+                                  ? _buildPlaceholder()
+                                  : _buildImage(fullThumbPath))),
                 ),
 
                 // 悬停时间提示小浮层

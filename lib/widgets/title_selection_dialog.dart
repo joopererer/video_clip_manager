@@ -5,10 +5,8 @@ import '../services/enhanced_multi_source_service.dart';
 class TitleSelectionDialog extends StatefulWidget {
   final String videoCode;
 
-  const TitleSelectionDialog({
-    Key? key,
-    required this.videoCode,
-  }) : super(key: key);
+  const TitleSelectionDialog({Key? key, required this.videoCode})
+    : super(key: key);
 
   @override
   State<TitleSelectionDialog> createState() => _TitleSelectionDialogState();
@@ -45,15 +43,10 @@ class _TitleSelectionDialogState extends State<TitleSelectionDialog> {
 }
 
 /// 显示标题选择对话框
-Future<void> showTitleSelectionDialog(
-  BuildContext context,
-  String videoCode,
-) {
+Future<void> showTitleSelectionDialog(BuildContext context, String videoCode) {
   return showDialog<void>(
     context: context,
     barrierDismissible: false,
-    builder: (context) => TitleSelectionDialog(
-      videoCode: videoCode,
-    ),
+    builder: (context) => TitleSelectionDialog(videoCode: videoCode),
   );
 }

@@ -1,24 +1,28 @@
-import '../widgets/ai_settings_dialog.dart';
+import 'dart:async';
+import 'package:cross_file/cross_file.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'dart:async';
-import 'package:path/path.dart' as path;
-import 'package:desktop_drop/desktop_drop.dart';
-import 'package:cross_file/cross_file.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:path/path.dart' as path;
+import 'package:provider/provider.dart';
 
 import '../data/app_state.dart';
 import '../data/models.dart';
-import '../utils/tag_utils.dart';
-import '../utils/toast_utils.dart';
-import '../services/preview_service.dart'; // 添加预览服务导入
-import '../services/thumbnail_service.dart'; // 添加缩略图服务导入
+import '../services/preview_service.dart';
 import '../services/screenshot_service.dart';
-import 'tabs/videos_tab.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
+import '../theme/app_typography.dart';
+import '../utils/toast_utils.dart';
+import '../widgets/ai_settings_dialog.dart';
+import '../widgets/common/app_header.dart';
+import '../widgets/common/app_sidebar.dart';
+import '../widgets/theme_picker_dialog.dart';
+import 'settings/external_scrapers_settings_screen.dart';
 import 'tabs/clips_tab.dart';
 import 'tabs/playlists_tab.dart';
-import 'settings/external_scrapers_settings_screen.dart';
+import 'tabs/videos_tab.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -27,9 +31,9 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _MainScreenState extends State<MainScreen> {
+  int _currentTabIndex = 0;
+  bool? _userCollapsedOverride;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _isDraggingFile = false;
@@ -37,10 +41,6 @@ class _MainScreenState extends State<MainScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() {
-      setState(() {}); // 当tab切换时触发UI更新
-    });
     _searchController.addListener(
       () => setState(() => _searchQuery = _searchController.text),
     );
@@ -54,7 +54,7 @@ class _MainScreenState extends State<MainScreen>
     }
 
     // 延迟启动，避免与界面初始化冲突
-    await Future.delayed(Duration(seconds: 3));
+    await Future.delayed(const Duration(seconds: 3));
 
     if (!mounted) {
       if (kDebugMode) {
@@ -68,12 +68,10 @@ class _MainScreenState extends State<MainScreen>
     // 收集所有视频路径：OriginalVideo + VideoClip
     final Set<String> allVideoPaths = {};
 
-    // 添加 OriginalVideo 路径
     for (final video in appState.originalVideos) {
       allVideoPaths.add(video.path);
     }
 
-    // 添加 VideoClip 中的视频路径
     for (final clip in appState.clips) {
       allVideoPaths.add(clip.videoPath);
     }
@@ -84,9 +82,6 @@ class _MainScreenState extends State<MainScreen>
       print(
         'MainScreen: Found ${videoPaths.length} unique videos (${appState.originalVideos.length} original + ${appState.clips.length} clips)',
       );
-      print(
-        'MainScreen: Video paths: ${videoPaths.map((p) => p.split('/').last).join(', ')}',
-      );
     }
 
     if (videoPaths.isNotEmpty) {
@@ -94,7 +89,6 @@ class _MainScreenState extends State<MainScreen>
         print('MainScreen: Loading existing cache first...');
       }
 
-      // 首先加载已有的缓存文件到内存
       await PreviewService().loadExistingCache();
 
       if (kDebugMode) {
@@ -103,7 +97,6 @@ class _MainScreenState extends State<MainScreen>
         );
       }
 
-      // 在后台启动全局预生成
       PreviewService().startGlobalPreGeneration(videoPaths);
     } else {
       if (kDebugMode) {
@@ -114,9 +107,7 @@ class _MainScreenState extends State<MainScreen>
 
   @override
   void dispose() {
-    // 停止全局预生成
     PreviewService().stopGlobalPreGeneration();
-    _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -141,7 +132,7 @@ class _MainScreenState extends State<MainScreen>
         builder: (ctx) => AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.auto_awesome, color: Colors.purple),
+              Icon(Icons.auto_awesome, color: AppColors.primary),
               SizedBox(width: 8),
               Text('语义检索模型未就绪'),
             ],
@@ -175,7 +166,10 @@ class _MainScreenState extends State<MainScreen>
 
     if (!mounted) return;
     if (appState.lastSemanticError != null) {
-      ToastUtils.showWarning(context, 'AI 语义检索异常: ${appState.lastSemanticError}');
+      ToastUtils.showWarning(
+        context,
+        'AI 语义检索异常: ${appState.lastSemanticError}',
+      );
     } else if (appState.semanticScores.isEmpty) {
       ToastUtils.showInfo(context, '未匹配到相似度高于阈值的视频帧');
     } else {
@@ -190,14 +184,14 @@ class _MainScreenState extends State<MainScreen>
     final appState = context.read<AppState>();
 
     for (final file in files) {
-      final path = file.path.toLowerCase();
-      if (path.endsWith('.mp4') ||
-          path.endsWith('.avi') ||
-          path.endsWith('.mkv') ||
-          path.endsWith('.mov') ||
-          path.endsWith('.wmv') ||
-          path.endsWith('.flv') ||
-          path.endsWith('.webm')) {
+      final p = file.path.toLowerCase();
+      if (p.endsWith('.mp4') ||
+          p.endsWith('.avi') ||
+          p.endsWith('.mkv') ||
+          p.endsWith('.mov') ||
+          p.endsWith('.wmv') ||
+          p.endsWith('.flv') ||
+          p.endsWith('.webm')) {
         _addVideoFromPath(file.path, appState);
       }
     }
@@ -220,243 +214,10 @@ class _MainScreenState extends State<MainScreen>
     _showSnackBar('Added video: $videoName');
   }
 
-  void _showTagFilterDialog() {
-    final appState = context.read<AppState>();
+  void _showThemePicker() {
     showDialog(
       context: context,
-      builder: (context) {
-        final allTags = appState.allTags;
-        List<String> tempSelectedTags = List.from(appState.selectedTags);
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Filter by Tags'),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: allTags.isEmpty
-                    ? const Text('No tags available.')
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: allTags.length,
-                        itemBuilder: (context, index) {
-                          final tag = allTags[index];
-                          return CheckboxListTile(
-                            title: buildTagText(tag),
-                            value: tempSelectedTags.contains(tag),
-                            onChanged: (isSelected) {
-                              setDialogState(() {
-                                if (isSelected == true) {
-                                  tempSelectedTags.add(tag);
-                                } else {
-                                  tempSelectedTags.remove(tag);
-                                }
-                              });
-                            },
-                          );
-                        },
-                      ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    appState.setSelectedTags(tempSelectedTags);
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Apply'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showRatingFilterDialog() {
-    final appState = context.read<AppState>();
-    int? tempSelectedRating = appState.selectedRating;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Filter by Rating'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Select rating to filter by:'),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('All Ratings'),
-                        selected: tempSelectedRating == null,
-                        onSelected: (selected) {
-                          setDialogState(() {
-                            tempSelectedRating = selected
-                                ? null
-                                : tempSelectedRating;
-                          });
-                        },
-                      ),
-                      ChoiceChip(
-                        label: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.star_border,
-                              size: 16,
-                              color: Colors.grey,
-                            ),
-                            Text(' No Rating'),
-                          ],
-                        ),
-                        selected: tempSelectedRating == 0,
-                        onSelected: (selected) {
-                          setDialogState(() {
-                            tempSelectedRating = selected ? 0 : null;
-                          });
-                        },
-                      ),
-                      ...List.generate(5, (index) {
-                        final rating = index + 1;
-                        return ChoiceChip(
-                          label: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ...List.generate(
-                                rating,
-                                (starIndex) => const Icon(
-                                  Icons.star,
-                                  size: 16,
-                                  color: Colors.amber,
-                                ),
-                              ),
-                              Text(' $rating'),
-                            ],
-                          ),
-                          selected: tempSelectedRating == rating,
-                          onSelected: (selected) {
-                            setDialogState(() {
-                              tempSelectedRating = selected ? rating : null;
-                            });
-                          },
-                        );
-                      }),
-                    ],
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    appState.setSelectedRating(tempSelectedRating);
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Apply'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showFavoriteFilterDialog() {
-    final appState = context.read<AppState>();
-    bool? tempSelectedFavorite = appState.selectedFavorite;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Filter by Favorite'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Select favorite status to filter by:'),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('All Clips'),
-                        selected: tempSelectedFavorite == null,
-                        onSelected: (selected) {
-                          setDialogState(() {
-                            tempSelectedFavorite = selected
-                                ? null
-                                : tempSelectedFavorite;
-                          });
-                        },
-                      ),
-                      ChoiceChip(
-                        label: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.favorite, color: Colors.red),
-                            SizedBox(width: 4),
-                            Text('Favorites Only'),
-                          ],
-                        ),
-                        selected: tempSelectedFavorite == true,
-                        onSelected: (selected) {
-                          setDialogState(() {
-                            tempSelectedFavorite = selected ? true : null;
-                          });
-                        },
-                      ),
-                      ChoiceChip(
-                        label: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.favorite_border, color: Colors.grey),
-                            SizedBox(width: 4),
-                            Text('Not Favorites'),
-                          ],
-                        ),
-                        selected: tempSelectedFavorite == false,
-                        onSelected: (selected) {
-                          setDialogState(() {
-                            tempSelectedFavorite = selected ? false : null;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: () {
-                    appState.setSelectedFavorite(tempSelectedFavorite);
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('Apply'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (context) => const ThemePickerDialog(),
     );
   }
 
@@ -466,9 +227,9 @@ class _MainScreenState extends State<MainScreen>
       builder: (context) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.info_outline, color: Colors.blue),
+            Icon(Icons.info_outline, color: AppColors.primary),
             SizedBox(width: 8),
-            Text('About Video Clip Manager'),
+            Text('关于 Video Clip Manager'),
           ],
         ),
         content: const Column(
@@ -480,405 +241,306 @@ class _MainScreenState extends State<MainScreen>
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 8),
-            Text('Version: 1.0.1'),
+            Text('版本: 1.0.1 (Dark Media Workspace)'),
             SizedBox(height: 4),
-            Text('Author: AI Assistant'),
+            Text('作者: AI Assistant'),
             SizedBox(height: 4),
-            Text('Description: A powerful video clip management tool'),
+            Text('说明: 现代深色高性能本地与在线视频片段管理工作台'),
             SizedBox(height: 8),
-            Text('Features:', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text('核心能力:', style: TextStyle(fontWeight: FontWeight.bold)),
             SizedBox(height: 4),
-            Text('• Video clip creation and editing'),
-            Text('• Playlist management'),
-            Text('• Tag-based organization'),
-            Text('• Rating and favorite system'),
-            Text('• Thumbnail generation'),
-            Text('• Cross-platform support'),
+            Text('• 视频精准软剪切与无损片段标记'),
+            Text('• 播放列表时间轴编排与事务编辑'),
+            Text('• 多色系标签分类与星级评分系统'),
+            Text('• 全局后台缩略图异步秒级预生成'),
+            Text('• 本地 EmbeddingGemma 2 离线跨模态语义检索'),
+            Text('• 在线流媒体解析与外部平台元数据嗅探'),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: const Text('关闭'),
           ),
         ],
       ),
     );
   }
 
+  String _getTitleForTab(int index) {
+    switch (index) {
+      case 0:
+        return '片段库';
+      case 1:
+        return '原始视频';
+      case 2:
+        return '播放列表';
+      default:
+        return 'Video Clip Manager';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final thumbnailService = context.read<ThumbnailService>();
+    final colors = context.appColors;
 
     return Scaffold(
+      backgroundColor: colors.background,
       body: Stack(
         children: [
-          // The main UI
-          Scaffold(
-            appBar: AppBar(
-              title: Text('Video Clip Manager (${appState.currentDbPath})'),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  tooltip: 'Refresh All Thumbnails',
-                  onPressed: () async {
-                    await appState.forceRefreshThumbnails();
-                    _showSnackBar("All thumbnails are being refreshed.");
-                  },
-                ),
-                const SizedBox(width: 8),
-                PopupMenuButton<int>(
-                  onSelected: (item) async {
-                    if (item == 0) {
-                      final result = await appState.importAndMergeClips();
-                      _showSnackBar(result);
-                    } else if (item == 1) {
+          // 响应式主工作台 Shell (侧边栏 + 顶栏 + 内容区)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 1050;
+              final isSidebarCollapsed =
+                  isNarrow || (_userCollapsedOverride ?? false);
+
+              return Row(
+                children: [
+                  // 1. 左侧导航边栏 (208px / 64px 折叠)
+                  AppSidebar(
+                    currentIndex: _currentTabIndex,
+                    onIndexChanged: (index) {
+                      setState(() {
+                        _currentTabIndex = index;
+                      });
+                    },
+                    isCollapsed: isSidebarCollapsed,
+                    onToggleCollapse: isNarrow
+                        ? null
+                        : () {
+                            setState(() {
+                              _userCollapsedOverride = !isSidebarCollapsed;
+                            });
+                          },
+                    onSwitchDb: () async {
                       final result = await appState.switchDatabase();
                       _showSnackBar(result);
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem<int>(
-                      value: 0,
-                      child: Text('Import & Merge JSON'),
-                    ),
-                    const PopupMenuItem<int>(
-                      value: 1,
-                      child: Text('Switch Database'),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.auto_awesome),
-                  tooltip: 'AI 视觉大模型与多模态设置',
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => const AiSettingsDialog(),
-                    );
-                  },
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  tooltip: 'External Scrapers Settings',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ExternalScrapersSettingsScreen(),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.info_outline),
-                  tooltip: 'About',
-                  onPressed: _showAboutDialog,
-                ),
-              ],
-              bottom: TabBar(
-                controller: _tabController,
-                tabs: const [
-                  Tab(icon: Icon(Icons.cut), text: 'Clips'),
-                  Tab(icon: Icon(Icons.movie), text: 'Videos'),
-                  Tab(icon: Icon(Icons.playlist_play), text: 'Playlists'),
-                ],
-              ),
-            ),
-            body: DropTarget(
-              onDragDone: (details) {
-                _handleVideoDrop(details.files);
-                setState(() {
-                  _isDraggingFile = false;
-                });
-              },
-              onDragEntered: (details) {
-                setState(() {
-                  _isDraggingFile = true;
-                });
-              },
-              onDragExited: (details) {
-                setState(() {
-                  _isDraggingFile = false;
-                });
-              },
-              child: Stack(
-                children: [
-                  Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: TextField(
-                          controller: _searchController,
-                          onSubmitted: (val) {
+                    },
+                    currentDbName: path.basename(appState.currentDbPath),
+                  ),
+
+                  // 2. 右侧主要工作区 (顶栏 + 内容区)
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // 顶部约 60px 工具栏
+                        AppHeader(
+                          title: _getTitleForTab(_currentTabIndex),
+                          searchController: _searchController,
+                          onSearchChanged: (val) {
+                            setState(() {
+                              _searchQuery = val;
+                            });
+                          },
+                          onSearchSubmitted: (val) {
                             _executeSemanticSearch(val);
                           },
-                          decoration: InputDecoration(
-                            labelText: 'Search title, notes, tags or AI semantic query...',
-                            helperText: appState.searchStatus,
-                            helperStyle: TextStyle(
-                              color: Colors.purple.shade700,
-                              fontWeight: FontWeight.w500,
-                              fontSize: 11,
-                            ),
-                            prefixIcon: const Icon(Icons.search),
-                            suffixIcon: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (_tabController.index == 0 &&
-                                      appState.selectedTags.isNotEmpty)
-                                    Chip(
-                                      label: Text(
-                                        '${appState.selectedTags.length}',
-                                      ),
-                                      onDeleted: () =>
-                                          appState.clearSelectedTags(),
-                                    ),
-                                  if (_tabController.index == 0 &&
-                                      appState.selectedRating != null)
-                                    Chip(
-                                      label: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          appState.selectedRating == 0
-                                              ? const Icon(
-                                                  Icons.star_border,
-                                                  size: 16,
-                                                  color: Colors.grey,
-                                                )
-                                              : const Icon(
-                                                  Icons.star,
-                                                  size: 16,
-                                                  color: Colors.amber,
-                                                ),
-                                          Text(
-                                            appState.selectedRating == 0
-                                                ? 'No Rating'
-                                                : '${appState.selectedRating}',
-                                          ),
-                                        ],
-                                      ),
-                                      onDeleted: () =>
-                                          appState.clearSelectedRating(),
-                                    ),
-                                  if (_tabController.index == 0 &&
-                                      appState.selectedFavorite != null)
-                                    Chip(
-                                      label: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            appState.selectedFavorite!
-                                                ? Icons.favorite
-                                                : Icons.favorite_border,
-                                            size: 16,
-                                            color: appState.selectedFavorite!
-                                                ? Colors.red
-                                                : Colors.grey,
-                                          ),
-                                          Text(
-                                            appState.selectedFavorite!
-                                                ? 'Fav'
-                                                : 'Not Fav',
-                                          ),
-                                        ],
-                                      ),
-                                      onDeleted: () =>
-                                          appState.clearSelectedFavorite(),
-                                    ),
-                                  if (_tabController.index == 0)
-                                    PopupMenuButton<String>(
-                                      icon: const Icon(Icons.filter_list),
-                                      onSelected: (value) {
-                                        switch (value) {
-                                          case 'tags':
-                                            _showTagFilterDialog();
-                                            break;
-                                          case 'rating':
-                                            _showRatingFilterDialog();
-                                            break;
-                                          case 'favorite':
-                                            _showFavoriteFilterDialog();
-                                            break;
-                                          case 'clear_all':
-                                            appState.clearAllFilters();
-                                            break;
-                                        }
-                                      },
-                                      itemBuilder: (context) => [
-                                        const PopupMenuItem<String>(
-                                          value: 'tags',
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.label),
-                                              SizedBox(width: 8),
-                                              Text('Filter by Tags'),
-                                            ],
-                                          ),
-                                        ),
-                                        const PopupMenuItem<String>(
-                                          value: 'rating',
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.star),
-                                              SizedBox(width: 8),
-                                              Text('Filter by Rating'),
-                                            ],
-                                          ),
-                                        ),
-                                        const PopupMenuItem<String>(
-                                          value: 'favorite',
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.favorite),
-                                              SizedBox(width: 8),
-                                              Text('Filter by Favorite'),
-                                            ],
-                                          ),
-                                        ),
-                                        if (appState.selectedTags.isNotEmpty ||
-                                            appState.selectedRating != null ||
-                                            appState.selectedFavorite != null)
-                                          const PopupMenuDivider(),
-                                        if (appState.selectedTags.isNotEmpty ||
-                                            appState.selectedRating != null ||
-                                            appState.selectedFavorite != null)
-                                          const PopupMenuItem<String>(
-                                            value: 'clear_all',
-                                            child: Row(
-                                              children: [
-                                                Icon(Icons.clear_all),
-                                                SizedBox(width: 8),
-                                                Text('Clear All Filters'),
-                                              ],
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  if (_searchQuery.isNotEmpty && _tabController.index == 0)
-                                    appState.isSemanticSearching
-                                        ? const Padding(
-                                            padding: EdgeInsets.symmetric(horizontal: 8.0),
-                                            child: SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(strokeWidth: 2),
-                                            ),
-                                          )
-                                        : IconButton(
-                                            icon: Icon(
-                                              Icons.auto_awesome,
-                                              color: appState.semanticScores.isNotEmpty
-                                                  ? Colors.amber.shade700
-                                                  : Colors.purple.shade400,
-                                              size: 20,
-                                            ),
-                                            tooltip: 'AI 语义多模态检索',
-                                            onPressed: () => _executeSemanticSearch(_searchQuery),
-                                          ),
-                                  if (_searchQuery.isNotEmpty)
-                                    IconButton(
-                                      icon: const Icon(Icons.clear),
-                                      onPressed: () {
-                                        appState.clearSemanticSearch();
-                                        _searchController.clear();
-                                      },
-                                    ),
-                                ],
+                          onClearSearch: () {
+                            appState.clearSemanticSearch();
+                            _searchController.clear();
+                            setState(() {
+                              _searchQuery = '';
+                            });
+                          },
+                          isSemanticSearching: appState.isSemanticSearching,
+                          hasSemanticScores: appState.semanticScores.isNotEmpty,
+                          onTriggerSemanticSearch: () =>
+                              _executeSemanticSearch(_searchQuery),
+                          onRefreshThumbnails: () async {
+                            await appState.forceRefreshThumbnails();
+                            _showSnackBar(
+                              "All thumbnails are being refreshed.",
+                            );
+                          },
+                          onImportMerge: () async {
+                            final result = await appState.importAndMergeClips();
+                            _showSnackBar(result);
+                          },
+                          onSwitchDb: () async {
+                            final result = await appState.switchDatabase();
+                            _showSnackBar(result);
+                          },
+                          onOpenAiSettings: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => const AiSettingsDialog(),
+                            );
+                          },
+                          onOpenScraperSettings: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const ExternalScrapersSettingsScreen(),
                               ),
-                            ),
-                            border: const OutlineInputBorder(
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(8.0),
-                              ),
+                            );
+                          },
+                          onOpenAbout: _showAboutDialog,
+                          onOpenTheme: _showThemePicker,
+                          searchStatus: appState.searchStatus,
+                          isNarrow: constraints.maxWidth < 1050,
+                        ),
+
+                        // 内容主展示区 (支持外部文件拖拽导入与 IndexedStack 保持各 Tab 状态)
+                        Expanded(
+                          child: DropTarget(
+                            onDragDone: (details) {
+                              _handleVideoDrop(details.files);
+                              setState(() {
+                                _isDraggingFile = false;
+                              });
+                            },
+                            onDragEntered: (details) {
+                              setState(() {
+                                _isDraggingFile = true;
+                              });
+                            },
+                            onDragExited: (details) {
+                              setState(() {
+                                _isDraggingFile = false;
+                              });
+                            },
+                            child: Stack(
+                              children: [
+                                IndexedStack(
+                                  index: _currentTabIndex,
+                                  children: [
+                                    ClipsTab(
+                                      onClearSearch: () =>
+                                          _searchController.clear(),
+                                      onOpenVideos: () =>
+                                          setState(() => _currentTabIndex = 1),
+                                      searchQuery: _searchQuery,
+                                      selectedTags: appState.selectedTags,
+                                      selectedRating: appState.selectedRating,
+                                      selectedFavorite:
+                                          appState.selectedFavorite,
+                                    ),
+                                    VideosTab(
+                                      searchQuery: _searchQuery,
+                                      selectedTags: appState.selectedTags,
+                                      selectedRating: appState.selectedRating,
+                                      selectedFavorite:
+                                          appState.selectedFavorite,
+                                    ),
+                                    PlaylistsTab(searchQuery: _searchQuery),
+                                  ],
+                                ),
+
+                                // 拖拽悬停视觉提示
+                                if (_isDraggingFile)
+                                  Container(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.25,
+                                    ),
+                                    child: Center(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 32,
+                                          vertical: 24,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: colors.surfaceElevated,
+                                          borderRadius: BorderRadius.circular(
+                                            AppRadius.modal,
+                                          ),
+                                          border: Border.all(
+                                            color: AppColors.primary,
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(
+                                              Icons.cloud_upload_outlined,
+                                              size: 56,
+                                              color: AppColors.primary,
+                                            ),
+                                            const SizedBox(
+                                              height: AppSpacing.sm,
+                                            ),
+                                            Text(
+                                              '释放文件以添加视频到媒体库',
+                                              style: AppTypography.subtitle
+                                                  .copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                // 全局耗时任务加载遮罩
+                                if (appState.isLoading ||
+                                    appState.isSaving ||
+                                    appState.isGeneratingThumbnails)
+                                  Container(
+                                    color: Colors.black.withValues(alpha: 0.6),
+                                    child: Center(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 32,
+                                          vertical: 24,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: colors.surfaceElevated,
+                                          borderRadius: BorderRadius.circular(
+                                            AppRadius.md,
+                                          ),
+                                          border: Border.all(
+                                            color: colors.borderSubtle,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const SizedBox(
+                                              width: 32,
+                                              height: 32,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 3,
+                                                color: AppColors.primary,
+                                              ),
+                                            ),
+                                            const SizedBox(
+                                              height: AppSpacing.md,
+                                            ),
+                                            Text(
+                                              appState.isSaving
+                                                  ? '正在保存项目数据…'
+                                                  : (appState
+                                                            .isGeneratingThumbnails
+                                                        ? '正在后台生成缩略图…'
+                                                        : '正在加载…'),
+                                              style: AppTypography.body
+                                                  .copyWith(
+                                                    color: colors.textPrimary,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         ),
-                      ),
-                      Expanded(
-                        child: TabBarView(
-                          controller: _tabController,
-                          children: [
-                            ClipsTab(
-                              searchQuery: _searchQuery,
-                              selectedTags: appState.selectedTags,
-                              selectedRating: appState.selectedRating,
-                              selectedFavorite: appState.selectedFavorite,
-                            ),
-                            VideosTab(
-                              searchQuery: _searchQuery,
-                              selectedTags: appState.selectedTags,
-                              selectedRating: appState.selectedRating,
-                              selectedFavorite: appState.selectedFavorite,
-                            ),
-                            PlaylistsTab(searchQuery: _searchQuery),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  if (_isDraggingFile)
-                    Container(
-                      color: Colors.blue.withValues(alpha: 0.3),
-                      child: const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.cloud_upload,
-                              size: 64,
-                              color: Colors.blue,
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'Drop video files here to add',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.blue,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (appState.isLoading ||
-                      appState.isSaving ||
-                      appState.isGeneratingThumbnails)
-                    Container(
-                      color: Colors.black.withValues(alpha: 0.5),
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const CircularProgressIndicator(),
-                            const SizedBox(height: 16),
-                            Text(
-                              appState.isSaving
-                                  ? 'Saving...'
-                                  : (appState.isGeneratingThumbnails
-                                        ? 'Generating Thumbnails...'
-                                        : 'Loading...'),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                 ],
-              ),
-            ),
+              );
+            },
           ),
-          // Off-screen Video used by ScreenshotService for all screenshot tasks.
+
+          // 关键不可变机制：保持 ScreenshotService 运行所需的离屏 Video 宿主
           Positioned(
             left: -2,
             top: -2,

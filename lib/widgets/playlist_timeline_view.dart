@@ -1,57 +1,54 @@
 import 'package:flutter/material.dart';
 import '../data/models.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_spacing.dart';
+import '../utils/playlist_time.dart';
+import '../utils/timeline_layout.dart';
 
-// --- PERFORMANCE OPTIMIZATION ---
-// 1. Move the color list to a top-level constant to avoid rebuilding it on every item.
-final List<Color> _userDefinedTimelineColors = [
-  Colors.blue.shade400,
-  Colors.green.shade400,
-  Colors.orange.shade400,
-  Colors.purple.shade400,
-  Colors.red.shade400,
-  Colors.teal.shade400,
-  Colors.indigo.shade400,
-  Colors.pink.shade400,
-  Colors.blue.shade600,
-  Colors.green.shade600,
-  Colors.orange.shade600,
-  Colors.purple.shade600,
-  Colors.red.shade600,
-  Colors.teal.shade600,
-  Colors.indigo.shade600,
-  Colors.pink.shade600,
-  Colors.blue.shade300,
-  Colors.green.shade300,
-  Colors.orange.shade300,
-  Colors.purple.shade300,
-  Colors.red.shade300,
-  Colors.teal.shade300,
-  Colors.indigo.shade300,
-  Colors.pink.shade300,
+/// Muted hues that read well on the dark surfaces. A clip always gets the same
+/// colour (see [playlistClipColor]).
+const List<Color> _segmentColors = [
+  Color(0xFF6C8CD5),
+  Color(0xFF5FB49C),
+  Color(0xFFD9A15B),
+  Color(0xFFB07CC6),
+  Color(0xFFD2706F),
+  Color(0xFF58A6B8),
+  Color(0xFF8C97D9),
+  Color(0xFFC2749A),
 ];
 
-// 2. Move formatters to top-level functions for reusability and performance.
-String _formatTimelineDuration(Duration duration) {
-  final minutes = duration.inMinutes;
-  final seconds = duration.inSeconds % 60;
-  if (minutes > 0) {
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
-  } else {
-    return '${seconds}s';
+Color playlistClipColor(String clipId) {
+  // FNV-1a so the colour does not depend on String.hashCode.
+  var h = 0x811c9dc5;
+  for (final unit in clipId.codeUnits) {
+    h = ((h ^ unit) * 0x01000193) & 0xFFFFFFFF;
   }
+  return _segmentColors[h % _segmentColors.length];
 }
 
-/// A widget that displays a timeline of playlist items, where each item's width
-/// is proportional to its duration. Supports selection, dynamic text display,
-/// and drag-and-drop reordering.
-class PlaylistTimelineView extends StatelessWidget {
+String _compactDuration(Duration d) {
+  if (d.inMinutes > 0) return formatPlaylistDuration(d);
+  final s = d.inMilliseconds / 1000;
+  return s >= 10 ? '${s.round()}s' : '${s.toStringAsFixed(1)}s';
+}
+
+/// A timeline of playlist items. Each segment's width is proportional to its
+/// effective duration, with a small visual floor so very short clips stay
+/// visible and clickable. Labels and tooltips always show the real times.
+///
+/// [onReorder] receives `(from, finalIndex)`: the position the dragged entry
+/// ends up at once moved, ready for `PlaylistDraft.moveTo`.
+class PlaylistTimelineView extends StatefulWidget {
   final List<PlaylistItemWithClip> items;
   final double height;
   final bool showDuration;
   final bool showNames;
-  final Function(int)? onItemTap;
+  final bool showScale;
+  final double minSegmentWidth;
+  final ValueChanged<int>? onItemTap;
   final int? selectedIndex;
-  final Function(int, int)? onReorder;
+  final void Function(int from, int finalIndex)? onReorder;
   final bool enableReorder;
 
   const PlaylistTimelineView({
@@ -60,6 +57,8 @@ class PlaylistTimelineView extends StatelessWidget {
     this.height = 60,
     this.showDuration = true,
     this.showNames = true,
+    this.showScale = false,
+    this.minSegmentWidth = 8,
     this.onItemTap,
     this.selectedIndex,
     this.onReorder,
@@ -67,274 +66,299 @@ class PlaylistTimelineView extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    final totalDurationMs = items.fold<int>(
-      0,
-      (total, item) => total + item.effectiveDuration.inMilliseconds,
-    );
-
-    // --- REORDERING IMPLEMENTATION ---
-    // 3. Wrap the main Row in a DragTarget to handle drops.
-    return DragTarget<int>(
-      builder: (context, candidateData, rejectedData) {
-        return Container(
-          height: height,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Row(
-            children: items.asMap().entries.map((entry) {
-              final index = entry.key;
-              final itemWithClip = entry.value;
-              final durationRatio = totalDurationMs > 0
-                  ? itemWithClip.effectiveDuration.inMilliseconds /
-                        totalDurationMs
-                  : 0.0;
-
-              final itemWidget = _TimelineItem(
-                itemWithClip: itemWithClip,
-                durationRatio: durationRatio,
-                isSelected: selectedIndex == index,
-                showNames: showNames,
-                showDuration: showDuration,
-                onTap: () => onItemTap?.call(index),
-              );
-
-              // 4. Wrap each item in a LongPressDraggable if reordering is enabled.
-              if (enableReorder) {
-                return LongPressDraggable<int>(
-                  data: index,
-                  feedback: Opacity(
-                    opacity: 0.7,
-                    child: SizedBox(
-                      height: height,
-                      width: 100, // Fixed width for the feedback widget
-                      child: Material(elevation: 4.0, child: itemWidget),
-                    ),
-                  ),
-                  child: itemWidget,
-                );
-              } else {
-                return itemWidget;
-              }
-            }).toList(),
-          ),
-        );
-      },
-      onAcceptWithDetails: (details) {
-        final draggedIndex = details.data;
-        // Determine drop position by checking relative x-offset
-        final dropPosition = (context.findRenderObject() as RenderBox)
-            .globalToLocal(details.offset);
-
-        double currentWidth = 0;
-        final totalWidth = (context.findRenderObject() as RenderBox).size.width;
-        int droppedOnIndex = items.length - 1; // Default to last item
-
-        for (int i = 0; i < items.length; i++) {
-          final item = items[i];
-          final ratio = totalDurationMs > 0
-              ? item.effectiveDuration.inMilliseconds / totalDurationMs
-              : 0;
-          final itemWidth = ratio * totalWidth;
-          if (dropPosition.dx >= currentWidth &&
-              dropPosition.dx < currentWidth + itemWidth) {
-            droppedOnIndex = i;
-            break;
-          }
-          currentWidth += itemWidth;
-        }
-
-        onReorder?.call(draggedIndex, droppedOnIndex);
-      },
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Center(
-        child: Text(
-          '暂无片段',
-          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-        ),
-      ),
-    );
-  }
+  State<PlaylistTimelineView> createState() => _PlaylistTimelineViewState();
 }
 
-// --- STRUCTURE & DYNAMIC LAYOUT ---
-// 5. Extracted the timeline item into its own stateless widget for clarity and isolation.
-class _TimelineItem extends StatelessWidget {
-  final PlaylistItemWithClip itemWithClip;
-  final double durationRatio;
-  final bool isSelected;
-  final bool showNames;
-  final bool showDuration;
-  final VoidCallback? onTap;
-
-  const _TimelineItem({
-    required this.itemWithClip,
-    required this.durationRatio,
-    required this.isSelected,
-    required this.showNames,
-    required this.showDuration,
-    this.onTap,
-  });
-
-  // --- 核心修正：完全恢复您原来的颜色选择算法 ---
-  Color _getColorForClip(VideoClip clip) {
-    final hash = clip.id.hashCode.abs();
-    final colorIndex =
-        (hash * 7 + hash ~/ 7) % _userDefinedTimelineColors.length;
-    return _userDefinedTimelineColors[colorIndex];
-  }
+class _PlaylistTimelineViewState extends State<PlaylistTimelineView> {
+  /// Insertion slot (0..length) currently hovered while dragging.
+  int? _dropSlot;
+  int? _dragging;
 
   @override
   Widget build(BuildContext context) {
-    final clip = itemWithClip.clip;
-    final color = _getColorForClip(clip);
-    const double minWidthForText = 40.0;
+    final c = context.appColors;
+    if (widget.items.isEmpty) return _empty(c);
 
-    return Expanded(
-      flex: (durationRatio * 1000).round().clamp(1, 1000),
-      child: GestureDetector(
-        onTap: onTap,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final canShowText = constraints.maxWidth > minWidthForText;
+    final bar = LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final layout = computeTimelineLayout(
+          [
+            for (final e in widget.items)
+              playlistItemDuration(e).inMilliseconds,
+          ],
+          width,
+          minSegment: widget.minSegmentWidth,
+        );
+        final bounds = layout.boundaries;
 
+        return DragTarget<int>(
+          onWillAcceptWithDetails: (_) => widget.enableReorder,
+          onMove: (details) {
+            final box = context.findRenderObject() as RenderBox;
+            final local = box.globalToLocal(details.offset);
+            final slot = layout.nearestSlot(local.dx);
+            if (slot != _dropSlot) setState(() => _dropSlot = slot);
+          },
+          onLeave: (_) => setState(() => _dropSlot = null),
+          onAcceptWithDetails: (details) {
+            final slot = _dropSlot;
+            setState(() => _dropSlot = null);
+            if (slot == null) return;
+            final target = finalIndexForSlot(details.data, slot);
+            if (target != null) widget.onReorder?.call(details.data, target);
+          },
+          builder: (context, candidates, rejected) {
             return Container(
-              margin: const EdgeInsets.all(1.5),
+              height: widget.height,
               decoration: BoxDecoration(
-                // 恢复您原来的透明度逻辑
-                color: isSelected
-                    ? color.withValues(alpha: 0.8)
-                    : color.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: isSelected ? color : color.withValues(alpha: 0.3),
-                  width: isSelected ? 2 : 1,
-                ),
-                boxShadow: isSelected
-                    ? [
-                        BoxShadow(
-                          color: Colors.black38,
-                          blurRadius: 4,
-                          spreadRadius: 1,
-                        ),
-                      ]
-                    : [],
+                color: c.surface,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: c.borderSubtle),
               ),
+              clipBehavior: Clip.antiAlias,
               child: Stack(
-                fit: StackFit.expand,
                 children: [
-                  CustomPaint(painter: TimelineItemPainter(color: color)),
-                  if (canShowText)
-                    _buildItemContent(clip, itemWithClip.effectiveDuration),
-                  if (isSelected)
+                  for (var i = 0; i < widget.items.length; i++)
                     Positioned(
-                      top: 2,
-                      right: 2,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: color, width: 1),
-                        ),
-                        child: Icon(Icons.check, size: 6, color: color),
+                      left: bounds[i],
+                      width: layout.widths[i],
+                      top: 0,
+                      bottom: 0,
+                      child: _segment(
+                        c,
+                        i,
+                        layout.widths[i],
+                        layout.expanded[i],
                       ),
+                    ),
+                  if (_dropSlot != null && _dragging != null)
+                    Positioned(
+                      left: (bounds[_dropSlot!] - 1.5).clamp(0.0, width - 3),
+                      width: 3,
+                      top: 0,
+                      bottom: 0,
+                      child: IgnorePointer(child: ColoredBox(color: c.primary)),
                     ),
                 ],
               ),
             );
           },
+        );
+      },
+    );
+
+    if (!widget.showScale) return bar;
+    final total = playlistTotalDuration(widget.items);
+    final style = TextStyle(color: c.textMuted, fontSize: 11);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        bar,
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('0:00', style: style),
+            Text(formatPlaylistDuration(total, millis: true), style: style),
+          ],
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildItemContent(VideoClip clip, Duration effectiveDuration) {
-    // 这个方法保持不变
-    return Padding(
-      padding: const EdgeInsets.all(4.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          if (showNames)
-            Text(
-              clip.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                shadows: [
-                  Shadow(
-                    offset: Offset(0, 1),
-                    blurRadius: 2,
-                    color: Colors.black54,
-                  ),
+  Widget _segment(AppColorExtension c, int index, double width, bool expanded) {
+    final entry = widget.items[index];
+    final selected = widget.selectedIndex == index;
+    final color = playlistClipColor(entry.clip.id);
+    final dragged = _dragging == index;
+
+    Widget body = _SegmentBody(
+      entry: entry,
+      color: color,
+      width: width,
+      selected: selected,
+      expanded: expanded,
+      dimmed: dragged,
+      showNames: widget.showNames,
+      showDuration: widget.showDuration,
+      selectedBorder: c.textPrimary,
+    );
+
+    body = Tooltip(
+      richMessage: _tooltip(index),
+      waitDuration: const Duration(milliseconds: 350),
+      child: MouseRegion(
+        cursor: widget.onItemTap != null
+            ? SystemMouseCursors.click
+            : MouseCursor.defer,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onItemTap == null
+              ? null
+              : () => widget.onItemTap!(index),
+          child: body,
+        ),
+      ),
+    );
+
+    if (!widget.enableReorder) return body;
+    return Draggable<int>(
+      data: index,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      onDragStarted: () => setState(() => _dragging = index),
+      onDragEnd: (_) => setState(() {
+        _dragging = null;
+        _dropSlot = null;
+      }),
+      feedback: _DragChip(label: entry.clip.name, color: color),
+      child: body,
+    );
+  }
+
+  InlineSpan _tooltip(int index) {
+    final entry = widget.items[index];
+    final item = entry.item;
+    final clip = entry.clip;
+    final start = item.customStartTime ?? clip.startTime;
+    final end = item.customEndTime ?? clip.endTime;
+    final offset = playlistOffsetOf(widget.items, index);
+    final length = playlistItemDuration(entry);
+    String t(Duration d) => formatPlaylistDuration(d, millis: true);
+    return TextSpan(
+      children: [
+        TextSpan(
+          text: '${index + 1}. ${clip.name}\n',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        TextSpan(text: '素材时间 ${t(start)} – ${t(end)}\n'),
+        TextSpan(text: '时长 ${t(length)}\n'),
+        TextSpan(text: '列表位置 ${t(offset)} – ${t(offset + length)}'),
+      ],
+    );
+  }
+
+  Widget _empty(AppColorExtension c) {
+    return Container(
+      height: widget.height,
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: c.borderSubtle),
+      ),
+      alignment: Alignment.center,
+      child: Text('暂无片段', style: TextStyle(color: c.textMuted, fontSize: 13)),
+    );
+  }
+}
+
+class _SegmentBody extends StatelessWidget {
+  final PlaylistItemWithClip entry;
+  final Color color;
+  final double width;
+  final bool selected;
+  final bool expanded;
+  final bool dimmed;
+  final bool showNames;
+  final bool showDuration;
+  final Color selectedBorder;
+
+  const _SegmentBody({
+    required this.entry,
+    required this.color,
+    required this.width,
+    required this.selected,
+    required this.expanded,
+    required this.dimmed,
+    required this.showNames,
+    required this.showDuration,
+    required this.selectedBorder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const gap = 1.0;
+    final inner = width - gap * 2;
+    final canShowText = inner > 44;
+    return Opacity(
+      opacity: dimmed ? 0.35 : 1,
+      child: Container(
+        margin: const EdgeInsets.all(gap),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: selected ? 0.95 : 0.72),
+          borderRadius: BorderRadius.circular(inner < 12 ? 2 : 6),
+          border: Border.all(
+            color: selected ? selectedBorder : color.withValues(alpha: 0.4),
+            width: selected ? 2 : 1,
+          ),
+        ),
+        // A hatch under the segment marks widths drawn larger than real scale.
+        foregroundDecoration: expanded
+            ? BoxDecoration(
+                borderRadius: BorderRadius.circular(inner < 12 ? 2 : 6),
+                border: Border(
+                  bottom: BorderSide(color: Colors.white70, width: 2),
+                ),
+              )
+            : null,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: canShowText
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (showNames)
+                    Text(
+                      entry.clip.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  if (showDuration)
+                    Text(
+                      _compactDuration(playlistItemDuration(entry)),
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.white70,
+                      ),
+                    ),
                 ],
-              ),
-            ),
-          if (showNames && showDuration) const SizedBox(height: 2),
-          if (showDuration)
-            Text(
-              _formatTimelineDuration(effectiveDuration),
-              style: const TextStyle(
-                fontSize: 8,
-                color: Colors.white70,
-                fontWeight: FontWeight.w500,
-                shadows: [
-                  Shadow(
-                    offset: Offset(0, 1),
-                    blurRadius: 2,
-                    color: Colors.black54,
-                  ),
-                ],
-              ),
-            ),
-        ],
+              )
+            : null,
       ),
     );
   }
 }
 
-class TimelineItemPainter extends CustomPainter {
+class _DragChip extends StatelessWidget {
+  final String label;
   final Color color;
-  TimelineItemPainter({required this.color});
+  const _DragChip({required this.label, required this.color});
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [color.withValues(alpha: 0.05), color.withValues(alpha: 0.2)],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 6)],
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Colors.white, fontSize: 12),
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant TimelineItemPainter oldDelegate) =>
-      color != oldDelegate.color;
 }

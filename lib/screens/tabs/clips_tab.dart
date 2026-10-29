@@ -1,25 +1,30 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../data/app_state.dart';
 import '../../data/models.dart';
+import '../../services/preview_service.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_spacing.dart';
+import '../../theme/app_typography.dart';
+import '../../utils/tag_utils.dart';
+import '../../widgets/add_to_playlist_dialog.dart';
+import '../../widgets/clip_card.dart';
+import '../../widgets/clip_list_row.dart';
 import '../player/clip_editor_screen.dart';
 import '../player/clip_playback_screen.dart';
-import '../../widgets/clip_thumbnail.dart';
-import '../../widgets/add_to_playlist_dialog.dart';
-import '../../utils/tag_utils.dart';
-import '../../services/preview_service.dart';
 
 // 排序选项枚举
 enum SortOption {
-  nameAsc('Name (A-Z)', Icons.sort_by_alpha),
-  nameDesc('Name (Z-A)', Icons.sort_by_alpha),
-  dateAddedAsc('Date Added (Oldest)', Icons.access_time),
-  dateAddedDesc('Date Added (Newest)', Icons.access_time),
-  ratingAsc('Rating (Low to High)', Icons.star),
-  ratingDesc('Rating (High to Low)', Icons.star),
-  durationAsc('Duration (Short to Long)', Icons.timer),
-  durationDesc('Duration (Long to Short)', Icons.timer);
+  nameAsc('名称 (A-Z)', Icons.sort_by_alpha),
+  nameDesc('名称 (Z-A)', Icons.sort_by_alpha),
+  dateAddedAsc('最早添加', Icons.access_time),
+  dateAddedDesc('最新添加', Icons.access_time),
+  ratingAsc('评分 (从低到高)', Icons.star),
+  ratingDesc('评分 (从高到低)', Icons.star),
+  durationAsc('时长 (从短到长)', Icons.timer),
+  durationDesc('时长 (从长到短)', Icons.timer);
 
   const SortOption(this.label, this.icon);
   final String label;
@@ -31,6 +36,8 @@ class ClipsTab extends StatefulWidget {
   final List<String> selectedTags;
   final int? selectedRating;
   final bool? selectedFavorite;
+  final VoidCallback? onClearSearch;
+  final VoidCallback? onOpenVideos;
 
   const ClipsTab({
     super.key,
@@ -38,6 +45,8 @@ class ClipsTab extends StatefulWidget {
     required this.selectedTags,
     this.selectedRating,
     this.selectedFavorite,
+    this.onClearSearch,
+    this.onOpenVideos,
   });
 
   @override
@@ -45,20 +54,16 @@ class ClipsTab extends StatefulWidget {
 }
 
 class _ClipsTabState extends State<ClipsTab> {
-  SortOption _currentSortOption = SortOption.dateAddedDesc; // 默认按添加时间倒序
+  SortOption _currentSortOption = SortOption.dateAddedDesc;
+  String? _selectedClipId;
 
   @override
   Widget build(BuildContext context) {
-    // 只监听视图模式变化，不监听clips数据变化
-    final viewMode = context.select<AppState, bool>(
-      (appState) => appState.clipsIsGridView,
-    );
+    final appState = context.watch<AppState>();
+    final viewMode = appState.clipsIsGridView;
+    final allClips = appState.clips;
 
-    // 直接获取clips数据，不通过watch
-    final appState = context.read<AppState>();
-    final clips = appState.clips;
-
-    // 使用AppState的getFilteredClips方法，包含所有过滤条件
+    // 使用 AppState 的过滤逻辑获取匹配列表
     final filteredClips = appState.getFilteredClips(
       searchQuery: widget.searchQuery,
       selectedTags: widget.selectedTags,
@@ -66,214 +71,244 @@ class _ClipsTabState extends State<ClipsTab> {
       selectedFavorite: widget.selectedFavorite ?? appState.selectedFavorite,
     );
 
-    // 应用排序
+    // 应用排序规则
     final sortedClips = _sortClips(filteredClips);
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 顶部控制栏：排序、视图模式、统计信息
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-          padding: const EdgeInsets.all(16.0),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(16.0),
-            border: Border.all(color: Colors.grey.shade200),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.shade200,
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              // 排序下拉菜单
-              Expanded(flex: 2, child: _buildSortDropdown()),
-              const SizedBox(width: 16),
-              // 统计信息
-              _buildStatistics(sortedClips.length, clips.length),
-              const SizedBox(width: 16),
-              // 视图模式切换按钮
-              GestureDetector(
-                onTap: () => appState.setClipsViewMode(!viewMode),
-                child: Container(
-                  height: 40,
-                  width: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade600,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.shade200,
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    viewMode ? Icons.list : Icons.grid_view,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // 内容区域
+        // 顶部控制与筛选工具条
+        _buildToolbar(context, appState, sortedClips.length, allClips.length),
+
+        // 主展示内容区 (响应式网格 / 列表 / 空状态)
         Expanded(
           child: sortedClips.isEmpty
-              ? Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.grey.shade200),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade100,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.video_library,
-                            size: 48,
-                            color: Colors.green.shade600,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          '暂无片段',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '从视频中创建您的第一个片段',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            // 显示提示信息
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('请切换到视频标签页添加视频文件'),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.video_library, size: 18),
-                          label: const Text('查看视频'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green.shade600,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
+              ? _buildEmptyState(context, appState, allClips.length)
               : viewMode
-              ? buildGridView(context, sortedClips)
-              : buildListView(context, sortedClips),
+              ? _buildGridView(context, appState, sortedClips)
+              : _buildListView(context, appState, sortedClips),
         ),
       ],
     );
   }
 
-  // 构建排序下拉菜单
-  Widget _buildSortDropdown() {
+  Widget _buildToolbar(
+    BuildContext context,
+    AppState appState,
+    int filteredCount,
+    int totalCount,
+  ) {
+    final colors = context.appColors;
+    final viewMode = appState.clipsIsGridView;
+
+    final hasActiveFilter =
+        appState.selectedTags.isNotEmpty ||
+        appState.selectedRating != null ||
+        appState.selectedFavorite != null ||
+        widget.searchQuery.isNotEmpty;
+
     return Container(
-      height: 40,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade300),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.shade200,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+        color: colors.background,
+        border: Border(
+          bottom: BorderSide(color: colors.borderSubtle, width: 1.0),
+        ),
+      ),
+      child: Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.xs,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        alignment: WrapAlignment.spaceBetween,
+        children: [
+          // 左侧：排序菜单与筛选触发器
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 排序下拉
+              _buildSortDropdown(context, colors),
+
+              const SizedBox(width: AppSpacing.sm),
+
+              // 快捷筛选弹出菜单
+              _buildFilterMenuButton(context, appState, colors),
+              const SizedBox(width: AppSpacing.xs),
+              FilterChip(
+                avatar: const Icon(Icons.favorite_border, size: 16),
+                label: const Text('收藏'),
+                selected: appState.selectedFavorite == true,
+                onSelected: (selected) =>
+                    appState.setSelectedFavorite(selected ? true : null),
+              ),
+
+              if (hasActiveFilter) ...[
+                const SizedBox(width: AppSpacing.xs),
+                // 一键清除筛选
+                TextButton.icon(
+                  onPressed: () {
+                    appState.clearAllFilters();
+                    widget.onClearSearch?.call();
+                    if (appState.semanticScores.isNotEmpty) {
+                      appState.clearSemanticSearch();
+                    }
+                  },
+                  icon: const Icon(Icons.clear_all, size: 16),
+                  label: const Text('重置筛选', style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: colors.textSecondary,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+
+          // 右侧：结果数量统计与网格/列表切换
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 统计徽章
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: colors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(color: colors.borderSubtle),
+                ),
+                child: Text(
+                  '展示 $filteredCount / 共 $totalCount 个片段',
+                  style: AppTypography.caption.copyWith(
+                    color: colors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: AppSpacing.sm),
+
+              // 视图切换按钮组
+              Container(
+                decoration: BoxDecoration(
+                  color: colors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(color: colors.borderSubtle),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Tooltip(
+                      message: '网格视图',
+                      child: InkWell(
+                        onTap: () => appState.setClipsViewMode(true),
+                        borderRadius: const BorderRadius.horizontal(
+                          left: Radius.circular(AppRadius.sm),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: viewMode
+                                ? colors.primaryContainer
+                                : Colors.transparent,
+                            borderRadius: const BorderRadius.horizontal(
+                              left: Radius.circular(AppRadius.sm),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.grid_view,
+                            size: 17,
+                            color: viewMode ? colors.primary : colors.textMuted,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Tooltip(
+                      message: '列表视图',
+                      child: InkWell(
+                        onTap: () => appState.setClipsViewMode(false),
+                        borderRadius: const BorderRadius.horizontal(
+                          right: Radius.circular(AppRadius.sm),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: !viewMode
+                                ? colors.primaryContainer
+                                : Colors.transparent,
+                            borderRadius: const BorderRadius.horizontal(
+                              right: Radius.circular(AppRadius.sm),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.view_list,
+                            size: 18,
+                            color: !viewMode
+                                ? colors.primary
+                                : colors.textMuted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSortDropdown(BuildContext context, AppColorExtension colors) {
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: colors.surfaceElevated,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: colors.borderSubtle),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<SortOption>(
           value: _currentSortOption,
-          isExpanded: true,
-          icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade600),
-          iconSize: 20,
-          elevation: 8,
-          dropdownColor: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          items: SortOption.values.map((SortOption option) {
+          icon: Icon(
+            Icons.arrow_drop_down,
+            color: colors.textSecondary,
+            size: 20,
+          ),
+          dropdownColor: colors.surfaceElevated,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          style: TextStyle(color: colors.textPrimary, fontSize: 12.5),
+          items: SortOption.values.map((option) {
             return DropdownMenuItem<SortOption>(
               value: option,
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: _currentSortOption == option
-                          ? Colors.blue.shade50
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Icon(
-                      option.icon,
-                      size: 16,
-                      color: _currentSortOption == option
-                          ? Colors.blue.shade700
-                          : Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      option.label,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: _currentSortOption == option
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                        color: _currentSortOption == option
-                            ? Colors.blue.shade700
-                            : Colors.grey.shade700,
-                      ),
-                    ),
-                  ),
+                  Icon(option.icon, size: 14, color: colors.primary),
+                  const SizedBox(width: 6),
+                  Text(option.label),
                 ],
               ),
             );
           }).toList(),
-          onChanged: (SortOption? newValue) {
-            if (newValue != null) {
-              setState(() {
-                _currentSortOption = newValue;
-              });
+          onChanged: (newVal) {
+            if (newVal != null) {
+              setState(() => _currentSortOption = newVal);
             }
           },
         ),
@@ -281,320 +316,335 @@ class _ClipsTabState extends State<ClipsTab> {
     );
   }
 
-  // 构建统计信息显示
-  Widget _buildStatistics(int filteredCount, int totalCount) {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.blue.shade50, Colors.blue.shade100],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20.0),
-        border: Border.all(color: Colors.blue.shade200, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blue.shade100.withValues(alpha: 0.3),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+  Widget _buildFilterMenuButton(
+    BuildContext context,
+    AppState appState,
+    AppColorExtension colors,
+  ) {
+    return PopupMenuButton<String>(
+      tooltip: '多维条件筛选',
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        side: BorderSide(color: colors.border),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade600,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(Icons.video_library, size: 14, color: Colors.white),
+      color: colors.surfaceElevated,
+      onSelected: (action) {
+        switch (action) {
+          case 'tags':
+            _showTagFilterDialog(context, appState);
+            break;
+          case 'rating':
+            _showRatingFilterDialog(context, appState);
+            break;
+          case 'favorite':
+            _showFavoriteFilterDialog(context, appState);
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'tags',
+          child: Row(
+            children: [
+              const Icon(Icons.label_outline, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                appState.selectedTags.isEmpty
+                    ? '按标签筛选…'
+                    : '标签已选 (${appState.selectedTags.length})',
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Text(
-            '$filteredCount / $totalCount',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Colors.blue.shade800,
-              letterSpacing: 0.5,
-            ),
+        ),
+        PopupMenuItem(
+          value: 'rating',
+          child: Row(
+            children: [
+              const Icon(Icons.star_outline, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                appState.selectedRating == null
+                    ? '按星级筛选…'
+                    : '星级已选 (${appState.selectedRating == 0 ? "无星" : "${appState.selectedRating}星"})',
+              ),
+            ],
           ),
-        ],
+        ),
+        PopupMenuItem(
+          value: 'favorite',
+          child: Row(
+            children: [
+              const Icon(Icons.favorite_outline, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                appState.selectedFavorite == null
+                    ? '按收藏筛选…'
+                    : (appState.selectedFavorite! ? '仅看收藏' : '仅看未收藏'),
+              ),
+            ],
+          ),
+        ),
+      ],
+      child: Container(
+        height: 34,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color:
+              (appState.selectedTags.isNotEmpty ||
+                  appState.selectedRating != null ||
+                  appState.selectedFavorite != null)
+              ? colors.primaryContainer.withValues(alpha: 0.6)
+              : colors.surfaceElevated,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(
+            color:
+                (appState.selectedTags.isNotEmpty ||
+                    appState.selectedRating != null ||
+                    appState.selectedFavorite != null)
+                ? colors.primary
+                : colors.borderSubtle,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.filter_list,
+              size: 16,
+              color:
+                  (appState.selectedTags.isNotEmpty ||
+                      appState.selectedRating != null ||
+                      appState.selectedFavorite != null)
+                  ? colors.primaryHover
+                  : colors.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '筛选',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+                color:
+                    (appState.selectedTags.isNotEmpty ||
+                        appState.selectedRating != null ||
+                        appState.selectedFavorite != null)
+                    ? colors.primaryHover
+                    : colors.textPrimary,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // 排序逻辑
+  Widget _buildGridView(
+    BuildContext context,
+    AppState appState,
+    List<VideoClip> clips,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 根据可用宽度动态计算网格列数 (220px - 280px 卡片宽度适中)
+        final crossAxisCount = (constraints.maxWidth / 240).floor().clamp(1, 6);
+
+        return GridView.builder(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: AppSpacing.md,
+            mainAxisSpacing: AppSpacing.md,
+            mainAxisExtent:
+                ((constraints.maxWidth - 32 - (crossAxisCount - 1) * 16) /
+                        crossAxisCount) *
+                    9 /
+                    16 +
+                112,
+          ),
+          itemCount: clips.length,
+          itemBuilder: (context, index) {
+            final clip = clips[index];
+            return ClipCard(
+              key: ValueKey(clip.id),
+              clip: clip,
+              isSelected: _selectedClipId == clip.id,
+              onSelect: () => setState(() => _selectedClipId = clip.id),
+              onPlay: () => _playClip(context, clip),
+              onEdit: () => _editClip(context, clip),
+              onDelete: () => _deleteClip(context, clip, appState),
+              onAddToPlaylist: () => _showAddToPlaylistDialog(context, clip),
+              onRatingChanged: (newRating) {
+                appState.updateClip(clip.copyWith(rating: newRating));
+              },
+              onFavoriteToggled: (newFav) {
+                appState.updateClip(clip.copyWith(isFavorite: newFav));
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildListView(
+    BuildContext context,
+    AppState appState,
+    List<VideoClip> clips,
+  ) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      itemCount: clips.length,
+      itemBuilder: (context, index) {
+        final clip = clips[index];
+        return ClipListRow(
+          key: ValueKey(clip.id),
+          clip: clip,
+          isSelected: _selectedClipId == clip.id,
+          onSelect: () => setState(() => _selectedClipId = clip.id),
+          onPlay: () => _playClip(context, clip),
+          onEdit: () => _editClip(context, clip),
+          onDelete: () => _deleteClip(context, clip, appState),
+          onAddToPlaylist: () => _showAddToPlaylistDialog(context, clip),
+          onRatingChanged: (newRating) {
+            appState.updateClip(clip.copyWith(rating: newRating));
+          },
+          onFavoriteToggled: (newFav) {
+            appState.updateClip(clip.copyWith(isFavorite: newFav));
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState(
+    BuildContext context,
+    AppState appState,
+    int totalClipsCount,
+  ) {
+    final colors = context.appColors;
+    final isFiltered = totalClipsCount > 0;
+
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              decoration: BoxDecoration(
+                color: colors.surfaceElevated,
+                shape: BoxShape.circle,
+                border: Border.all(color: colors.borderSubtle),
+              ),
+              child: Icon(
+                isFiltered ? Icons.search_off : Icons.video_library_outlined,
+                size: 48,
+                color: colors.textMuted,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              isFiltered ? '未找到符合条件的片段' : '片段库暂无视频片段',
+              style: AppTypography.sectionTitle,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              isFiltered
+                  ? '尝试修改搜索关键词或重置当前标签/星级过滤条件。'
+                  : '请先导入本地或在线视频，进入片段编辑器标记 IN/OUT 剪辑点保存片段。',
+              style: AppTypography.bodySecondary,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            if (isFiltered)
+              FilledButton.icon(
+                onPressed: () {
+                  appState.clearAllFilters();
+                  widget.onClearSearch?.call();
+                  if (appState.semanticScores.isNotEmpty) {
+                    appState.clearSemanticSearch();
+                  }
+                },
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('重置所有筛选'),
+              )
+            else
+              FilledButton.icon(
+                onPressed: () {
+                  widget.onOpenVideos?.call();
+                },
+                icon: const Icon(Icons.movie_outlined, size: 16),
+                label: const Text('前往原始视频库导入'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 排序算法实现
   List<VideoClip> _sortClips(List<VideoClip> clips) {
-    final sortedClips = List<VideoClip>.from(clips);
+    final sorted = List<VideoClip>.from(clips);
 
     switch (_currentSortOption) {
       case SortOption.nameAsc:
-        sortedClips.sort(
+        sorted.sort(
           (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
         );
         break;
       case SortOption.nameDesc:
-        sortedClips.sort(
+        sorted.sort(
           (a, b) => b.name.toLowerCase().compareTo(a.name.toLowerCase()),
         );
         break;
       case SortOption.dateAddedAsc:
-        sortedClips.sort((a, b) => a.id.compareTo(b.id)); // 假设ID按时间顺序
+        sorted.sort((a, b) => a.id.compareTo(b.id));
         break;
       case SortOption.dateAddedDesc:
-        sortedClips.sort((a, b) => b.id.compareTo(a.id));
+        sorted.sort((a, b) => b.id.compareTo(a.id));
         break;
       case SortOption.ratingAsc:
-        sortedClips.sort((a, b) => a.rating.compareTo(b.rating));
+        sorted.sort((a, b) => a.rating.compareTo(b.rating));
         break;
       case SortOption.ratingDesc:
-        sortedClips.sort((a, b) => b.rating.compareTo(a.rating));
+        sorted.sort((a, b) => b.rating.compareTo(a.rating));
         break;
       case SortOption.durationAsc:
-        sortedClips.sort((a, b) {
-          final durationA = a.endTime - a.startTime;
-          final durationB = b.endTime - b.startTime;
-          return durationA.compareTo(durationB);
+        sorted.sort((a, b) {
+          final durA = a.endTime - a.startTime;
+          final durB = b.endTime - b.startTime;
+          return durA.compareTo(durB);
         });
         break;
       case SortOption.durationDesc:
-        sortedClips.sort((a, b) {
-          final durationA = a.endTime - a.startTime;
-          final durationB = b.endTime - b.startTime;
-          return durationB.compareTo(durationA);
+        sorted.sort((a, b) {
+          final durA = a.endTime - a.startTime;
+          final durB = b.endTime - b.startTime;
+          return durB.compareTo(durA);
         });
         break;
     }
 
-    return sortedClips;
+    return sorted;
   }
 
-  Widget buildListView(BuildContext context, List<VideoClip> clips) {
-    final appState = context.read<AppState>();
-    return ListView.builder(
-      itemCount: clips.length,
-      itemBuilder: (context, index) {
-        final clip = clips[index];
-
-        return ClipListItem(
-          clip: clip,
-          onPlay: () => _playClip(context, clip),
-          onEdit: () => _editClip(context, clip),
-          onDelete: () => _deleteClip(context, clip, appState),
-        );
-      },
-    );
-  }
-
-  Widget buildGridView(BuildContext context, List<VideoClip> clips) {
-    final appState = context.read<AppState>();
-    return GridView.builder(
-      padding: const EdgeInsets.all(8.0),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 200,
-        childAspectRatio: 0.8,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemCount: clips.length,
-      itemBuilder: (context, index) {
-        final clip = clips[index];
-        final duration = clip.endTime - clip.startTime;
-
-        return Card(
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () => _playClip(context, clip),
-            child: Column(
-              children: [
-                // Header with action buttons only (no favorite icon)
-                Container(
-                  color: Colors.black54,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end, // 靠右对齐
-                    children: [
-                      IconButton(
-                        icon: const Icon(
-                          Icons.playlist_add,
-                          color: Colors.green,
-                          size: 18,
-                        ),
-                        onPressed: () =>
-                            _showAddToPlaylistDialog(context, clip),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.edit,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                        onPressed: () => _editClip(context, clip),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.delete,
-                          color: Colors.pink,
-                          size: 18,
-                        ),
-                        onPressed: () => _deleteClip(context, clip, appState),
-                      ),
-                    ],
-                  ),
-                ),
-                // Thumbnail
-                Expanded(child: ClipThumbnail(clip: clip)),
-                // Footer with info and controls
-                Container(
-                  color: Colors.black45,
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title
-                      Text(
-                        clip.name,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      // Duration
-                      Text(
-                        formatDuration(duration),
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Colors.white70,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                      if (clip.hitTimestampMs != null)
-                        Container(
-                          margin: const EdgeInsets.only(top: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.shade700,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.location_searching, size: 11, color: Colors.white),
-                              const SizedBox(width: 4),
-                              Text(
-                                '命中时刻: ${formatDuration(Duration(milliseconds: clip.hitTimestampMs!))}',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (clip.aiSummary != null && clip.aiSummary!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 2.0),
-                          child: Text(
-                            '✨ ${clip.aiSummary!}',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.tealAccent.shade100,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      const SizedBox(height: 6),
-                      // Rating stars and favorite button in one row
-                      Row(
-                        children: [
-                          // Rating stars
-                          ...List.generate(5, (starIndex) {
-                            return GestureDetector(
-                              onTap: () {
-                                final newRating = clip.rating == starIndex + 1
-                                    ? 0
-                                    : starIndex + 1;
-                                final updatedClip = clip.copyWith(
-                                  rating: newRating,
-                                );
-                                appState.updateClip(updatedClip);
-                              },
-                              child: Icon(
-                                starIndex < clip.rating
-                                    ? Icons.star
-                                    : Icons.star_border,
-                                color: starIndex < clip.rating
-                                    ? Colors.amber
-                                    : Colors.white54,
-                                size: 14,
-                              ),
-                            );
-                          }),
-                          const Spacer(),
-                          // Favorite button
-                          GestureDetector(
-                            onTap: () {
-                              final updatedClip = clip.copyWith(
-                                isFavorite: !clip.isFavorite,
-                              );
-                              appState.updateClip(updatedClip);
-                            },
-                            child: Icon(
-                              clip.isFavorite
-                                  ? Icons.favorite
-                                  : Icons.favorite_border,
-                              color: clip.isFavorite
-                                  ? Colors.redAccent
-                                  : Colors.white54,
-                              size: 16,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // Play button
-                          GestureDetector(
-                            onTap: () => _playClip(context, clip),
-                            child: const Icon(
-                              Icons.play_circle_outline,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
+  // 播放与编辑弹窗逻辑
   void _playClip(BuildContext context, VideoClip clip) async {
     final appState = context.read<AppState>();
     final clipToEdit = await showDialog<VideoClip?>(
       context: context,
-      barrierDismissible: false, // 防止误关闭
+      barrierDismissible: false,
       builder: (context) => Dialog(
-        insetPadding: const EdgeInsets.all(16.0), // 设置边距
+        insetPadding: const EdgeInsets.all(16.0),
         child: ConstrainedBox(
           constraints: const BoxConstraints(
-            maxWidth: 1200, // 最大宽度
-            maxHeight: 800, // 最大高度
-            minWidth: 800, // 最小宽度
-            minHeight: 600, // 最小高度
+            maxWidth: 1200,
+            maxHeight: 800,
+            minWidth: 800,
+            minHeight: 600,
           ),
           child: ClipPlaybackScreen(
             clip: clip,
@@ -612,14 +662,12 @@ class _ClipsTabState extends State<ClipsTab> {
       ),
     );
 
-    // 用户在播放界面点击了“编辑”，等待播放器资源与 Windows Direct3D 纹理完全释放后再进入编辑页
     if (clipToEdit != null && context.mounted) {
       await Future.delayed(const Duration(milliseconds: 200));
       if (context.mounted) {
         _editClip(context, clipToEdit);
       }
     } else {
-      // 仅当用户关闭播放器且未进入编辑页时，才恢复后台预生成
       PreviewService().resumeGlobalPreGeneration();
     }
   }
@@ -628,7 +676,6 @@ class _ClipsTabState extends State<ClipsTab> {
     final appState = context.read<AppState>();
     final video = appState.originalVideos.firstWhere(
       (v) => v.path == clip.videoPath,
-      // Au cas où la vidéo originale aurait été supprimée, on en crée une temporaire.
       orElse: () => OriginalVideo(
         id: 'temp_${clip.videoPath.hashCode}',
         path: clip.videoPath,
@@ -639,8 +686,6 @@ class _ClipsTabState extends State<ClipsTab> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        // **LA CORRECTION EST ICI**
-        // On passe uniquement la vidéo. ClipEditorScreen se chargera d'afficher tous les clips associés.
         builder: (context) => ClipEditorScreen(video: video, clipToEdit: clip),
       ),
     );
@@ -657,320 +702,207 @@ class _ClipsTabState extends State<ClipsTab> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Confirm Deletion'),
-        content: Text('Are you sure you want to delete "${clip.name}"?'),
+        title: const Text('删除片段确认'),
+        content: Text('确定要删除片段 "${clip.name}" 吗？此操作仅移除元数据记录，不会删除源视频文件。'),
         actions: [
           TextButton(
-            child: const Text('Cancel'),
+            child: const Text('取消'),
             onPressed: () => Navigator.of(ctx).pop(),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () {
               appState.deleteClip(clip.id);
               Navigator.of(ctx).pop();
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            child: const Text('确认删除'),
           ),
         ],
       ),
     );
   }
-}
 
-String formatDuration(Duration duration) {
-  final hours = duration.inHours;
-  final minutes = duration.inMinutes.remainder(60);
-  final seconds = duration.inSeconds.remainder(60);
+  // 筛选对话框
+  void _showTagFilterDialog(BuildContext context, AppState appState) {
+    final allTags = appState.allTags;
+    List<String> tempSelectedTags = List.from(appState.selectedTags);
 
-  if (hours > 0) {
-    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  } else {
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
-}
-
-// 独立的列表项widget，只监听自己的clip数据变化
-class ClipListItem extends StatefulWidget {
-  final VideoClip clip;
-  final VoidCallback onPlay;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  const ClipListItem({
-    super.key,
-    required this.clip,
-    required this.onPlay,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  @override
-  State<ClipListItem> createState() => _ClipListItemState();
-}
-
-class _ClipListItemState extends State<ClipListItem> {
-  late ValueNotifier<int> _ratingNotifier;
-  late ValueNotifier<bool> _favoriteNotifier;
-
-  @override
-  void initState() {
-    super.initState();
-    _ratingNotifier = ValueNotifier(widget.clip.rating);
-    _favoriteNotifier = ValueNotifier(widget.clip.isFavorite);
-  }
-
-  @override
-  void didUpdateWidget(ClipListItem oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.clip.rating != widget.clip.rating) {
-      _ratingNotifier.value = widget.clip.rating;
-    }
-    if (oldWidget.clip.isFavorite != widget.clip.isFavorite) {
-      _favoriteNotifier.value = widget.clip.isFavorite;
-    }
-  }
-
-  @override
-  void dispose() {
-    _ratingNotifier.dispose();
-    _favoriteNotifier.dispose();
-    super.dispose();
-  }
-
-  void _showAddToPlaylistDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AddToPlaylistDialog(clip: widget.clip),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('按标签筛选'),
+          content: SizedBox(
+            width: 360,
+            child: allTags.isEmpty
+                ? const Text('库中暂无可用的标签。')
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: allTags.length,
+                    itemBuilder: (context, index) {
+                      final tag = allTags[index];
+                      final isSelected = tempSelectedTags.contains(tag);
+                      return CheckboxListTile(
+                        title: buildTagText(tag),
+                        value: isSelected,
+                        onChanged: (val) {
+                          setDialogState(() {
+                            if (val == true) {
+                              tempSelectedTags.add(tag);
+                            } else {
+                              tempSelectedTags.remove(tag);
+                            }
+                          });
+                        },
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                appState.setSelectedTags(tempSelectedTags);
+                Navigator.pop(ctx);
+              },
+              child: const Text('应用'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final duration = widget.clip.endTime - widget.clip.startTime;
+  void _showRatingFilterDialog(BuildContext context, AppState appState) {
+    int? tempRating = appState.selectedRating;
 
-    return RepaintBoundary(
-      child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-        child: InkWell(
-          onTap: widget.onPlay,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 90),
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
-              children: [
-                // 1. 略缩图 - 使用RepaintBoundary隔离
-                RepaintBoundary(
-                  child: Container(
-                    width: 90, // 调整略缩图宽度
-                    height: 68, // 增加略缩图高度以匹配容器
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(6),
-                      color: Colors.grey.shade200,
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: ClipThumbnail(clip: widget.clip),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // 2. 信息区域
-                Expanded(
-                  child: RepaintBoundary(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // 标题
-                        Text(
-                          widget.clip.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        // 时间信息
-                        Text(
-                          '${formatDuration(widget.clip.startTime)} - ${formatDuration(widget.clip.endTime)} (${formatDuration(duration)})',
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 13,
-                            color: Colors.grey,
-                          ),
-                        ),
-                        if (widget.clip.hitTimestampMs != null) ...[
-                          const SizedBox(height: 2),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 5,
-                                  vertical: 1,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.shade700,
-                                  borderRadius: BorderRadius.circular(3),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(
-                                      Icons.location_searching,
-                                      size: 10,
-                                      color: Colors.white,
-                                    ),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      '命中: ${formatDuration(Duration(milliseconds: widget.clip.hitTimestampMs!))}',
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              if (widget.clip.aiSummary != null &&
-                                  widget.clip.aiSummary!.isNotEmpty) ...[
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    '✨ ${widget.clip.aiSummary!}',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.teal.shade700,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ] else if (widget.clip.aiSummary != null &&
-                            widget.clip.aiSummary!.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            '✨ ${widget.clip.aiSummary!}',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.teal.shade700,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                        if (widget.clip.tags.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 2,
-                            children: widget.clip.tags
-                                .map((tag) => buildTagChip(tag))
-                                .toList(),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // 3. 星级评分 - 使用ValueListenableBuilder精确更新
-                ValueListenableBuilder<int>(
-                  valueListenable: _ratingNotifier,
-                  builder: (context, rating, child) {
-                    return Wrap(
-                      spacing: 1.0,
-                      children: List.generate(5, (starIndex) {
-                        return GestureDetector(
-                          onTap: () {
-                            final appState = context.read<AppState>();
-                            final newRating = rating == starIndex + 1
-                                ? 0
-                                : starIndex + 1;
-                            final updatedClip = widget.clip.copyWith(
-                              rating: newRating,
-                            );
-                            appState.updateClip(updatedClip);
-                          },
-                          child: Icon(
-                            starIndex < rating ? Icons.star : Icons.star_border,
-                            color: starIndex < rating
-                                ? Colors.amber
-                                : Colors.grey,
-                            size: 16,
-                          ),
-                        );
-                      }),
-                    );
-                  },
-                ),
-                const SizedBox(width: 8),
-                // 4. 爱心收藏 - 使用ValueListenableBuilder精确更新
-                ValueListenableBuilder<bool>(
-                  valueListenable: _favoriteNotifier,
-                  builder: (context, isFavorite, child) {
-                    return GestureDetector(
-                      onTap: () {
-                        final appState = context.read<AppState>();
-                        final updatedClip = widget.clip.copyWith(
-                          isFavorite: !isFavorite,
-                        );
-                        appState.updateClip(updatedClip);
-                      },
-                      child: Icon(
-                        isFavorite ? Icons.favorite : Icons.favorite_border,
-                        color: isFavorite ? Colors.redAccent : Colors.grey,
-                        size: 18,
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('按星级筛选'),
+          content: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('全部星级'),
+                selected: tempRating == null,
+                onSelected: (selected) {
+                  setDialogState(
+                    () => tempRating = selected ? null : tempRating,
+                  );
+                },
+              ),
+              ChoiceChip(
+                label: const Text('无评分 (0星)'),
+                selected: tempRating == 0,
+                onSelected: (selected) {
+                  setDialogState(() => tempRating = selected ? 0 : null);
+                },
+              ),
+              ...List.generate(5, (index) {
+                final rating = index + 1;
+                return ChoiceChip(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.star,
+                        size: 14,
+                        color: AppColors.starActive,
                       ),
-                    );
+                      const SizedBox(width: 4),
+                      Text('$rating 星'),
+                    ],
+                  ),
+                  selected: tempRating == rating,
+                  onSelected: (selected) {
+                    setDialogState(() => tempRating = selected ? rating : null);
                   },
-                ),
-                const SizedBox(width: 16), // 5. <空白> 区域
-                // 6. 添加到播放列表按钮
-                IconButton(
-                  icon: const Icon(
-                    Icons.playlist_add,
-                    color: Colors.green,
-                    size: 20,
-                  ),
-                  onPressed: () => _showAddToPlaylistDialog(context),
-                  tooltip: 'Add to Playlist',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 4),
-                // 7. 编辑按钮
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
-                  onPressed: widget.onEdit,
-                  tooltip: 'Edit Clip',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 4),
-                // 8. 删除按钮
-                IconButton(
-                  icon: const Icon(
-                    Icons.delete,
-                    color: Colors.redAccent,
-                    size: 20,
-                  ),
-                  onPressed: widget.onDelete,
-                  tooltip: 'Delete Clip',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-              ],
-            ),
+                );
+              }),
+            ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                appState.setSelectedRating(tempRating);
+                Navigator.pop(ctx);
+              },
+              child: const Text('应用'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFavoriteFilterDialog(BuildContext context, AppState appState) {
+    bool? tempFav = appState.selectedFavorite;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('按收藏状态筛选'),
+          content: Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('全部片段'),
+                selected: tempFav == null,
+                onSelected: (selected) {
+                  setDialogState(() => tempFav = selected ? null : tempFav);
+                },
+              ),
+              ChoiceChip(
+                label: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.favorite,
+                      size: 14,
+                      color: AppColors.favoriteActive,
+                    ),
+                    SizedBox(width: 4),
+                    Text('仅看收藏'),
+                  ],
+                ),
+                selected: tempFav == true,
+                onSelected: (selected) {
+                  setDialogState(() => tempFav = selected ? true : null);
+                },
+              ),
+              ChoiceChip(
+                label: const Text('仅看未收藏'),
+                selected: tempFav == false,
+                onSelected: (selected) {
+                  setDialogState(() => tempFav = selected ? false : null);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                appState.setSelectedFavorite(tempFav);
+                Navigator.pop(ctx);
+              },
+              child: const Text('应用'),
+            ),
+          ],
         ),
       ),
     );

@@ -1,0 +1,152 @@
+00:00 +0: loading D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart
+00:00 +0: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests resolveCliPath finds compiled local-media-ai executable
+00:00 +1: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:00 +1: D:/workspace/FlutterProjects/video_clip_manager/test/app_state_ai_test.dart: AppState Semantic Search & AI Integration getFilteredClips matches AI generated summary, scene, and actions via text query
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\app_state_test_610a2627/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:00 +2: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:00 +2: D:/workspace/FlutterProjects/video_clip_manager/test/app_state_ai_test.dart: AppState Semantic Search & AI Integration computeMaxSim ranks by cosine similarity and finds hitTimestampMs
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\app_state_test_3b065942/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:00 +3: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:00 +4: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:00 +5: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:01 +6: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:01 +7: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:01 +8: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:01 +9: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:01 +10: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:01 +10: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: DeltaEngine syncClipRange skips extraction when 100% cache hit
+[DeltaEngine] 100% 缓存命中，零计算复用已有 1 帧
+00:01 +11: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:01 +12: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests generateCaption parses structured output correctly
+00:01 +13: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests sanitizeTags strips punctuation, splits clauses and extracts atomic keywords
+00:01 +14: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +15: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +16: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +17: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +18: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +19: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +20: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +21: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +22: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +23: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +24: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +25: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +26: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +27: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +28: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +29: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +30: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +31: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +32: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +33: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +34: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +35: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +36: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +37: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +38: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +39: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +40: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +41: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:02 +42: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:03 +43: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:03 +44: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:03 +45: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:03 +46: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:03 +47: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:03 +48: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:03 +49: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:03 +50: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\stage2_test_fe6884a4/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+00:03 +51: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:03 +52: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:04 +53: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:04 +53: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 2: Widget harness 1280x800 Clips List View
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\stage2_test_1a5337/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+00:04 +54: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:04 +55: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:04 +56: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:04 +57: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:04 +58: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 2: Widget harness 1280x800 Clips List View
+00:04 +59: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 2: Widget harness 1280x800 Clips List View
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+00:04 +60: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 2: Widget harness 1280x800 Clips List View
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:04 +61: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField malformed text shows a hint and does not commit
+00:04 +61: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\stage2_test_47f3e958/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:04 +62: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:04 +63: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:04 +64: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:05 +65: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:05 +66: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:05 +67: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:05 +68: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:05 +69: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:05 +70: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:05 +71: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:05 +72: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:05 +73: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:05 +74: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:05 +75: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:05 +76: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: ClipEditorKeyHandler focus guard shortcuts fire when the editor owns the keyboard
+00:05 +76: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\stage2_test_bdf23968/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+00:05 +77: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+00:05 +78: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+00:05 +79: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+00:05 +80: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+00:06 +81: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+00:06 +82: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+00:06 +83: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:06 +84: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimelineGeometry / ticks round trip between time and pixels is stable
+00:06 +85: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:06 +86: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:06 +87: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:06 +88: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage3_tmp\stage2_test_daa0844a/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+00:06 +89: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:06 +90: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:06 +91: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:06 +92: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:06 +93: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:06 +94: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:06 +95: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:06 +96: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:07 +97: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:07 +98: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+00:07 +99: All tests passed!

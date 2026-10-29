@@ -5,6 +5,75 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'ai_failure.dart';
+import 'ai_model_downloader.dart';
+import 'ai_model_manifest.dart';
+import 'ai_model_verifier.dart';
+
+/// Raw result of one sidecar invocation.
+class SidecarOutput {
+  const SidecarOutput({
+    required this.exitCode,
+    required this.stdout,
+    required this.stderr,
+    this.timedOut = false,
+  });
+
+  final int exitCode;
+  final String stdout;
+  final String stderr;
+  final bool timedOut;
+}
+
+/// Runs the sidecar. Throws [ProcessException] when it cannot be started.
+typedef SidecarRunner =
+    Future<SidecarOutput> Function(
+      String exe,
+      List<String> args, {
+      required Duration timeout,
+    });
+
+/// Starts [exe], decodes its output as UTF-8 (the sidecar writes UTF-8 even on
+/// a GBK system), and stops the whole process tree when [timeout] passes.
+Future<SidecarOutput> runSidecarProcess(
+  String exe,
+  List<String> args, {
+  required Duration timeout,
+}) async {
+  final proc = await Process.start(exe, args);
+  const decoder = Utf8Decoder(allowMalformed: true);
+  final outF = proc.stdout.transform(decoder).join();
+  final errF = proc.stderr.transform(decoder).join();
+
+  var timedOut = false;
+  final code = await proc.exitCode.timeout(
+    timeout,
+    onTimeout: () async {
+      timedOut = true;
+      if (Platform.isWindows) {
+        // proc.kill() would leave the FFmpeg child running.
+        try {
+          await Process.run('taskkill', ['/PID', '${proc.pid}', '/T', '/F']);
+        } catch (_) {
+          proc.kill();
+        }
+      } else {
+        proc.kill();
+      }
+      return -1;
+    },
+  );
+  const drain = Duration(seconds: 3);
+  final out = await outF.timeout(drain, onTimeout: () => '');
+  final err = await errF.timeout(drain, onTimeout: () => '');
+  return SidecarOutput(
+    exitCode: code,
+    stdout: out,
+    stderr: err,
+    timedOut: timedOut,
+  );
+}
+
 /// 诊断信息
 class AiDoctorInfo {
   final bool cliFound;
@@ -75,7 +144,11 @@ class ClipCaptionInfo {
     final rawTags = json['tags'] ?? json['key_actions'] ?? json['actions'];
     final scene = json['scene'] as String? ?? '';
     final subject = (json['main_subject'] ?? json['subject']) as String? ?? '';
-    final sanitized = AiService.sanitizeTags(rawTags, scene: scene, mainSubject: subject);
+    final sanitized = AiService.sanitizeTags(
+      rawTags,
+      scene: scene,
+      mainSubject: subject,
+    );
     return ClipCaptionInfo(
       scene: scene,
       mainSubject: subject,
@@ -166,9 +239,12 @@ class AiService {
     String? customOutDir,
   }) async {
     final cli = await resolveCliPath();
-    final tempDir = customOutDir ??
-        p.join((await getTemporaryDirectory()).path,
-            'clip_frames_${DateTime.now().millisecondsSinceEpoch}');
+    final tempDir =
+        customOutDir ??
+        p.join(
+          (await getTemporaryDirectory()).path,
+          'clip_frames_${DateTime.now().millisecondsSinceEpoch}',
+        );
     await Directory(tempDir).create(recursive: true);
 
     final args = [
@@ -193,22 +269,115 @@ class AiService {
       maxEdge.toString(),
     ];
 
-    final res = await Process.run(cli ?? 'local-media-ai', args);
-    if (res.exitCode != 0) {
-      throw Exception('抽取视频帧失败: ${res.stderr}');
+    final exe = cli ?? 'local-media-ai';
+    final cmdLine =
+        'extract-clip --video "$videoPathOrUrl" '
+        '--start-ms $startMs --end-ms $endMs --strategy $strategy '
+        '--every-ms $everyMs --max-frames $maxFrames --max-edge $maxEdge';
+
+    AiStageException fail(
+      AiFailureKind kind, {
+      String? detail,
+      int? exitCode,
+    }) => AiStageException(
+      stage: AiStage.extraction,
+      kind: kind,
+      message: describeAiFailure(
+        AiStage.extraction,
+        kind,
+        videoPath: videoPathOrUrl,
+      ),
+      detail: detail,
+      videoPath: videoPathOrUrl,
+      startMs: startMs,
+      endMs: endMs,
+      command: redactSecrets(cmdLine),
+      exitCode: exitCode,
+    );
+
+    if (endMs <= startMs) {
+      throw fail(
+        AiFailureKind.invalidRange,
+        detail: 'start=$startMs end=$endMs',
+      );
     }
 
-    final json = jsonDecode(res.stdout as String) as Map<String, dynamic>;
-    if (json['ok'] != true || json['data'] == null) {
-      throw Exception('抽帧结果解析失败: ${json['error']}');
+    final SidecarOutput res;
+    try {
+      res = await sidecarRunner(exe, args, timeout: sidecarTimeout);
+    } on ProcessException catch (e) {
+      throw fail(AiFailureKind.cliMissing, detail: '$exe: ${e.message}');
+    }
+    if (res.timedOut) {
+      throw fail(
+        AiFailureKind.timeout,
+        detail:
+            '超过 ${sidecarTimeout.inSeconds}s\n${tailForLog('${res.stdout}\n${res.stderr}')}',
+      );
     }
 
-    final data = json['data'] as Map<String, dynamic>;
-    final rawFrames = (data['frames'] as List<dynamic>?) ?? [];
+    // The sidecar reports errors as JSON on stdout and usually leaves stderr
+    // empty, so both streams are read.
+    Map<String, dynamic>? json;
+    try {
+      final decoded = jsonDecode(res.stdout);
+      if (decoded is Map<String, dynamic>) json = decoded;
+    } catch (_) {}
+
+    if (res.exitCode != 0 || json == null || json['ok'] != true) {
+      final reason = (json?['error'] as String?) ?? '';
+      final raw = [
+        reason,
+        if (json == null) res.stdout,
+        res.stderr,
+      ].where((s) => s.trim().isNotEmpty).join('\n');
+      final kind = json == null && res.exitCode == 0
+          ? AiFailureKind.outputInvalid
+          : classifySidecarText(raw);
+      throw fail(kind, detail: tailForLog(raw), exitCode: res.exitCode);
+    }
+
+    final data = json['data'];
+    final rawFrames = data is Map<String, dynamic>
+        ? (data['frames'] as List<dynamic>?) ?? const []
+        : const [];
+    final method = data is Map<String, dynamic>
+        ? (data['method'] as String?)
+        : null;
     return rawFrames
         .map((f) => ExtractedClipFrame.fromJson(f as Map<String, dynamic>))
+        .map((f) => normalizeFrameTime(f, startMs: startMs, method: method))
         .toList();
   }
+
+  /// Makes [ExtractedClipFrame.tMs] an absolute position in the source video.
+  ///
+  /// Measured on the sidecar (synthetic ramp video whose brightness encodes
+  /// the source second): with `method == "Seek"` `t_ms` is already absolute;
+  /// with `method == "Filter"` `t_ms` counts from `--start-ms` and the pixels
+  /// come from about `start + t_ms` (within roughly one second). When the
+  /// method is missing the value is left unchanged (the older behaviour).
+  @visibleForTesting
+  static ExtractedClipFrame normalizeFrameTime(
+    ExtractedClipFrame frame, {
+    required int startMs,
+    required String? method,
+  }) {
+    if (method == null || method.toLowerCase() != 'filter' || startMs <= 0) {
+      return frame;
+    }
+    return ExtractedClipFrame(
+      tMs: frame.tMs + startMs,
+      path: frame.path,
+      sizeBytes: frame.sizeBytes,
+    );
+  }
+
+  /// Process runner and time limit for sidecar calls. Fields (not method
+  /// parameters) so test doubles that override [extractClipFrames] and
+  /// [embedFrames] keep the same signatures.
+  SidecarRunner sidecarRunner = runSidecarProcess;
+  Duration sidecarTimeout = const Duration(minutes: 3);
 
   /// 自动探测并解析 ONNX Runtime 动态链接库路径 (Windows: onnxruntime.dll)
   Future<String?> resolveOrtLibPath() async {
@@ -312,26 +481,62 @@ class AiService {
       args.addAll(['--ort-lib', resolvedOrt]);
     }
 
-    final res = await Process.run(cli ?? 'local-media-ai', args);
-    if (res.exitCode != 0) {
-      String errMsg = (res.stderr as String).trim();
-      if (errMsg.isEmpty && (res.stdout as String).isNotEmpty) {
-        try {
-          final j = jsonDecode(res.stdout as String);
-          errMsg = j['error'] ?? res.stdout;
-        } catch (_) {
-          errMsg = res.stdout;
-        }
-      }
-      throw Exception('批量帧向量生成失败: $errMsg');
+    final exe = cli ?? 'local-media-ai';
+    final cmdLine =
+        'embed-frames --frames-json <${frames.length} frames> '
+        '--model-dir "$effectiveModelDir" --soft-tokens $softTokens'
+        '${resolvedOrt != null ? ' --ort-lib "$resolvedOrt"' : ''}';
+
+    AiStageException fail(
+      AiFailureKind kind, {
+      String? detail,
+      int? exitCode,
+    }) => AiStageException(
+      stage: AiStage.inference,
+      kind: kind,
+      message: describeAiFailure(AiStage.inference, kind),
+      detail: detail,
+      command: redactSecrets(cmdLine),
+      exitCode: exitCode,
+    );
+
+    final SidecarOutput res;
+    try {
+      res = await sidecarRunner(exe, args, timeout: sidecarTimeout);
+    } on ProcessException catch (e) {
+      throw fail(AiFailureKind.cliMissing, detail: '$exe: ${e.message}');
+    }
+    if (res.timedOut) {
+      throw fail(
+        AiFailureKind.timeout,
+        detail:
+            '超过 ${sidecarTimeout.inSeconds}s\n${tailForLog('${res.stdout}\n${res.stderr}')}',
+      );
     }
 
-    final json = jsonDecode(res.stdout as String) as Map<String, dynamic>;
-    if (json['ok'] != true || json['data'] == null) {
-      throw Exception('帧向量结果解析失败: ${json['error']}');
+    Map<String, dynamic>? json;
+    try {
+      final decoded = jsonDecode(res.stdout);
+      if (decoded is Map<String, dynamic>) json = decoded;
+    } catch (_) {}
+
+    if (res.exitCode != 0 || json == null || json['ok'] != true) {
+      final reason = (json?['error'] as String?) ?? '';
+      final raw = [
+        reason,
+        if (json == null) res.stdout,
+        res.stderr,
+      ].where((s) => s.trim().isNotEmpty).join('\n');
+      final kind = json == null && res.exitCode == 0
+          ? AiFailureKind.outputInvalid
+          : classifySidecarText(raw, stage: AiStage.inference);
+      throw fail(kind, detail: tailForLog(raw), exitCode: res.exitCode);
     }
 
-    final data = json['data'] as Map<String, dynamic>;
+    final data = json['data'];
+    if (data is! Map<String, dynamic>) {
+      throw fail(AiFailureKind.outputInvalid, detail: tailForLog(res.stdout));
+    }
     return (data['embeddings'] as List<dynamic>?)
             ?.cast<Map<String, dynamic>>()
             .toList() ??
@@ -339,7 +544,7 @@ class AiService {
   }
 
   /// VLM 结构化视频故事描述生成
-    Future<ClipCaptionInfo> generateCaption({
+  Future<ClipCaptionInfo> generateCaption({
     List<String>? framePaths,
     List<ExtractedClipFrame>? frames,
     String? instruction,
@@ -361,7 +566,8 @@ class AiService {
     // 1. 若配置了 API 端点（Ollama / LM Studio / DashScope / OpenAI 兼容）
     if (apiUrl != null && apiUrl.trim().isNotEmpty) {
       final trimmedUrl = apiUrl.trim();
-      if ((trimmedUrl.contains('localhost:11434') || trimmedUrl.contains('127.0.0.1:11434')) &&
+      if ((trimmedUrl.contains('localhost:11434') ||
+              trimmedUrl.contains('127.0.0.1:11434')) &&
           !(await isServerHealthy(trimmedUrl))) {
         await ensureBuiltInLlamaServerRunning(port: '11434');
       }
@@ -369,18 +575,16 @@ class AiService {
         paths: paths,
         apiUrl: apiUrl.trim(),
         apiKey: apiKey?.trim(),
-        model: (model != null && model.trim().isNotEmpty) ? model.trim() : 'qwen2-vl:2b',
+        model: (model != null && model.trim().isNotEmpty)
+            ? model.trim()
+            : 'qwen2-vl:2b',
         instruction: instruction,
       );
     }
 
     // 2. 否则通过本地 Sidecar CLI 进程执行
     final cli = await resolveCliPath();
-    final args = [
-      'caption',
-      '--frames',
-      paths.join(','),
-    ];
+    final args = ['caption', '--frames', paths.join(',')];
     if (instruction != null && instruction.isNotEmpty) {
       args.addAll(['--instruction', instruction]);
     }
@@ -411,37 +615,33 @@ class AiService {
         ? '${apiUrl}chat/completions'
         : '$apiUrl/chat/completions';
 
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
+    final headers = <String, String>{'Content-Type': 'application/json'};
     if (apiKey != null && apiKey.isNotEmpty) {
       headers['Authorization'] = 'Bearer $apiKey';
     }
 
-    final promptText = instruction ??
+    final promptText =
+        instruction ??
         '你是一位资深视频镜头与媒体资产分析专家。'
-        '请仔细观察按时间先后顺序排列的一组视频连续关键帧画面，提炼该视频片段的核心事件、环境场景、主要主体与专业分类标签。\n\n'
-        '【关键输出要求】：\n'
-        '1. 必须严格且仅输出标准纯 JSON 格式（不要使用 Markdown 代码块或外部额外文本）。\n'
-        '2. Schema 结构必须包含以下字段：\n'
-        '{\n'
-        '  "scene": "精炼场景环境名词（不超过8个字，例如：雪山、雨夜街道、办公室）",\n'
-        '  "main_subject": "画面的核心主角/主体（不超过6个字，例如：女人、跑车、金毛犬）",\n'
-        '  "tags": ["标签1", "标签2", "标签3", "标签4", "标签5"],\n'
-        '  "key_actions": ["动作动名词1", "动作动名词2"],\n'
-        '  "summary": "一段生动连贯的自然语言剧情概要，详细描述整个片段发生了什么故事"\n'
-        '}\n\n'
-        '【标签规范（非常重要）】：\n'
-        '- "tags" 是面向专业视频素材管理系统（如 Eagle、Adobe Premiere、素材库）的分类关键词列表（建议 5-10 个）。\n'
-        '- 必须全部为【独立的原子关键词/名词/动名词】（2~4字为佳，如：女人、雪山、木棍、大雾、徒步、冬季、户外、远足）。\n'
-        '- 严禁包含整句或短语！严禁出现标点符号（绝不允许出现逗号、顿号、分号，如“行走，手持木棍”是严重错误的）！\n'
-        '- 请将动作与物体完全拆开为原子词，例如应输出 "徒步", "木棍"，而不是 "手持木棍行走"。';
+            '请仔细观察按时间先后顺序排列的一组视频连续关键帧画面，提炼该视频片段的核心事件、环境场景、主要主体与专业分类标签。\n\n'
+            '【关键输出要求】：\n'
+            '1. 必须严格且仅输出标准纯 JSON 格式（不要使用 Markdown 代码块或外部额外文本）。\n'
+            '2. Schema 结构必须包含以下字段：\n'
+            '{\n'
+            '  "scene": "精炼场景环境名词（不超过8个字，例如：雪山、雨夜街道、办公室）",\n'
+            '  "main_subject": "画面的核心主角/主体（不超过6个字，例如：女人、跑车、金毛犬）",\n'
+            '  "tags": ["标签1", "标签2", "标签3", "标签4", "标签5"],\n'
+            '  "key_actions": ["动作动名词1", "动作动名词2"],\n'
+            '  "summary": "一段生动连贯的自然语言剧情概要，详细描述整个片段发生了什么故事"\n'
+            '}\n\n'
+            '【标签规范（非常重要）】：\n'
+            '- "tags" 是面向专业视频素材管理系统（如 Eagle、Adobe Premiere、素材库）的分类关键词列表（建议 5-10 个）。\n'
+            '- 必须全部为【独立的原子关键词/名词/动名词】（2~4字为佳，如：女人、雪山、木棍、大雾、徒步、冬季、户外、远足）。\n'
+            '- 严禁包含整句或短语！严禁出现标点符号（绝不允许出现逗号、顿号、分号，如“行走，手持木棍”是严重错误的）！\n'
+            '- 请将动作与物体完全拆开为原子词，例如应输出 "徒步", "木棍"，而不是 "手持木棍行走"。';
 
     final contentItems = <Map<String, dynamic>>[
-      {
-        'type': 'text',
-        'text': promptText,
-      }
+      {'type': 'text', 'text': promptText},
     ];
 
     for (final path in paths) {
@@ -453,9 +653,7 @@ class AiService {
         final mime = ext == '.png' ? 'image/png' : 'image/jpeg';
         contentItems.add({
           'type': 'image_url',
-          'image_url': {
-            'url': 'data:$mime;base64,$base64Str',
-          },
+          'image_url': {'url': 'data:$mime;base64,$base64Str'},
         });
       }
     }
@@ -463,31 +661,29 @@ class AiService {
     final payload = {
       'model': model,
       'messages': [
-        {
-          'role': 'user',
-          'content': contentItems,
-        }
+        {'role': 'user', 'content': contentItems},
       ],
       'temperature': 0.2,
       'max_tokens': 1024,
     };
 
     final res = await http
-        .post(
-          Uri.parse(endpoint),
-          headers: headers,
-          body: jsonEncode(payload),
-        )
+        .post(Uri.parse(endpoint), headers: headers, body: jsonEncode(payload))
         .timeout(
           const Duration(seconds: 180),
-          onTimeout: () => throw Exception('连接 VLM 服务超时 (180s)。首次加载本地多模态大模型至显存可能需要较长时间，请稍后重试或检查服务状态'),
+          onTimeout: () => throw Exception(
+            '连接 VLM 服务超时 (180s)。首次加载本地多模态大模型至显存可能需要较长时间，请稍后重试或检查服务状态',
+          ),
         );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('VLM 服务请求失败 (HTTP ${res.statusCode}): ${utf8.decode(res.bodyBytes, allowMalformed: true)}');
+      throw Exception(
+        'VLM 服务请求失败 (HTTP ${res.statusCode}): ${utf8.decode(res.bodyBytes, allowMalformed: true)}',
+      );
     }
 
-    final respJson = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    final respJson =
+        jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
     final choices = respJson['choices'] as List<dynamic>?;
     if (choices == null || choices.isEmpty) {
       throw Exception('VLM 服务未返回有效选择结果: ${res.body}');
@@ -517,15 +713,31 @@ class AiService {
       final tokens = raw.split(RegExp(r'[,，、;；|/\\\s\n\r]+'));
       for (final token in tokens) {
         var clean = token
-            .replaceAll(RegExp(r'^[^\w\u4e00-\u9fa5]+|[^\w\u4e00-\u9fa5]+$'), '')
+            .replaceAll(
+              RegExp(r'^[^\w\u4e00-\u9fa5]+|[^\w\u4e00-\u9fa5]+$'),
+              '',
+            )
             .trim();
         if (clean.isEmpty) continue;
 
         // 剥离常见谓词/助词前缀，提取核心物体或动作名词
         // 例如："手持木棍" -> "木棍", "身穿蓝衣" -> "蓝衣", "一个女人" -> "女人"
         for (final prefix in [
-          '一个', '一根', '一只', '一部', '一片', '手持', '手拿', '手提', '身穿',
-          '佩戴', '背着', '站在', '走在', '正在', '在'
+          '一个',
+          '一根',
+          '一只',
+          '一部',
+          '一片',
+          '手持',
+          '手拿',
+          '手提',
+          '身穿',
+          '佩戴',
+          '背着',
+          '站在',
+          '走在',
+          '正在',
+          '在',
         ]) {
           if (clean.startsWith(prefix) && clean.length > prefix.length + 1) {
             clean = clean.substring(prefix.length).trim();
@@ -565,14 +777,36 @@ class AiService {
     // 智能提取场景中的精炼名词（若场景很短 <= 6 字直接加入，若长则尝试提取环境高频词）
     if (scene != null && scene.trim().isNotEmpty) {
       final s = scene.trim();
-      if (s.length >= 2 && s.length <= 6 && !s.contains(RegExp(r'[,，、。!！?？]'))) {
+      if (s.length >= 2 &&
+          s.length <= 6 &&
+          !s.contains(RegExp(r'[,，、。!！?？]'))) {
         processCandidate(s);
       } else {
         // 如果 scene 是一长串描述，提取其中可能出现的高频环境词
         for (final envKeyword in [
-          '雪山', '海滩', '森林', '沙漠', '草原', '街道', '办公室', '会议室',
-          '城市', '公路', '星空', '雾气', '大雾', '晴天', '雨夜', '室内', '户外',
-          '山脉', '湖泊', '河流', '日落', '日出', '夜景'
+          '雪山',
+          '海滩',
+          '森林',
+          '沙漠',
+          '草原',
+          '街道',
+          '办公室',
+          '会议室',
+          '城市',
+          '公路',
+          '星空',
+          '雾气',
+          '大雾',
+          '晴天',
+          '雨夜',
+          '室内',
+          '户外',
+          '山脉',
+          '湖泊',
+          '河流',
+          '日落',
+          '日出',
+          '夜景',
         ]) {
           if (s.contains(envKeyword)) {
             result.add(envKeyword);
@@ -588,7 +822,9 @@ class AiService {
   ClipCaptionInfo parseCaptionFromRaw(String rawText) {
     String clean = rawText.trim();
     if (clean.contains('```')) {
-      final match = RegExp(r'```(?:json)?\s*([\s\S]*?)\s*```').firstMatch(clean);
+      final match = RegExp(
+        r'```(?:json)?\s*([\s\S]*?)\s*```',
+      ).firstMatch(clean);
       if (match != null) {
         clean = match.group(1)?.trim() ?? clean;
       }
@@ -597,12 +833,18 @@ class AiService {
     try {
       final map = jsonDecode(clean) as Map<String, dynamic>;
       final scene = map['scene']?.toString() ?? '视频场景';
-      final mainSubject = (map['main_subject'] ?? map['subject'])?.toString() ?? '主体';
+      final mainSubject =
+          (map['main_subject'] ?? map['subject'])?.toString() ?? '主体';
       final rawTags = map['tags'] ?? map['key_actions'] ?? map['actions'] ?? [];
-      final keyActions = sanitizeTags(rawTags, scene: scene, mainSubject: mainSubject);
+      final keyActions = sanitizeTags(
+        rawTags,
+        scene: scene,
+        mainSubject: mainSubject,
+      );
       final summary = map['summary']?.toString() ?? clean;
 
-      final searchDoc = 'Scene: $scene\nMain Subject: $mainSubject\nActions: ${keyActions.join(", ")}\nSummary: $summary';
+      final searchDoc =
+          'Scene: $scene\nMain Subject: $mainSubject\nActions: ${keyActions.join(", ")}\nSummary: $summary';
 
       return ClipCaptionInfo(
         scene: scene,
@@ -655,35 +897,110 @@ class AiService {
 
     for (final dir in searchDirs) {
       final modelFile = File(p.join(dir, 'Qwen2-VL-2B-Instruct-Q4_K_M.gguf'));
-      final mmprojFile = File(p.join(dir, 'mmproj-Qwen2-VL-2B-Instruct-f16.gguf'));
+      final mmprojFile = File(
+        p.join(dir, 'mmproj-Qwen2-VL-2B-Instruct-f16.gguf'),
+      );
       if (modelFile.existsSync() && mmprojFile.existsSync()) {
-        return {
-          'model': modelFile.path,
-          'mmproj': mmprojFile.path,
-        };
+        return {'model': modelFile.path, 'mmproj': mmprojFile.path};
       }
     }
     return null;
   }
 
-  /// 检测多模态语义检索 (EmbeddingGemma 2 ONNX) 模型文件是否就绪
-  Future<String?> resolveEmbeddingModelDir() async {
-    final searchDirs = [
-      'models',
-      r'models\embeddinggemma2',
-      r'D:\workspace\IdeaProjects\video_clip_manager\models',
-      r'D:\workspace\FlutterProjects\video_clip_manager\models',
-      r'D:\workspace\local-media-ai\runtime\models',
-    ];
+  /// Optional user-selected folder for the in-app EmbeddingGemma model.
+  /// Persisted by [AppState]; this is the single source used by discovery,
+  /// download, verification and loading.
+  String? customEmbeddingModelDir;
 
-    for (final dir in searchDirs) {
-      final tokenizer = File(p.join(dir, 'tokenizer.json'));
-      final onnxModel = File(p.join(dir, 'onnx', 'model_quantized.onnx'));
-      if (tokenizer.existsSync() && onnxModel.existsSync()) {
-        return Directory(dir).absolute.path;
-      }
+  /// Folders searched for the EmbeddingGemma 2 model, in priority order.
+  /// Unchanged from earlier releases so existing installs keep working.
+  /// Download, verification, loading and the settings page all read this
+  /// list (or [embeddingInstallDir]); nothing else decides where the model is.
+  List<String> embeddingModelCandidateDirs() => [
+    if (customEmbeddingModelDir != null &&
+        customEmbeddingModelDir!.trim().isNotEmpty)
+      customEmbeddingModelDir!.trim(),
+    'models',
+    r'models\embeddinggemma2',
+    r'D:\workspace\IdeaProjects\video_clip_manager\models',
+    r'D:\workspace\FlutterProjects\video_clip_manager\models',
+    r'D:\workspace\local-media-ai\runtime\models',
+  ];
+
+  static const ModelVerifier _modelVerifier = ModelVerifier();
+
+  /// True while [installEmbeddingModel] runs. Used to refuse actions that
+  /// would pull files out from under it (for example changing the model dir).
+  bool get isInstallingEmbeddingModel => _installingEmbeddingModel;
+  bool _installingEmbeddingModel = false;
+
+  /// 检测多模态语义检索 (EmbeddingGemma 2 ONNX) 模型是否就绪。
+  ///
+  /// A folder counts only when every file of the pinned manifest exists with
+  /// the expected size. Earlier releases accepted a folder that merely had two
+  /// files, which reported "ready" for half-finished downloads. The sha256
+  /// check is the (slow) explicit verify in [installEmbeddingModel].
+  Future<String?> resolveEmbeddingModelDir() async {
+    final custom = customEmbeddingModelDir?.trim();
+    if (custom != null && custom.isNotEmpty) {
+      if (!Directory(custom).existsSync()) return null;
+      final v = await _modelVerifier.verify(custom, embeddingGemmaManifest);
+      return v.isComplete ? Directory(custom).absolute.path : null;
+    }
+    for (final dir in embeddingModelCandidateDirs()) {
+      if (!Directory(dir).existsSync()) continue;
+      final v = await _modelVerifier.verify(dir, embeddingGemmaManifest);
+      if (v.isComplete) return Directory(dir).absolute.path;
     }
     return null;
+  }
+
+  /// Folder a download goes to. A user-selected folder is authoritative; the
+  /// default candidates are only searched when no custom folder is set.
+  Future<String> embeddingInstallDir() async {
+    final custom = customEmbeddingModelDir?.trim();
+    if (custom != null && custom.isNotEmpty) {
+      return Directory(custom).absolute.path;
+    }
+    for (final dir in embeddingModelCandidateDirs()) {
+      if (!Directory(dir).existsSync()) continue;
+      final v = await _modelVerifier.verify(dir, embeddingGemmaManifest);
+      if (v.anyFilePresent) return Directory(dir).absolute.path;
+    }
+    return Directory(embeddingModelCandidateDirs().first).absolute.path;
+  }
+
+  /// Cheap state of the folder the model lives in (or would be installed to).
+  Future<ModelVerification> inspectEmbeddingModel() async {
+    final dir = await resolveEmbeddingModelDir() ?? await embeddingInstallDir();
+    return _modelVerifier.verify(dir, embeddingGemmaManifest);
+  }
+
+  /// Verifies sha256 of every file, downloads only what is missing or wrong
+  /// (resuming `.part` files) and re-measures the folder at the end.
+  /// Valid files are never rewritten. Only one install runs at a time.
+  Future<ModelInstallResult> installEmbeddingModel({
+    String mirror = 'https://hf-mirror.com',
+    void Function(ModelProgress)? onProgress,
+    bool Function()? isCancelled,
+    ModelDownloader? downloader,
+  }) async {
+    if (_installingEmbeddingModel) {
+      throw StateError('EmbeddingGemma 模型正在下载或校验中');
+    }
+    _installingEmbeddingModel = true;
+    try {
+      final dir = await embeddingInstallDir();
+      return await (downloader ?? ModelDownloader()).install(
+        manifest: embeddingGemmaManifest,
+        dir: dir,
+        mirror: mirror,
+        onProgress: onProgress,
+        isCancelled: isCancelled,
+      );
+    } finally {
+      _installingEmbeddingModel = false;
+    }
   }
 
   /// 检测指定 URL 的服务是否存活
@@ -692,7 +1009,9 @@ class AiService {
       final healthUri = Uri.parse(
         baseUrl.endsWith('/') ? '${baseUrl}health' : '$baseUrl/health',
       );
-      final res = await http.get(healthUri).timeout(const Duration(milliseconds: 1200));
+      final res = await http
+          .get(healthUri)
+          .timeout(const Duration(milliseconds: 1200));
       if (res.statusCode >= 200 && res.statusCode < 400) return true;
     } catch (_) {}
 
@@ -700,7 +1019,9 @@ class AiService {
       final modelsUri = Uri.parse(
         baseUrl.endsWith('/') ? '${baseUrl}models' : '$baseUrl/models',
       );
-      final res = await http.get(modelsUri).timeout(const Duration(milliseconds: 1200));
+      final res = await http
+          .get(modelsUri)
+          .timeout(const Duration(milliseconds: 1200));
       if (res.statusCode >= 200 && res.statusCode < 400) return true;
     } catch (_) {}
 
@@ -721,17 +1042,18 @@ class AiService {
 
     try {
       debugPrint('[AiService] Spawning built-in llama-server on port $port...');
-      _localServerProcess = await Process.start(
-        exe,
-        [
-          '-m', models['model']!,
-          '--mmproj', models['mmproj']!,
-          '--port', port,
-          '-ngl', '99',
-          '--ctx-size', '4096',
-        ],
-        mode: ProcessStartMode.detached,
-      );
+      _localServerProcess = await Process.start(exe, [
+        '-m',
+        models['model']!,
+        '--mmproj',
+        models['mmproj']!,
+        '--port',
+        port,
+        '-ngl',
+        '99',
+        '--ctx-size',
+        '4096',
+      ], mode: ProcessStartMode.detached);
 
       // 轮询等待服务就绪
       for (int i = 0; i < 15; i++) {
@@ -746,5 +1068,4 @@ class AiService {
     }
     return false;
   }
-
 }

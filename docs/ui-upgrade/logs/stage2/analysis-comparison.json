@@ -1,0 +1,28 @@
+{
+  "baseline_commit": "1993962",
+  "baseline_command": "flutter analyze --no-pub (temporary tracked Dart source snapshot)",
+  "current_command": "flutter analyze",
+  "normalization": "Compare severity, message, file and rule; ignore shifted line and column numbers; preserve multiplicity.",
+  "baseline": {
+    "error": 0,
+    "warning": 98,
+    "info": 1268
+  },
+  "stage2": {
+    "error": 0,
+    "warning": 97,
+    "info": 1268
+  },
+  "added": [],
+  "removed": [
+    {
+      "diagnostic": [
+        "warning",
+        "The value of the local variable 'thumbnailService' isn't used",
+        "lib\\screens\\main_screen.dart",
+        "unused_local_variable"
+      ],
+      "count": 1
+    }
+  ]
+}

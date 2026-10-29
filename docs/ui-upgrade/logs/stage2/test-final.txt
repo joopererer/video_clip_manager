@@ -1,0 +1,79 @@
+00:00 +0: loading D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart
+00:00 +0: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests resolveCliPath finds compiled local-media-ai executable
+00:00 +1: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:00 +2: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests generateCaption parses structured output correctly
+00:00 +3: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests sanitizeTags strips punctuation, splits clauses and extracts atomic keywords
+00:03 +4: D:/workspace/FlutterProjects/video_clip_manager/test/app_state_ai_test.dart: AppState Semantic Search & AI Integration getFilteredClips matches AI generated summary, scene, and actions via text query
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage2_tmp\app_state_test_6ea3ae6a/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:03 +5: D:/workspace/FlutterProjects/video_clip_manager/test/app_state_ai_test.dart: AppState Semantic Search & AI Integration computeMaxSim ranks by cosine similarity and finds hitTimestampMs
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage2_tmp\app_state_test_bfe9ff76/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:03 +6: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: FrameEmbeddingPool & VideoFrameEmbeddingRecord cosineSimilarity computes correctly
+00:03 +7: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: FrameEmbeddingPool & VideoFrameEmbeddingRecord putFrames and getFramesInRange filters by time window
+00:03 +8: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: FrameEmbeddingPool & VideoFrameEmbeddingRecord saveToDisk and loadFromDisk persists records
+00:03 +9: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: DeltaEngine planDelta detects full missing on empty cache
+00:03 +10: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: DeltaEngine planDelta detects partial cache hit with tolerance
+00:03 +11: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: DeltaEngine planDelta detects 100% cache hit on trimmed/already cached range
+00:03 +12: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: DeltaEngine computeMaxSim finds optimal frame and timestamp
+00:03 +13: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: DeltaEngine syncClipRange skips extraction when 100% cache hit
+[DeltaEngine] 100% 缓存命中，零计算复用已有 1 帧
+00:04 +14: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +15: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +16: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +17: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +18: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +19: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Missing source is explicit without starting a native preview
+00:05 +20: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 2: Clips Tab with data and dark theme
+00:05 +20: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage2_tmp\stage2_test_1207934d/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+00:05 +21: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:06 +22: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:06 +23: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:06 +24: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:06 +25: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:06 +25: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 2: Widget harness 1280x800 Clips List View
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage2_tmp\stage2_test_f5d00cd5/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+00:06 +26: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 2: Widget harness 1280x800 Clips List View
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:06 +27: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage2_tmp\stage2_test_e9c69c31/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:07 +28: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage2_tmp\stage2_test_dd1567ec/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:07 +29: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+Loading database from: D:\workspace\FlutterProjects\video_clip_manager\build\stage2_tmp\stage2_test_ba942dca/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:08 +30: All tests passed!

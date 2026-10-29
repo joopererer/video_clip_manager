@@ -12,7 +12,8 @@ import '../../data/app_state.dart';
 import '../tabs/clips_tab.dart';
 import '../../utils/tag_utils.dart';
 import '../../widgets/custom_progress_bar.dart'; // 添加自定义进度条导入
-import '../../services/preview_service.dart'; // 添加预览服务导入
+import '../../widgets/common/volume_control.dart';
+import '../../services/preview_service.dart';
 
 class ClipPlaybackScreen extends StatefulWidget {
   final VideoClip clip;
@@ -33,7 +34,7 @@ class ClipPlaybackScreen extends StatefulWidget {
     this.selectedRating,
     this.selectedFavorite,
     this.currentSortOption = SortOption.dateAddedDesc,
-      this.initialSeekTime,
+    this.initialSeekTime,
   });
 
   @override
@@ -60,6 +61,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
   bool _showCustomProgressBar = true; // 控制是否显示自定义进度条
   bool _showClipRelativeProgress = true; // 控制是否显示clip相对进度
   bool _isMuted = false; // 静音状态
+  double _volume = 100;
+  double _volumeBeforeMute = 100;
 
   // 新增：全局焦点节点
   late final FocusNode _focusNode;
@@ -108,7 +111,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       Duration loadedDuration = mainPlayer.state.duration;
       if (loadedDuration == Duration.zero) {
         try {
-          final isNetwork = _currentClip.videoPath.startsWith('http://') ||
+          final isNetwork =
+              _currentClip.videoPath.startsWith('http://') ||
               _currentClip.videoPath.startsWith('https://');
           final timeout = isNetwork
               ? const Duration(seconds: 12)
@@ -127,7 +131,8 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
       }
 
       // 如果依然未能获取时长但已经有缓冲数据，也可以继续尝试
-      if (loadedDuration == Duration.zero && mainPlayer.state.buffer == Duration.zero) {
+      if (loadedDuration == Duration.zero &&
+          mainPlayer.state.buffer == Duration.zero) {
         throw Exception('Main player failed to load media');
       }
 
@@ -244,7 +249,9 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
         );
         await _continuePreGeneration();
       } else {
-        print('ClipPlayback: Cache complete or more than 30% remaining, skipping generation');
+        print(
+          'ClipPlayback: Cache complete or more than 30% remaining, skipping generation',
+        );
       }
     } catch (e) {
       print('ClipPlayback: Error in smart pre-generation: $e');
@@ -638,17 +645,25 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
 
   // 切换静音状态
   void _toggleMute() {
-    setState(() {
-      _isMuted = !_isMuted;
-    });
-
     if (_isMuted) {
-      mainPlayer.setVolume(0);
-      print('ClipPlayback: Audio muted');
+      _setVolume(_volumeBeforeMute > 0 ? _volumeBeforeMute : 100);
     } else {
-      mainPlayer.setVolume(100);
-      print('ClipPlayback: Audio unmuted');
+      _volumeBeforeMute = _volume > 0 ? _volume : 100;
+      _setVolume(0);
     }
+  }
+
+  void _setVolume(double v) {
+    setState(() {
+      if (v > 0) {
+        _volumeBeforeMute = v;
+        _isMuted = false;
+      } else {
+        _isMuted = true;
+      }
+      _volume = v;
+    });
+    mainPlayer.setVolume(v);
   }
 
   // 处理键盘快捷键
@@ -962,6 +977,13 @@ class _ClipPlaybackScreenState extends State<ClipPlaybackScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                VolumeControl(
+                  volume: _isMuted ? 0 : _volume,
+                  muted: _isMuted,
+                  onVolumeChanged: _setVolume,
+                  onToggleMute: _toggleMute,
+                ),
+                const SizedBox(width: 12),
                 // 上一个按钮
                 IconButton(
                   onPressed: previousClip != null

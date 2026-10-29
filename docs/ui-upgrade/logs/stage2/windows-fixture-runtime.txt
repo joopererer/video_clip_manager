@@ -1,0 +1,119 @@
+The Dart VM service is listening on http://127.0.0.1:56919/lddJuOmEuko=/
+package:media_kit_libs_windows_video registered.
+MainScreen: _startGlobalPreGeneration called
+ScreenshotService: initialized
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\SAMPLE_UI_VERIFICATION.json
+media_kit: NativeReferenceHolder: Allocated 1716594293888
+media_kit: ANGLESurfaceManager: Direct3D Feature Level: 11_0
+1 1
+media_kit: VideoOutput: Create Texture: 1716811111040
+PreviewService: Cache directory initialized: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\PreviewCache
+Cannot load nvcuda.dll
+media_kit: VideoOutput: Using H/W rendering.
+VideoOutput.Resize
+{handle: 1716591571104, id: 1716811111040, rect: {height: 0, left: 0, top: 0, width: 0}}
+NativeVideoController: Texture ID: 1716811111040
+media_kit: ANGLESurfaceManager: Direct3D Feature Level: 11_0
+1 1
+media_kit: VideoOutput: Create Texture: 1716592098368
+Cannot load nvcuda.dll
+media_kit: VideoOutput: Using H/W rendering.
+VideoOutput.Resize
+{handle: 1716813441456, id: 1716592098368, rect: {height: 0, left: 0, top: 0, width: 0}}
+NativeVideoController: Texture ID: 1716592098368
+MainScreen: Found 3 unique videos (2 original + 6 clips)
+MainScreen: Loading existing cache first...
+PreviewService: Loading existing cache files...
+PreviewService: Loaded 2 cached keyframes for hash 650b5bb4b1a22552ea1280890394cfa4
+PreviewService: Loaded 2 cached keyframes for hash fe710f80a64c6627799049b0c064d6b5
+PreviewService: Cache loading completed
+MainScreen: Starting global pre-generation for 3 videos
+PreviewService: Starting global pre-generation for 3 videos
+PreviewService: Video paths: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4, C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4, C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4
+PreviewService: Processing video 1/3: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4
+PreviewService: _isVideoSkipped - checking C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4, failureCount: 0, maxFailures: 3
+PreviewService: Not skipping C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4 (failureCount: 0 < 3)
+PreviewService: Failure info for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4: {failureCount: 0, isSkipped: false, lastFailureTime: null, timeUntilReset: 0:00:00.000000}
+PreviewService: _isVideoSkipped - checking C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4, failureCount: 0, maxFailures: 3
+PreviewService: Not skipping C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4 (failureCount: 0 < 3)
+PreviewService: Checking cache for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4...
+PreviewService: _hasSufficientCache - checking for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4
+PreviewService: _hasSufficientCache - video hash: 650b5bb4b1a22552ea1280890394cfa4
+PreviewService: _hasSufficientCache - total files in cache: 4
+PreviewService: _hasSufficientCache - found cache file: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\PreviewCache\650b5bb4b1a22552ea1280890394cfa4_0.png
+PreviewService: _hasSufficientCache - found cache file: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\PreviewCache\650b5bb4b1a22552ea1280890394cfa4_5.png
+PreviewService: _hasSufficientCache - cache count for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4: 2
+PreviewService: _hasSufficientCache - result: false (need >= 10, have 2)
+PreviewService: Cache check result for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4: false
+PreviewService: Starting pre-generation for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4
+PreviewService: Starting pre-generation for video: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4
+PreviewService: Video file size: 0.31 MB
+PreviewService: Opening video: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4
+640 360
+media_kit: VideoOutput: Free Texture: 1716592098368
+media_kit: ANGLESurfaceManager: Direct3D Feature Level: 11_0
+media_kit: VideoOutput: Create Texture: 1717343706656
+VideoOutput.Resize
+{handle: 1716813441456, id: 1717343706656, rect: {height: 360, left: 0, top: 0, width: 640}}
+PreviewService: Video duration: 6 seconds
+PreviewService: Video length: 0 minutes, interval: 5s, max keyframes: 30
+PreviewService: Will generate 2 keyframes for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4
+PreviewService: Generating keyframe 1/2 (50.0%) at 0s for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4
+PreviewService: Loaded preview from cache: 650b5bb4b1a22552ea1280890394cfa4_0.png
+PreviewService: Using cached keyframe at 0s for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4
+PreviewService: Generating keyframe 2/2 (100.0%) at 5s for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4
+PreviewService: Loaded preview from cache: 650b5bb4b1a22552ea1280890394cfa4_5.png
+PreviewService: Using cached keyframe at 5s for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4
+PreviewService: Completed pre-generation for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_0_测试素材.mp4 - 2 keyframes generated
+PreviewService: Processing video 2/3: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4
+PreviewService: _isVideoSkipped - checking C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4, failureCount: 0, maxFailures: 3
+PreviewService: Not skipping C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4 (failureCount: 0 < 3)
+PreviewService: Failure info for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4: {failureCount: 0, isSkipped: false, lastFailureTime: null, timeUntilReset: 0:00:00.000000}
+PreviewService: _isVideoSkipped - checking C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4, failureCount: 0, maxFailures: 3
+PreviewService: Not skipping C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4 (failureCount: 0 < 3)
+PreviewService: Checking cache for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4...
+PreviewService: _hasSufficientCache - checking for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4
+PreviewService: _hasSufficientCache - video hash: fe710f80a64c6627799049b0c064d6b5
+PreviewService: _hasSufficientCache - total files in cache: 4
+PreviewService: _hasSufficientCache - found cache file: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\PreviewCache\fe710f80a64c6627799049b0c064d6b5_0.png
+PreviewService: _hasSufficientCache - found cache file: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\PreviewCache\fe710f80a64c6627799049b0c064d6b5_5.png
+PreviewService: _hasSufficientCache - cache count for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4: 2
+PreviewService: _hasSufficientCache - result: false (need >= 10, have 2)
+PreviewService: Cache check result for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4: false
+PreviewService: Starting pre-generation for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4
+PreviewService: Starting pre-generation for video: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4
+PreviewService: Video file size: 0.35 MB
+PreviewService: Opening video: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4
+PreviewService: Video duration: 6 seconds
+PreviewService: Video length: 0 minutes, interval: 5s, max keyframes: 30
+PreviewService: Will generate 2 keyframes for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4
+PreviewService: Generating keyframe 1/2 (50.0%) at 0s for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4
+PreviewService: Loaded preview from cache: fe710f80a64c6627799049b0c064d6b5_0.png
+PreviewService: Using cached keyframe at 0s for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4
+PreviewService: Generating keyframe 2/2 (100.0%) at 5s for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4
+PreviewService: Loaded preview from cache: fe710f80a64c6627799049b0c064d6b5_5.png
+PreviewService: Using cached keyframe at 5s for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4
+PreviewService: Completed pre-generation for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\sample_1_测试素材.mp4 - 2 keyframes generated
+PreviewService: Processing video 3/3: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4
+PreviewService: _isVideoSkipped - checking C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4, failureCount: 0, maxFailures: 3
+PreviewService: Not skipping C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4 (failureCount: 0 < 3)
+PreviewService: Failure info for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4: {failureCount: 0, isSkipped: false, lastFailureTime: null, timeUntilReset: 0:00:00.000000}
+PreviewService: _isVideoSkipped - checking C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4, failureCount: 0, maxFailures: 3
+PreviewService: Not skipping C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4 (failureCount: 0 < 3)
+PreviewService: Checking cache for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4...
+PreviewService: _hasSufficientCache - checking for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4
+PreviewService: _hasSufficientCache - video hash: 7359e4dec14127f903f07bd3e158caec
+PreviewService: _hasSufficientCache - total files in cache: 4
+PreviewService: _hasSufficientCache - cache count for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4: 0
+PreviewService: _hasSufficientCache - result: false (need >= 10, have 0)
+PreviewService: Cache check result for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4: false
+PreviewService: Starting pre-generation for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4
+PreviewService: Starting pre-generation for video: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4
+PreviewService: Video file does not exist: C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4
+PreviewService: Recorded failure for C:\Users\UNIVAS~1\AppData\Local\Temp\vcm-stage2-desktop-yqdrkf0a\missing.mp4 (count: 1/3)
+PreviewService: Current failure records: {7359e4dec14127f903f07bd3e158caec: {failureCount: 1, lastFailureTime: 2026-10-26T22:23:00.024378, timeUntilReset: 23:59:59.998995}}
+PreviewService: Global pre-generation completed
+media_kit: VideoOutput: Free Texture: 1716811111040
+VideoOutput::~VideoOutput: 1716591571104
+media_kit: VideoOutput: Free Texture: 1717343706656
+VideoOutput::~VideoOutput: 1716813441456

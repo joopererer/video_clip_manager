@@ -20,8 +20,10 @@ class ScreenshotService {
   bool _disposed = false;
 
   // Timeouts are read from AppState if available, otherwise use defaults.
-  Duration get _openTimeout => Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10);
-  Duration get _seekTimeout => Duration(seconds: AppState.instance?.seekTimeoutSeconds ?? 10);
+  Duration get _openTimeout =>
+      Duration(seconds: AppState.instance?.openTimeoutSeconds ?? 10);
+  Duration get _seekTimeout =>
+      Duration(seconds: AppState.instance?.seekTimeoutSeconds ?? 10);
   int get _markReadyDelayMs => AppState.instance?.markReadyDelayMs ?? 300;
 
   // Completer that is completed when the off-screen Video widget has been
@@ -52,7 +54,9 @@ class ScreenshotService {
     // configured delay. Using a Timer lets us cancel/reschedule when the
     // user changes the delay in settings.
     final int delayMs = _markReadyDelayMs;
-    print('ScreenshotService: scheduling markReady in ${delayMs}ms (cancel existing)');
+    print(
+      'ScreenshotService: scheduling markReady in ${delayMs}ms (cancel existing)',
+    );
     _markReadyTimer?.cancel();
     _markReadyPending = true;
 
@@ -74,7 +78,9 @@ class ScreenshotService {
   void updateMarkReadyDelay() {
     if (_markReadyPending) {
       final int delayMs = _markReadyDelayMs;
-      print('ScreenshotService: markReady delay updated, rescheduling pending in ${delayMs}ms');
+      print(
+        'ScreenshotService: markReady delay updated, rescheduling pending in ${delayMs}ms',
+      );
       _markReadyTimer?.cancel();
       _markReadyTimer = Timer(Duration(milliseconds: delayMs), () {
         _markReadyTimer = null;
@@ -110,7 +116,9 @@ class ScreenshotService {
   }
 
   /// Returns a future that completes when the internal queue is idle.
-  Future<void> whenIdle({Duration timeout = const Duration(seconds: 15)}) async {
+  Future<void> whenIdle({
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
     if (_disposed) {
       print('ScreenshotService: whenIdle called after dispose');
       return;
@@ -154,7 +162,8 @@ class ScreenshotService {
     }
     try {
       // Check file existence for local paths; allow network paths
-      final isNetwork = videoPath.startsWith('http://') || videoPath.startsWith('https://');
+      final isNetwork =
+          videoPath.startsWith('http://') || videoPath.startsWith('https://');
       if (!isNetwork) {
         final file = File(videoPath);
         final exists = await file.exists();
@@ -169,7 +178,9 @@ class ScreenshotService {
         await _player.open(Media(videoPath), play: false).timeout(_openTimeout);
 
         // wait for buffer/first frame
-        await _player.stream.buffer.firstWhere((d) => d > Duration.zero).timeout(const Duration(seconds: 15));
+        await _player.stream.buffer
+            .firstWhere((d) => d > Duration.zero)
+            .timeout(const Duration(seconds: 15));
         await Future.delayed(const Duration(milliseconds: 200));
         _openPath = videoPath;
         print('ScreenshotService: opened $videoPath');
@@ -198,7 +209,9 @@ class ScreenshotService {
   /// Take a screenshot at [time] for [videoPath]. Serialized with retries.
   Future<Uint8List?> takeScreenshot(String videoPath, Duration time) {
     if (_disposed || !_hostEnabled) {
-      print('ScreenshotService: host disabled, skip screenshot for $videoPath @ ${time.inSeconds}s');
+      print(
+        'ScreenshotService: host disabled, skip screenshot for $videoPath @ ${time.inSeconds}s',
+      );
       return Future.value(null);
     }
     final completer = Completer<Uint8List?>();
@@ -207,14 +220,18 @@ class ScreenshotService {
         completer.complete(null);
         return;
       }
-      print('ScreenshotService: takeScreenshot start -> $videoPath @ ${time.inSeconds}s');
+      print(
+        'ScreenshotService: takeScreenshot start -> $videoPath @ ${time.inSeconds}s',
+      );
       try {
         // Ensure the off-screen Video has been attached before screenshotting.
         try {
           await _readyCompleter.future.timeout(const Duration(seconds: 5));
           print('ScreenshotService: host ready before screenshot');
         } catch (_) {
-          print('ScreenshotService: host not ready before screenshot, continuing');
+          print(
+            'ScreenshotService: host not ready before screenshot, continuing',
+          );
         }
 
         const int maxAttempts = 3;
@@ -223,7 +240,9 @@ class ScreenshotService {
 
         while (attempt < maxAttempts && !_disposed) {
           attempt++;
-          print('ScreenshotService: attempt #$attempt for $videoPath @ ${time.inSeconds}s');
+          print(
+            'ScreenshotService: attempt #$attempt for $videoPath @ ${time.inSeconds}s',
+          );
 
           // Ensure opened directly (already running within _queue)
           await _openDirectly(videoPath);
@@ -231,15 +250,21 @@ class ScreenshotService {
           try {
             await _player.seek(time).timeout(_seekTimeout);
           } on TimeoutException catch (te) {
-            print('ScreenshotService: seek timed out for $videoPath @ ${time.inSeconds}s: $te');
+            print(
+              'ScreenshotService: seek timed out for $videoPath @ ${time.inSeconds}s: $te',
+            );
             // exponential backoff before retry
             final backoffMs = 200 * (1 << (attempt - 1));
             await Future.delayed(Duration(milliseconds: backoffMs));
             // try re-opening on next attempt
             try {
-              await _player.open(Media(videoPath), play: false).timeout(_openTimeout);
+              await _player
+                  .open(Media(videoPath), play: false)
+                  .timeout(_openTimeout);
               _openPath = videoPath;
-              print('ScreenshotService: re-opened $videoPath after seek timeout');
+              print(
+                'ScreenshotService: re-opened $videoPath after seek timeout',
+              );
             } catch (_) {}
             continue;
           }
@@ -249,11 +274,15 @@ class ScreenshotService {
           try {
             result = await _player.screenshot();
           } catch (e) {
-            print('ScreenshotService: screenshot threw for $videoPath on attempt $attempt: $e');
+            print(
+              'ScreenshotService: screenshot threw for $videoPath on attempt $attempt: $e',
+            );
             result = null;
           }
 
-          print('ScreenshotService: screenshot attempt #$attempt result size: ${result != null ? result.length : 0}');
+          print(
+            'ScreenshotService: screenshot attempt #$attempt result size: ${result != null ? result.length : 0}',
+          );
 
           if (result != null && result.isNotEmpty) {
             completer.complete(result);
@@ -267,9 +296,13 @@ class ScreenshotService {
             await Future.delayed(Duration(milliseconds: backoffMs));
             // attempt to re-open to refresh native host
             try {
-              await _player.open(Media(videoPath), play: false).timeout(_openTimeout);
+              await _player
+                  .open(Media(videoPath), play: false)
+                  .timeout(_openTimeout);
               _openPath = videoPath;
-              print('ScreenshotService: re-opened $videoPath before next attempt');
+              print(
+                'ScreenshotService: re-opened $videoPath before next attempt',
+              );
             } catch (e) {
               print('ScreenshotService: re-open failed: $e');
             }
@@ -279,9 +312,13 @@ class ScreenshotService {
         // exhausted attempts
         completer.complete(null);
       } catch (e) {
-        print('ScreenshotService: screenshot failed for $videoPath @ ${time.inSeconds}s: $e');
+        print(
+          'ScreenshotService: screenshot failed for $videoPath @ ${time.inSeconds}s: $e',
+        );
         try {
-          print('ScreenshotService: debug state -> openPath: $_openPath, hostEnabled: $_hostEnabled, playerState: ${_player.state}');
+          print(
+            'ScreenshotService: debug state -> openPath: $_openPath, hostEnabled: $_hostEnabled, playerState: ${_player.state}',
+          );
         } catch (_) {}
         completer.complete(null);
       }

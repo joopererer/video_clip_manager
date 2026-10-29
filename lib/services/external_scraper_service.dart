@@ -7,19 +7,18 @@ import 'character_fix_service.dart';
 /// 外部 Scraper 服务
 /// 集成各种开源 scraper 来获取视频信息
 class ExternalScraperService {
-  
   /// 使用 yt-dlp 获取视频信息
   static Future<Map<String, dynamic>?> getVideoInfoWithYtDlp(String url) async {
     try {
       print('ExternalScraper: Using yt-dlp for URL: $url');
-      
+
       final result = await Process.run('yt-dlp', [
         '--dump-json',
         '--no-playlist',
         '--no-warnings',
         url,
       ]);
-      
+
       if (result.exitCode == 0 && result.stdout.toString().isNotEmpty) {
         final jsonData = json.decode(result.stdout.toString());
         print('ExternalScraper: yt-dlp success for $url');
@@ -32,19 +31,21 @@ class ExternalScraperService {
     }
     return null;
   }
-  
+
   /// 使用 JAV Scraper (Python) 获取 JAV 信息 - 修复版本
-  static Future<Map<String, dynamic>?> getJavInfoWithScraper(String code) async {
+  static Future<Map<String, dynamic>?> getJavInfoWithScraper(
+    String code,
+  ) async {
     try {
       print('ExternalScraper: Using JAV Scraper for code: $code');
-      
+
       // 检查是否安装了 javscraper
       final checkResult = await Process.run('pip', ['show', 'javscraper']);
       if (checkResult.exitCode != 0) {
         print('ExternalScraper: javscraper not installed, skipping');
         return null;
       }
-      
+
       // 使用正确的 javscraper API - 修复所有问题
       final scriptLines = [
         'import sys',
@@ -131,7 +132,7 @@ class ExternalScraperService {
         '                                "data": info',
         '                            }',
         '                        ',
-                                '                        # 确保正确处理UTF-8编码',
+        '                        # 确保正确处理UTF-8编码',
         '                        sys.stdout.reconfigure(encoding=\'utf-8\')',
         '                        print(json.dumps(result, ensure_ascii=False))',
         '                        return',
@@ -150,29 +151,34 @@ class ExternalScraperService {
         'if __name__ == "__main__":',
         '    main()',
       ];
-      
+
       final pythonScript = scriptLines.join('\n');
-      
+
       // 创建临时Python脚本文件
       final tempDir = await Directory.systemTemp.createTemp('javscraper_');
       final scriptFile = File('${tempDir.path}/javscraper_script.py');
       await scriptFile.writeAsString(pythonScript);
-      
+
       try {
-        final result = await Process.run('python', [scriptFile.path, code], 
-          environment: {'PYTHONIOENCODING': 'utf-8'});
-        
+        final result = await Process.run(
+          'python',
+          [scriptFile.path, code],
+          environment: {'PYTHONIOENCODING': 'utf-8'},
+        );
+
         if (result.exitCode == 0 && result.stdout.toString().isNotEmpty) {
           final stdout = result.stdout.toString().trim();
           print('ExternalScraper: Raw output: $stdout');
-          
+
           try {
             final jsonData = json.decode(stdout);
             if (jsonData.containsKey('error')) {
               print('ExternalScraper: JAV Scraper error: ${jsonData['error']}');
               return null;
             }
-            print('ExternalScraper: JAV Scraper success for $code from ${jsonData['source']}');
+            print(
+              'ExternalScraper: JAV Scraper success for $code from ${jsonData['source']}',
+            );
             return jsonData;
           } catch (e) {
             print('ExternalScraper: JSON parse error: $e');
@@ -191,23 +197,27 @@ class ExternalScraperService {
     }
     return null;
   }
-  
+
   /// 使用 TMDB API 获取电影信息
-  static Future<Map<String, dynamic>?> getMovieInfoWithTmdb(String title) async {
+  static Future<Map<String, dynamic>?> getMovieInfoWithTmdb(
+    String title,
+  ) async {
     try {
       print('ExternalScraper: Using TMDB for title: $title');
-      
+
       // 从配置服务获取 TMDB API Key
       final apiKey = await ConfigService.getTmdbApiKey();
       if (apiKey == null) {
         print('ExternalScraper: TMDB API key not configured');
         return null;
       }
-      
+
       final response = await http.get(
-        Uri.parse('https://api.themoviedb.org/3/search/movie?api_key=$apiKey&query=${Uri.encodeComponent(title)}'),
+        Uri.parse(
+          'https://api.themoviedb.org/3/search/movie?api_key=$apiKey&query=${Uri.encodeComponent(title)}',
+        ),
       );
-      
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['results'] != null && data['results'].isNotEmpty) {
@@ -216,8 +226,8 @@ class ExternalScraperService {
           return {
             'title': movie['title'],
             'overview': movie['overview'],
-            'poster_path': movie['poster_path'] != null 
-                ? 'https://image.tmdb.org/t/p/w500${movie['poster_path']}' 
+            'poster_path': movie['poster_path'] != null
+                ? 'https://image.tmdb.org/t/p/w500${movie['poster_path']}'
                 : null,
             'release_date': movie['release_date'],
             'vote_average': movie['vote_average'],
@@ -230,17 +240,17 @@ class ExternalScraperService {
     }
     return null;
   }
-  
+
   /// 使用自定义 Python 脚本获取信息
   static Future<Map<String, dynamic>?> getInfoWithCustomScript(
-    String scriptPath, 
-    List<String> arguments
+    String scriptPath,
+    List<String> arguments,
   ) async {
     try {
       print('ExternalScraper: Using custom script: $scriptPath');
-      
+
       final result = await Process.run('python', [scriptPath, ...arguments]);
-      
+
       if (result.exitCode == 0 && result.stdout.toString().isNotEmpty) {
         final jsonData = json.decode(result.stdout.toString());
         print('ExternalScraper: Custom script success');
@@ -253,40 +263,39 @@ class ExternalScraperService {
     }
     return null;
   }
-  
+
   /// 获取所有可用的 scraper 信息
   static Future<Map<String, bool>> getAvailableScrapers() async {
     return await ConfigService.checkExternalScrapersAvailability();
   }
-  
+
   /// 安装依赖
   static Future<bool> installDependencies() async {
     try {
       print('ExternalScraper: Installing dependencies...');
-      
+
       // 安装 javscraper
       final javResult = await Process.run('pip', ['install', 'javscraper']);
       if (javResult.exitCode != 0) {
-        print('ExternalScraper: Failed to install javscraper: ${javResult.stderr}');
+        print(
+          'ExternalScraper: Failed to install javscraper: ${javResult.stderr}',
+        );
         return false;
       }
-      
+
       // 安装其他依赖
-      final requirements = [
-        'requests',
-        'beautifulsoup4',
-        'lxml',
-        'tmdbv3api',
-      ];
-      
+      final requirements = ['requests', 'beautifulsoup4', 'lxml', 'tmdbv3api'];
+
       for (final package in requirements) {
         final result = await Process.run('pip', ['install', package]);
         if (result.exitCode != 0) {
-          print('ExternalScraper: Failed to install $package: ${result.stderr}');
+          print(
+            'ExternalScraper: Failed to install $package: ${result.stderr}',
+          );
           return false;
         }
       }
-      
+
       print('ExternalScraper: Dependencies installed successfully');
       return true;
     } catch (e) {
@@ -298,8 +307,10 @@ class ExternalScraperService {
   /// 使用 cloudscraper 获取 MissAV 页面内容
   static Future<Map<String, dynamic>?> getMissavPageContent(String url) async {
     try {
-      print('ExternalScraper: Getting MissAV page content with cloudscraper: $url');
-      
+      print(
+        'ExternalScraper: Getting MissAV page content with cloudscraper: $url',
+      );
+
       // 创建临时 Python 脚本
       final scriptContent = '''
 import sys
@@ -402,24 +413,29 @@ if __name__ == "__main__":
 ''';
 
       final scriptFile = await _createTempScript(scriptContent);
-      
+
       try {
         // 执行 Python 脚本
-        final result = await Process.run('python', [scriptFile.path, url], 
-          environment: {'PYTHONIOENCODING': 'utf-8'});
-        
+        final result = await Process.run(
+          'python',
+          [scriptFile.path, url],
+          environment: {'PYTHONIOENCODING': 'utf-8'},
+        );
+
         if (result.exitCode != 0) {
-          print('ExternalScraper: MissAV cloudscraper failed with exit code: ${result.exitCode}');
+          print(
+            'ExternalScraper: MissAV cloudscraper failed with exit code: ${result.exitCode}',
+          );
           print('ExternalScraper: Error: ${result.stderr}');
           return null;
         }
-        
+
         final output = result.stdout.toString().trim();
         if (output.isEmpty) {
           print('ExternalScraper: MissAV cloudscraper returned empty output');
           return null;
         }
-        
+
         // 查找最后一行 JSON 输出（可能前面有调试信息）
         final lines = output.split('\n');
         String jsonOutput = '';
@@ -430,40 +446,52 @@ if __name__ == "__main__":
             break;
           }
         }
-        
+
         if (jsonOutput.isEmpty) {
           print('ExternalScraper: No valid JSON found in output');
           print('ExternalScraper: Raw output: $output');
           return null;
         }
-        
+
         try {
           final data = json.decode(jsonOutput) as Map<String, dynamic>;
-          
+
           print('ExternalScraper: Parsed data: $data');
-          
+
           if (data['success'] == true || data['success'] == 'true') {
             // 应用字符修复
             if (data['title'] != null) {
               final originalTitle = data['title'] as String;
-              final fixedTitle = CharacterFixService.fixCharacters(originalTitle);
-              
+              final fixedTitle = CharacterFixService.fixCharacters(
+                originalTitle,
+              );
+
               if (fixedTitle != originalTitle) {
-                print('ExternalScraper: Fixed title from "$originalTitle" to "$fixedTitle"');
+                print(
+                  'ExternalScraper: Fixed title from "$originalTitle" to "$fixedTitle"',
+                );
                 data['title'] = fixedTitle;
               }
             }
-            
-            print('ExternalScraper: MissAV cloudscraper success, content length: ${data['content_length']}');
+
+            print(
+              'ExternalScraper: MissAV cloudscraper success, content length: ${data['content_length']}',
+            );
             print('ExternalScraper: Extracted title: ${data['title']}');
-            print('ExternalScraper: Title length: ${data['title']?.length ?? 0}');
+            print(
+              'ExternalScraper: Title length: ${data['title']?.length ?? 0}',
+            );
             return data;
           } else {
-            print('ExternalScraper: MissAV cloudscraper failed: ${data['error']}');
+            print(
+              'ExternalScraper: MissAV cloudscraper failed: ${data['error']}',
+            );
             return null;
           }
         } catch (e) {
-          print('ExternalScraper: Failed to parse MissAV cloudscraper output: $e');
+          print(
+            'ExternalScraper: Failed to parse MissAV cloudscraper output: $e',
+          );
           print('ExternalScraper: Raw output: $output');
           return null;
         }
@@ -471,7 +499,6 @@ if __name__ == "__main__":
         // 清理临时文件
         await scriptFile.delete();
       }
-      
     } catch (e) {
       print('ExternalScraper: MissAV cloudscraper error: $e');
       return null;

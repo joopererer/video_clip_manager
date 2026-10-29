@@ -8,19 +8,13 @@ import 'platform_support.dart';
 
 /// 播放器类型枚举
 enum PlayerType {
-  local,    // 本地视频播放器
+  local, // 本地视频播放器
   embedded, // 内嵌WebView播放器
   external, // 外部播放器 (通过本地播放器播放流)
 }
 
 /// 播放器状态
-enum PlayerState {
-  idle,
-  loading,
-  playing,
-  paused,
-  error,
-}
+enum PlayerState { idle, loading, playing, paused, error }
 
 /// 统一视频播放器适配器
 class UnifiedVideoPlayer extends ChangeNotifier {
@@ -60,26 +54,26 @@ class UnifiedVideoPlayer extends ChangeNotifier {
     MediaKit.ensureInitialized();
     _localPlayer = Player();
     _videoController = VideoController(_localPlayer!);
-    
+
     // 监听本地播放器状态
     _localPlayer!.stream.position.listen((position) {
       _currentPosition = position;
       _onPositionChanged?.call();
       notifyListeners();
     });
-    
+
     _localPlayer!.stream.duration.listen((duration) {
       _duration = duration;
       notifyListeners();
     });
-    
+
     _localPlayer!.stream.playing.listen((playing) {
       _isPlaying = playing;
       _playerState = playing ? PlayerState.playing : PlayerState.paused;
       _onStateChanged?.call();
       notifyListeners();
     });
-    
+
     _localPlayer!.stream.error.listen((error) {
       _playerState = PlayerState.error;
       _onError?.call();
@@ -88,18 +82,21 @@ class UnifiedVideoPlayer extends ChangeNotifier {
   }
 
   /// Plays a local video.
-  Future<void> playLocalVideo(OriginalVideo video, {OnlineVideoClip? clip}) async {
+  Future<void> playLocalVideo(
+    OriginalVideo video, {
+    OnlineVideoClip? clip,
+  }) async {
     _disposeCurrentPlayer();
-    
+
     _currentVideo = video;
     _currentClip = clip;
     _currentPlayerType = PlayerType.local;
     _playerState = PlayerState.loading;
     notifyListeners();
-    
+
     try {
       await _localPlayer!.open(Media(video.path));
-      
+
       if (clip != null) {
         // 设置片段播放范围
         await _localPlayer!.seek(clip.startTime);
@@ -107,7 +104,7 @@ class UnifiedVideoPlayer extends ChangeNotifier {
       } else {
         _duration = Duration.zero; // 将由播放器自动获取
       }
-      
+
       _playerState = PlayerState.playing;
       _isPlaying = true;
       notifyListeners();
@@ -119,14 +116,17 @@ class UnifiedVideoPlayer extends ChangeNotifier {
   }
 
   /// Plays an online video, choosing between embedded or external (stream) player.
-  Future<void> playOnlineVideo(OnlineVideo video, {OnlineVideoClip? clip}) async {
+  Future<void> playOnlineVideo(
+    OnlineVideo video, {
+    OnlineVideoClip? clip,
+  }) async {
     _disposeCurrentPlayer();
-    
+
     _currentVideo = video;
     _currentClip = clip;
-    
+
     final platformSupport = PlatformFactory.getPlatformByUrl(video.url);
-    
+
     if (platformSupport.supportsEmbeddedPlayback()) {
       // 使用内嵌播放器
       await _playWithEmbeddedPlayer(video, platformSupport, clip);
@@ -138,31 +138,32 @@ class UnifiedVideoPlayer extends ChangeNotifier {
 
   /// Plays online video using an embedded WebView.
   Future<void> _playWithEmbeddedPlayer(
-    OnlineVideo video, 
-    PlatformSupport platformSupport, 
-    OnlineVideoClip? clip
+    OnlineVideo video,
+    PlatformSupport platformSupport,
+    OnlineVideoClip? clip,
   ) async {
     _currentPlayerType = PlayerType.embedded;
     _playerState = PlayerState.loading;
     notifyListeners();
-    
+
     try {
       final embedUrl = platformSupport.getEmbedUrl(video.id);
       _webViewController = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setNavigationDelegate(NavigationDelegate(
-          onPageFinished: (String url) {
-            _playerState = PlayerState.playing;
-            _isPlaying = true;
-            notifyListeners();
-          },
-        ))
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageFinished: (String url) {
+              _playerState = PlayerState.playing;
+              _isPlaying = true;
+              notifyListeners();
+            },
+          ),
+        )
         ..loadRequest(Uri.parse(embedUrl));
-      
+
       // 注入控制脚本
       final controlScript = platformSupport.getPlayerControlScript();
       await _webViewController!.runJavaScript(controlScript);
-      
     } catch (e) {
       _playerState = PlayerState.error;
       notifyListeners();
@@ -172,34 +173,34 @@ class UnifiedVideoPlayer extends ChangeNotifier {
 
   /// Plays online video using the local player after extracting stream URL.
   Future<void> _playWithExternalPlayer(
-    OnlineVideo video, 
-    PlatformSupport platformSupport, 
-    OnlineVideoClip? clip
+    OnlineVideo video,
+    PlatformSupport platformSupport,
+    OnlineVideoClip? clip,
   ) async {
     _currentPlayerType = PlayerType.external;
     _playerState = PlayerState.loading;
     notifyListeners();
-    
+
     try {
       // 尝试获取视频流URL
       final streamUrl = await platformSupport.getVideoStreamUrl(video.url);
-      
+
       if (streamUrl != null) {
         // 使用本地播放器播放流
         await _localPlayer!.open(Media(streamUrl));
-        
+
         if (clip != null) {
           await _localPlayer!.seek(clip.startTime);
           _duration = clip.endTime - clip.startTime;
         }
-        
+
         _playerState = PlayerState.playing;
         _isPlaying = true;
       } else {
         // 无法获取流URL，显示错误
         _playerState = PlayerState.error;
       }
-      
+
       notifyListeners();
     } catch (e) {
       _playerState = PlayerState.error;
@@ -242,16 +243,18 @@ class UnifiedVideoPlayer extends ChangeNotifier {
   }
 
   Future<void> seek(Duration position) async {
-    final targetPosition = _currentClip != null 
+    final targetPosition = _currentClip != null
         ? _currentClip!.startTime + position
         : position;
-    
+
     switch (_currentPlayerType) {
       case PlayerType.local:
         await _localPlayer?.seek(targetPosition);
         break;
       case PlayerType.embedded:
-        await _webViewController?.runJavaScript('seekTo(${targetPosition.inSeconds})');
+        await _webViewController?.runJavaScript(
+          'seekTo(${targetPosition.inSeconds})',
+        );
         break;
       case PlayerType.external:
         await _localPlayer?.seek(targetPosition);
@@ -261,7 +264,7 @@ class UnifiedVideoPlayer extends ChangeNotifier {
 
   Future<void> setVolume(double volume) async {
     _volume = volume.clamp(0.0, 1.0);
-    
+
     switch (_currentPlayerType) {
       case PlayerType.local:
         await _localPlayer?.setVolume(_volume * 100);
@@ -278,7 +281,7 @@ class UnifiedVideoPlayer extends ChangeNotifier {
 
   Future<void> setMuted(bool muted) async {
     _isMuted = muted;
-    
+
     switch (_currentPlayerType) {
       case PlayerType.local:
         // 使用音量控制来实现静音
@@ -302,7 +305,9 @@ class UnifiedVideoPlayer extends ChangeNotifier {
         return _currentPosition;
       case PlayerType.embedded:
         try {
-          final result = await _webViewController?.runJavaScriptReturningResult('getCurrentTime()');
+          final result = await _webViewController?.runJavaScriptReturningResult(
+            'getCurrentTime()',
+          );
           if (result is num) {
             return Duration(seconds: result.toInt());
           }
@@ -341,7 +346,7 @@ class UnifiedVideoPlayer extends ChangeNotifier {
         await _localPlayer?.stop();
         break;
     }
-    
+
     _currentPlayerType = PlayerType.local;
     _playerState = PlayerState.idle;
     _currentPosition = Duration.zero;
@@ -358,7 +363,7 @@ class UnifiedVideoPlayer extends ChangeNotifier {
 
   /// 获取视频控制器（用于UI显示）
   VideoController? get videoController => _videoController;
-  
+
   /// 获取WebView控制器（用于UI显示）
   WebViewController? get webViewController => _webViewController;
 }

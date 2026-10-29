@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
@@ -7,6 +8,8 @@ import '../../data/app_state.dart';
 import '../../data/models.dart';
 import '../../services/online_video_service.dart';
 import '../../utils/toast_utils.dart';
+import '../../widgets/common/media_card_activation.dart';
+import '../../widgets/video_preview/video_preview_dialog.dart';
 import '../../widgets/video_thumbnail.dart';
 import '../../widgets/online_video_add_dialog.dart';
 import '../player/clip_editor_screen.dart';
@@ -19,12 +22,29 @@ class VideosTab extends StatefulWidget {
   final int? selectedRating;
   final bool? selectedFavorite;
 
+  /// Replaces the push of the clip editor. Tests use it because the real
+  /// editor creates a native media_kit player. Null in production.
+  @visibleForTesting
+  final void Function(BuildContext context, dynamic video)? onOpenEditor;
+
+  /// Replaces the original-video preview dialog. Tests use it because the
+  /// real dialog creates a native media_kit player. Null in production.
+  @visibleForTesting
+  final void Function(BuildContext context, dynamic video)? onOpenPreview;
+
+  /// Environment handed to [VideoPreviewDialog]. Tests inject a fake player.
+  @visibleForTesting
+  final VideoPreviewEnvironment? previewEnvironment;
+
   const VideosTab({
     super.key,
     required this.searchQuery,
     required this.selectedTags,
     this.selectedRating,
     this.selectedFavorite,
+    this.onOpenEditor,
+    this.onOpenPreview,
+    this.previewEnvironment,
   });
 
   @override
@@ -32,6 +52,49 @@ class VideosTab extends StatefulWidget {
 }
 
 class _VideosTabState extends State<VideosTab> {
+  String? _selectedVideoId;
+
+  /// True while a preview is being prepared or shown, so a fast double click
+  /// or a click on another Play button cannot stack a second player.
+  bool _previewBusy = false;
+
+  bool _isSelected(dynamic video) => _selectedVideoId == video.id;
+
+  void _select(dynamic video) {
+    if (_selectedVideoId == video.id) return;
+    setState(() => _selectedVideoId = video.id as String);
+  }
+
+  ShapeBorder _cardShape(BuildContext context, bool selected) {
+    final scheme = Theme.of(context).colorScheme;
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+      side: BorderSide(
+        color: selected ? scheme.primary : Colors.transparent,
+        width: selected ? 1.6 : 0,
+      ),
+    );
+  }
+
+  /// Right click: the card is already selected by [MediaCardInteractor].
+  Future<void> _showVideoContextMenu(
+    BuildContext context,
+    dynamic video,
+    Offset position,
+  ) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final value = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        position & const Size(40, 40),
+        Offset.zero & overlay.size,
+      ),
+      items: _videoMenuItems(video),
+    );
+    if (value == null || !context.mounted) return;
+    _handleVideoAction(context, value, video);
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -60,29 +123,25 @@ class _VideosTabState extends State<VideosTab> {
     );
   }
 
-  Widget _buildVideoInfoBar(
-    AppState appState,
-    List<dynamic> mixedVideos,
-  ) {
+  Widget _buildVideoInfoBar(AppState appState, List<dynamic> mixedVideos) {
     final localVideos = mixedVideos.where((v) => v['type'] == 'local').length;
     final onlineVideos = mixedVideos.where((v) => v['type'] == 'online').length;
-    
-    final totalDuration = mixedVideos.fold<Duration>(
-      Duration.zero,
-      (sum, v) {
-        if (v['type'] == 'local') {
-          final video = v['video'] as OriginalVideo;
-          return sum + (video.duration ?? Duration.zero);
-        } else {
-          final video = v['video'] as OnlineVideo;
-          return sum + (video.duration ?? Duration.zero);
-        }
-      },
-    );
+
+    final totalDuration = mixedVideos.fold<Duration>(Duration.zero, (sum, v) {
+      if (v['type'] == 'local') {
+        final video = v['video'] as OriginalVideo;
+        return sum + (video.duration ?? Duration.zero);
+      } else {
+        final video = v['video'] as OnlineVideo;
+        return sum + (video.duration ?? Duration.zero);
+      }
+    });
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      color: Theme.of(
+        context,
+      ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
       child: Row(
         children: [
           _buildInfoItem('Total', '${mixedVideos.length}', Icons.movie),
@@ -178,12 +237,10 @@ class _VideosTabState extends State<VideosTab> {
     final appState = context.read<AppState>();
     final video = videoData['video'];
     final videoType = videoData['type'];
-    
+
     int clipCount;
     if (videoType == 'local') {
-      clipCount = appState.clips
-          .where((c) => c.videoPath == video.path)
-          .length;
+      clipCount = appState.clips.where((c) => c.videoPath == video.path).length;
     } else {
       clipCount = appState.getOnlineVideoClips(video.id).length;
     }
@@ -191,8 +248,12 @@ class _VideosTabState extends State<VideosTab> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _navigateToClipEditor(context, video),
+      shape: _cardShape(context, _isSelected(video)),
+      child: MediaCardInteractor(
+        onSelect: () => _select(video),
+        onActivate: () => _openPreview(context, video),
+        onSecondaryTapDown: (d) =>
+            _showVideoContextMenu(context, video, d.globalPosition),
         child: Padding(
           padding: const EdgeInsets.all(8.0),
           child: Row(
@@ -214,7 +275,9 @@ class _VideosTabState extends State<VideosTab> {
                       child: Container(
                         padding: const EdgeInsets.all(2),
                         decoration: BoxDecoration(
-                          color: videoType == 'online' ? Colors.blue : Colors.green,
+                          color: videoType == 'online'
+                              ? Colors.blue
+                              : Colors.green,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Icon(
@@ -258,14 +321,15 @@ class _VideosTabState extends State<VideosTab> {
                     if (videoType == 'online')
                       Text(
                         OnlineVideoService.getPlatformName(video.platform),
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.blue,
-                        ),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: Colors.blue),
                       ),
                   ],
                 ),
               ),
-              // 右侧菜单按钮
+              // 右侧显式操作与菜单按钮（不触发卡片选中/播放）
+              _buildQuickActions(context, video),
               _buildVideoMenuButton(context, video),
             ],
           ),
@@ -278,20 +342,22 @@ class _VideosTabState extends State<VideosTab> {
     final appState = context.read<AppState>();
     final video = videoData['video'];
     final videoType = videoData['type'];
-    
+
     int clipCount;
     if (videoType == 'local') {
-      clipCount = appState.clips
-          .where((c) => c.videoPath == video.path)
-          .length;
+      clipCount = appState.clips.where((c) => c.videoPath == video.path).length;
     } else {
       clipCount = appState.getOnlineVideoClips(video.id).length;
     }
 
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _navigateToClipEditor(context, video),
+      shape: _cardShape(context, _isSelected(video)),
+      child: MediaCardInteractor(
+        onSelect: () => _select(video),
+        onActivate: () => _openPreview(context, video),
+        onSecondaryTapDown: (d) =>
+            _showVideoContextMenu(context, video, d.globalPosition),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -330,7 +396,9 @@ class _VideosTabState extends State<VideosTab> {
                     child: Container(
                       padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
-                        color: videoType == 'online' ? Colors.blue : Colors.green,
+                        color: videoType == 'online'
+                            ? Colors.blue
+                            : Colors.green,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Icon(
@@ -346,7 +414,10 @@ class _VideosTabState extends State<VideosTab> {
                       right: 4,
                       child: Text(
                         OnlineVideoService.getPlatformIcon(video.platform),
-                        style: const TextStyle(fontSize: 16, color: Colors.white),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                 ],
@@ -367,9 +438,9 @@ class _VideosTabState extends State<VideosTab> {
                   if (videoType == 'online')
                     Text(
                       OnlineVideoService.getPlatformName(video.platform),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.blue,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.blue),
                     ),
                 ],
               ),
@@ -384,14 +455,42 @@ class _VideosTabState extends State<VideosTab> {
                     'Clips: $clipCount',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: _buildVideoMenuButton(
-                      context,
-                      video,
-                      isCompact: true,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: IconButton(
+                          tooltip: 'Preview',
+                          padding: EdgeInsets.zero,
+                          iconSize: 18,
+                          icon: const Icon(Icons.play_circle_outline),
+                          onPressed: () => _openPreview(context, video),
+                        ),
+                      ),
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: IconButton(
+                          tooltip: 'Create Clip',
+                          padding: EdgeInsets.zero,
+                          iconSize: 16,
+                          icon: const Icon(Icons.content_cut),
+                          onPressed: () =>
+                              _navigateToClipEditor(context, video),
+                        ),
+                      ),
+                      SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: _buildVideoMenuButton(
+                          context,
+                          video,
+                          isCompact: true,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -408,45 +507,129 @@ class _VideosTabState extends State<VideosTab> {
     bool isCompact = false,
   }) {
     return PopupMenuButton<String>(
-      icon: isCompact ? null : const Icon(Icons.more_vert),
+      icon: isCompact ? const Icon(Icons.more_vert, size: 18) : null,
+      iconSize: 20,
+      tooltip: 'More',
+      padding: isCompact ? EdgeInsets.zero : const EdgeInsets.all(8),
       onSelected: (value) => _handleVideoAction(context, value, video),
-      itemBuilder: (context) => [
-        const PopupMenuItem(
-          value: 'create_clip',
-          child: Row(
-            children: [
-              Icon(Icons.content_cut),
-              SizedBox(width: 8),
-              Text('Create Clip'),
-            ],
-          ),
-        ),
-        if (video is OriginalVideo)
-          const PopupMenuItem(
-            value: 'clip_from_whole',
-            child: Row(
-              children: [
-                Icon(Icons.video_library),
-                SizedBox(width: 8),
-                Text('Clip from Whole Video'),
-              ],
+      itemBuilder: (context) => _videoMenuItems(video),
+    );
+  }
+
+  /// Shared by the "more" button and the right-click menu.
+  List<PopupMenuEntry<String>> _videoMenuItems(dynamic video) => [
+    const PopupMenuItem(
+      value: 'preview',
+      child: Row(
+        children: [
+          Icon(Icons.play_circle_outline),
+          SizedBox(width: 8),
+          Text('Play'),
+        ],
+      ),
+    ),
+    const PopupMenuItem(
+      value: 'create_clip',
+      child: Row(
+        children: [
+          Icon(Icons.content_cut),
+          SizedBox(width: 8),
+          Text('Create Clip'),
+        ],
+      ),
+    ),
+    if (video is OriginalVideo)
+      const PopupMenuItem(
+        value: 'clip_from_whole',
+        child: Row(
+          children: [
+            Icon(Icons.video_library),
+            SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'Clip from Whole Video',
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        const PopupMenuItem(
-          value: 'delete_video',
-          child: Row(
-            children: [
-              Icon(Icons.delete, color: Colors.red),
-              SizedBox(width: 8),
-              Text('Delete Video', style: TextStyle(color: Colors.red)),
-            ],
-          ),
+          ],
+        ),
+      ),
+    const PopupMenuItem(
+      value: 'delete_video',
+      child: Row(
+        children: [
+          Icon(Icons.delete, color: Colors.red),
+          SizedBox(width: 8),
+          Text('Delete Video', style: TextStyle(color: Colors.red)),
+        ],
+      ),
+    ),
+  ];
+
+  /// Explicit buttons so the two entry points stay discoverable now that a
+  /// single click only selects. Play opens the original-video preview; the
+  /// scissors button goes straight to the clip editor.
+  Widget _buildQuickActions(BuildContext context, dynamic video) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: 'Preview',
+          icon: const Icon(Icons.play_circle_outline, size: 20),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _openPreview(context, video),
+        ),
+        IconButton(
+          tooltip: 'Create Clip',
+          icon: const Icon(Icons.content_cut, size: 18),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _navigateToClipEditor(context, video),
         ),
       ],
     );
   }
 
+  /// Opens the original-video preview (never the clip editor). Only one
+  /// preview can be open or starting at a time. When the user picks
+  /// "Create Clip" in it, the preview has already released its player by the
+  /// time this method continues, so the editor starts on a free media stack.
+  Future<void> _openPreview(BuildContext context, dynamic video) async {
+    if (_previewBusy) return;
+    final override = widget.onOpenPreview;
+    if (override != null) {
+      override(context, video);
+      return;
+    }
+    _previewBusy = true;
+    try {
+      final clipCount = video is OriginalVideo
+          ? context
+                .read<AppState>()
+                .clips
+                .where((c) => c.videoPath == video.path)
+                .length
+          : context.read<AppState>().getOnlineVideoClips(video.id).length;
+      final action = await VideoPreviewDialog.show(
+        context,
+        video as Object,
+        clipCount: clipCount,
+        environment:
+            widget.previewEnvironment ?? const VideoPreviewEnvironment(),
+      );
+      if (action == PreviewAction.createClip && context.mounted) {
+        _navigateToClipEditor(context, video);
+      }
+    } finally {
+      _previewBusy = false;
+    }
+  }
+
   void _navigateToClipEditor(BuildContext context, dynamic video) {
+    final override = widget.onOpenEditor;
+    if (override != null) {
+      override(context, video);
+      return;
+    }
     if (video is OriginalVideo) {
       Navigator.push(
         context,
@@ -461,13 +644,12 @@ class _VideosTabState extends State<VideosTab> {
     }
   }
 
-  void _handleVideoAction(
-    BuildContext context,
-    String action,
-    dynamic video,
-  ) {
+  void _handleVideoAction(BuildContext context, String action, dynamic video) {
     final appState = context.read<AppState>();
     switch (action) {
+      case 'preview':
+        _openPreview(context, video);
+        break;
       case 'create_clip':
         _navigateToClipEditor(context, video);
         break;
@@ -476,7 +658,10 @@ class _VideosTabState extends State<VideosTab> {
           appState.createClipFromWholeVideo(video);
           ToastUtils.showSuccess(context, 'Created clip from "${video.name}"');
         } else if (video is OnlineVideo) {
-          ToastUtils.showWarning(context, 'Clipping from online videos is not yet supported.');
+          ToastUtils.showWarning(
+            context,
+            'Clipping from online videos is not yet supported.',
+          );
         }
         break;
       case 'delete_video':
@@ -487,12 +672,12 @@ class _VideosTabState extends State<VideosTab> {
 
   void _deleteVideo(BuildContext context, dynamic video) {
     final appState = context.read<AppState>();
-    
+
     if (video is OriginalVideo) {
       final clipCount = appState.clips
           .where((c) => c.videoPath == video.path)
           .length;
-      
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -519,7 +704,7 @@ class _VideosTabState extends State<VideosTab> {
       );
     } else if (video is OnlineVideo) {
       final clipCount = appState.getOnlineVideoClips(video.id).length;
-      
+
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -536,7 +721,10 @@ class _VideosTabState extends State<VideosTab> {
               onPressed: () {
                 appState.deleteOnlineVideo(video.id);
                 Navigator.of(context).pop();
-                ToastUtils.showSuccess(context, 'Online video deleted successfully');
+                ToastUtils.showSuccess(
+                  context,
+                  'Online video deleted successfully',
+                );
               },
               style: TextButton.styleFrom(foregroundColor: Colors.red),
               child: const Text('Delete'),
@@ -587,14 +775,14 @@ class _VideosTabState extends State<VideosTab> {
   void _showAddOnlineVideoScreen(BuildContext context) async {
     // 在对话框显示之前获取 AppState 引用，避免异步操作后 context 失效
     final appState = context.read<AppState>();
-    
+
     try {
       final result = await showDialog<OnlineVideo>(
         context: context,
         barrierDismissible: false,
         builder: (context) => AddOnlineVideoScreen(),
       );
-      
+
       if (result != null) {
         try {
           await appState.addOnlineVideo(result);
@@ -624,7 +812,7 @@ class _VideosTabState extends State<VideosTab> {
       if (result != null && result.files.isNotEmpty) {
         final appState = context.read<AppState>();
         final paths = result.files.map((file) => file.path!).toList();
-        
+
         for (final path in paths) {
           final video = OriginalVideo(
             id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -648,7 +836,7 @@ class _VideosTabState extends State<VideosTab> {
     final hours = duration.inHours;
     final minutes = duration.inMinutes % 60;
     final seconds = duration.inSeconds % 60;
-    
+
     if (hours > 0) {
       return '${hours}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
     } else {

@@ -7,10 +7,10 @@ import '../services/yt_dlp_service.dart';
 import '../services/character_fix_service.dart';
 
 enum UrlValidationStatus {
-  none,      // 未验证
+  none, // 未验证
   validating, // 验证中
-  valid,     // 有效
-  invalid,   // 无效
+  valid, // 有效
+  invalid, // 无效
 }
 
 class AddOnlineVideoScreen extends StatefulWidget {
@@ -23,7 +23,7 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
   final _videoUrlController = TextEditingController();
   final _pageUrlController = TextEditingController();
   final _titleController = TextEditingController();
-  
+
   bool _isLoading = false;
   bool _usePageSniffing = false;
   String? _detectedTitle;
@@ -34,7 +34,7 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
   List<StreamQuality> _detectedQualityOptions = [];
   String? _errorMessage;
   UrlValidationStatus _urlValidationStatus = UrlValidationStatus.none;
-  
+
   @override
   void dispose() {
     _videoUrlController.dispose();
@@ -42,7 +42,7 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
     _titleController.dispose();
     super.dispose();
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -71,9 +71,9 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                 ),
               ],
             ),
-            
+
             Divider(height: 32),
-            
+
             // 表单内容
             Expanded(
               child: Form(
@@ -90,7 +90,8 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                               controller: _videoUrlController,
                               decoration: InputDecoration(
                                 labelText: '视频链接 *',
-                                hintText: 'https://example.com/video.mp4 或 .m3u8',
+                                hintText:
+                                    'https://example.com/video.mp4 或 .m3u8',
                                 border: OutlineInputBorder(),
                                 suffixIcon: IconButton(
                                   icon: Icon(Icons.link),
@@ -101,7 +102,8 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                                 if (value == null || value.isEmpty) {
                                   return '请输入视频链接';
                                 }
-                                if (_urlValidationStatus == UrlValidationStatus.invalid) {
+                                if (_urlValidationStatus ==
+                                    UrlValidationStatus.invalid) {
                                   return '视频链接无效';
                                 }
                                 return null;
@@ -124,9 +126,9 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                           ),
                         ],
                       ),
-                      
+
                       SizedBox(height: 16),
-                      
+
                       // 嗅探页面信息选项
                       Row(
                         children: [
@@ -147,7 +149,7 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                           Text('嗅探页面信息（获取更好的标题和封面）'),
                         ],
                       ),
-                      
+
                       if (_usePageSniffing) ...[
                         SizedBox(height: 16),
                         TextFormField(
@@ -176,9 +178,9 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                           },
                         ),
                       ],
-                      
+
                       SizedBox(height: 16),
-                      
+
                       // 视频标题输入
                       TextFormField(
                         controller: _titleController,
@@ -203,9 +205,10 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                           return null;
                         },
                       ),
-                      
+
                       // 检测到的信息提示
-                      if (_detectedTitle != null && _titleController.text.isEmpty) ...[
+                      if (_detectedTitle != null &&
+                          _titleController.text.isEmpty) ...[
                         SizedBox(height: 8),
                         Container(
                           padding: EdgeInsets.all(8),
@@ -233,23 +236,30 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                           ),
                         ),
                       ],
-                      
+
                       // 缩略图预览
-                      if (_detectedThumbnail != null && _detectedThumbnail!.isNotEmpty) ...[
+                      if (_detectedThumbnail != null &&
+                          _detectedThumbnail!.isNotEmpty) ...[
                         SizedBox(height: 16),
                         Container(
                           padding: EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Colors.grey.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                            border: Border.all(
+                              color: Colors.grey.withOpacity(0.3),
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  Icon(Icons.image, color: Colors.grey[600], size: 16),
+                                  Icon(
+                                    Icons.image,
+                                    color: Colors.grey[600],
+                                    size: 16,
+                                  ),
                                   SizedBox(width: 8),
                                   Text(
                                     '视频封面预览',
@@ -268,20 +278,24 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                                   width: double.infinity,
                                   height: 120,
                                   fit: BoxFit.cover,
-                                  loadingBuilder: (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return Container(
-                                      width: double.infinity,
-                                      height: 120,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[200],
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Center(
-                                        child: CircularProgressIndicator(),
-                                      ),
-                                    );
-                                  },
+                                  loadingBuilder:
+                                      (context, child, loadingProgress) {
+                                        if (loadingProgress == null)
+                                          return child;
+                                        return Container(
+                                          width: double.infinity,
+                                          height: 120,
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey[200],
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                          ),
+                                          child: Center(
+                                            child: CircularProgressIndicator(),
+                                          ),
+                                        );
+                                      },
                                   errorBuilder: (context, error, stackTrace) {
                                     return Container(
                                       width: double.infinity,
@@ -291,13 +305,19 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
-                                          Icon(Icons.broken_image, color: Colors.grey),
+                                          Icon(
+                                            Icons.broken_image,
+                                            color: Colors.grey,
+                                          ),
                                           SizedBox(height: 4),
                                           Text(
                                             '封面加载失败',
-                                            style: TextStyle(color: Colors.grey),
+                                            style: TextStyle(
+                                              color: Colors.grey,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -309,8 +329,9 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                           ),
                         ),
                       ],
-                      
-                      if (_detectedVideoUrl != null && _detectedVideoUrl != _videoUrlController.text) ...[
+
+                      if (_detectedVideoUrl != null &&
+                          _detectedVideoUrl != _videoUrlController.text) ...[
                         SizedBox(height: 8),
                         Container(
                           padding: EdgeInsets.all(8),
@@ -320,7 +341,11 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.video_library, color: Colors.green, size: 16),
+                              Icon(
+                                Icons.video_library,
+                                color: Colors.green,
+                                size: 16,
+                              ),
                               SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -339,7 +364,7 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                           ),
                         ),
                       ],
-                      
+
                       if (_errorMessage != null) ...[
                         SizedBox(height: 16),
                         Container(
@@ -347,7 +372,9 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                           decoration: BoxDecoration(
                             color: Colors.red.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: Colors.red.withOpacity(0.3)),
+                            border: Border.all(
+                              color: Colors.red.withOpacity(0.3),
+                            ),
                           ),
                           child: Row(
                             children: [
@@ -363,7 +390,7 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                           ),
                         ),
                       ],
-                      
+
                       if (_isLoading) ...[
                         SizedBox(height: 16),
                         Center(
@@ -376,9 +403,9 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                           ),
                         ),
                       ],
-                      
+
                       SizedBox(height: 24),
-                      
+
                       // 支持的格式说明
                       Card(
                         child: Padding(
@@ -410,7 +437,7 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                 ),
               ),
             ),
-            
+
             // 底部按钮
             SizedBox(height: 24),
             Row(
@@ -423,13 +450,13 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
                 SizedBox(width: 12),
                 ElevatedButton(
                   onPressed: _canConfirm() ? _addVideo : null,
-                  child: _isLoading 
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text('确定'),
+                  child: _isLoading
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text('确定'),
                 ),
               ],
             ),
@@ -438,7 +465,7 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
       ),
     );
   }
-  
+
   /// 构建验证状态按钮
   Widget _buildValidationStatusButton() {
     switch (_urlValidationStatus) {
@@ -478,7 +505,7 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
         );
     }
   }
-  
+
   /// 检查是否可以确认
   bool _canConfirm() {
     if (_isLoading) return false;
@@ -487,16 +514,16 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
     if (_urlValidationStatus != UrlValidationStatus.valid) return false;
     return true;
   }
-  
+
   /// 从剪贴板粘贴
   void _pasteFromClipboard() async {
     // 这里需要实现剪贴板功能
     // 由于Flutter的剪贴板功能需要额外的包，这里先留空
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('剪贴板功能需要额外实现')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('剪贴板功能需要额外实现')));
   }
-  
+
   /// 验证视频URL
   Future<void> _validateVideoUrl(String url) async {
     if (url.isEmpty) {
@@ -506,12 +533,12 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
       });
       return;
     }
-    
+
     setState(() {
       _urlValidationStatus = UrlValidationStatus.validating;
       _errorMessage = null;
     });
-    
+
     try {
       final uri = Uri.parse(url);
       if (!uri.hasScheme || !uri.hasAuthority) {
@@ -521,18 +548,19 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
         });
         return;
       }
-      
+
       // 使用统一的URL验证逻辑
       final hasValidExtension = _isValidVideoUrl(url);
-      
+
       if (!hasValidExtension) {
         setState(() {
           _urlValidationStatus = UrlValidationStatus.invalid;
-          _errorMessage = '不支持的视频格式，请使用: .mp4, .m3u8, .webm, .avi, .mkv, .m4s 或支持的流媒体URL';
+          _errorMessage =
+              '不支持的视频格式，请使用: .mp4, .m3u8, .webm, .avi, .mkv, .m4s 或支持的流媒体URL';
         });
         return;
       }
-      
+
       // 如果URL中没有标题信息，尝试从URL中提取
       if (_titleController.text.isEmpty) {
         final extractedTitle = _extractTitleFromUrl(url);
@@ -543,12 +571,11 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
           });
         }
       }
-      
+
       setState(() {
         _urlValidationStatus = UrlValidationStatus.valid;
         _errorMessage = null;
       });
-      
     } catch (e) {
       setState(() {
         _urlValidationStatus = UrlValidationStatus.invalid;
@@ -556,12 +583,12 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
       });
     }
   }
-  
+
   /// 嗅探页面信息
   Future<void> _sniffPageInfo() async {
     final pageUrl = _pageUrlController.text.trim();
     if (pageUrl.isEmpty) return;
-    
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -569,24 +596,30 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
       _detectedVideoUrl = null;
       _detectedThumbnail = null;
     });
-    
+
     try {
       // 使用混合服务检测视频信息
-      final videoInfo = await HybridVideoSnifferService.extractVideoInfo(pageUrl);
-      
+      final videoInfo = await HybridVideoSnifferService.extractVideoInfo(
+        pageUrl,
+      );
+
       if (videoInfo != null) {
         setState(() {
           _detectedTitle = CharacterFixService.fixCharacters(videoInfo.title);
-          
+
           // 提取所有流信息（若为yt-dlp返回的VideoStream）
           final ytStreams = videoInfo.streams.whereType<VideoStream>().toList();
           if (ytStreams.isNotEmpty) {
             // 保存所有流信息
             _detectedStreams = ytStreams;
-            _detectedQualityOptions = VideoStreamSelector.getQualityOptions(ytStreams);
-            
+            _detectedQualityOptions = VideoStreamSelector.getQualityOptions(
+              ytStreams,
+            );
+
             // 选择最佳流作为默认
-            final best = VideoStreamSelector.selectBestStream(ytStreams) ?? ytStreams.first;
+            final best =
+                VideoStreamSelector.selectBestStream(ytStreams) ??
+                ytStreams.first;
             _detectedVideoUrl = best.url;
             _detectedHeaders = best.httpHeaders;
           } else {
@@ -595,17 +628,19 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
             _detectedStreams = [];
             _detectedQualityOptions = [];
           }
-          
+
           // 设置缩略图
           _detectedThumbnail = videoInfo.thumbnail;
-          
+
           // 如果当前没有标题，自动填充检测到的标题
           if (_titleController.text.isEmpty && _detectedTitle != null) {
             _titleController.text = _detectedTitle!;
           }
-          
+
           // 如果当前视频URL为空或无效，使用检测到的URL
-          if ((_videoUrlController.text.isEmpty || !_isValidVideoUrl(_videoUrlController.text)) && _detectedVideoUrl != null) {
+          if ((_videoUrlController.text.isEmpty ||
+                  !_isValidVideoUrl(_videoUrlController.text)) &&
+              _detectedVideoUrl != null) {
             _videoUrlController.text = _detectedVideoUrl!;
             _validateVideoUrl(_detectedVideoUrl!);
           }
@@ -625,45 +660,56 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
       });
     }
   }
-  
+
   /// 检查视频URL是否有效
   bool _isValidVideoUrl(String url) {
     try {
       final uri = Uri.parse(url);
       if (!uri.hasScheme || !uri.hasAuthority) return false;
-      
+
       final path = uri.path.toLowerCase();
       final query = uri.query.toLowerCase();
-      
+
       // 支持的视频格式扩展名
-      final supportedExtensions = ['.mp4', '.m3u8', '.webm', '.avi', '.mkv', '.m4s', '.ts'];
-      
+      final supportedExtensions = [
+        '.mp4',
+        '.m3u8',
+        '.webm',
+        '.avi',
+        '.mkv',
+        '.m4s',
+        '.ts',
+      ];
+
       // 检查路径扩展名
       if (supportedExtensions.any((ext) => path.endsWith(ext))) {
         return true;
       }
-      
+
       // 检查特殊的视频流格式（如Bilibili的m4s，YouTube的格式参数等）
-      if (path.contains('/video/') || path.contains('/stream/') || 
-          query.contains('mime=video') || query.contains('itag=') ||
+      if (path.contains('/video/') ||
+          path.contains('/stream/') ||
+          query.contains('mime=video') ||
+          query.contains('itag=') ||
           path.contains('upgcxcode') || // Bilibili特征
           uri.host.contains('googlevideo.com') || // YouTube CDN
           uri.host.contains('upos-') || // Bilibili CDN
-          uri.host.contains('akamaized.net')) { // CDN服务
+          uri.host.contains('akamaized.net')) {
+        // CDN服务
         return true;
       }
-      
+
       return false;
     } catch (e) {
       return false;
     }
   }
-  
+
   /// 检测平台类型
   String _detectPlatform(String url) {
     final uri = Uri.parse(url);
     final host = uri.host.toLowerCase();
-    
+
     if (host.contains('youtube.com') || host.contains('youtu.be')) {
       return 'youtube';
     } else if (host.contains('bilibili.com')) {
@@ -676,61 +722,64 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
       return 'unknown';
     }
   }
-  
+
   /// 从URL中提取标题
   String _extractTitleFromUrl(String url) {
     try {
       final uri = Uri.parse(url);
       final path = uri.path;
-      
+
       // 移除文件扩展名
       final pathWithoutExt = path.replaceAll(RegExp(r'\.[^.]*$'), '');
-      
+
       // 分割路径并找到有意义的部分
-      final segments = pathWithoutExt.split('/').where((segment) => 
-        segment.isNotEmpty && 
-        segment.length > 2 &&
-        !RegExp(r'^[0-9a-f]{8,}$').hasMatch(segment) // 排除哈希值
-      ).toList();
-      
+      final segments = pathWithoutExt
+          .split('/')
+          .where(
+            (segment) =>
+                segment.isNotEmpty &&
+                segment.length > 2 &&
+                !RegExp(r'^[0-9a-f]{8,}$').hasMatch(segment), // 排除哈希值
+          )
+          .toList();
+
       if (segments.isNotEmpty) {
         // 取最后一个有意义的段作为标题
         final title = segments.last;
         // 替换下划线和连字符为空格
         return title.replaceAll(RegExp(r'[-_]'), ' ');
       }
-      
+
       return '';
     } catch (e) {
       return '';
     }
   }
-  
+
   /// 添加视频
   Future<void> _addVideo() async {
-    
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    
+
     if (!_canConfirm()) {
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
-    
+
     try {
       final videoUrl = _videoUrlController.text.trim();
       final pageUrl = _pageUrlController.text.trim();
       final title = _titleController.text.trim();
-      
+
       print('  - videoUrl: $videoUrl');
-      print('  - pageUrl: $pageUrl'); 
+      print('  - pageUrl: $pageUrl');
       print('  - title: $title');
-      
+
       // 创建基础OnlineVideo对象
       final baseVideo = OnlineVideo(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -739,7 +788,7 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
         thumbnailUrl: _detectedThumbnail, // 直接设置缩略图URL
         platform: _detectPlatform(pageUrl.isNotEmpty ? pageUrl : videoUrl),
       );
-      
+
       // 使用缓存服务添加完整的流信息
       final onlineVideo = OnlineVideoCacheService.updateVideoCache(
         video: baseVideo,
@@ -748,11 +797,9 @@ class _AddOnlineVideoScreenState extends State<AddOnlineVideoScreen> {
         allStreams: _detectedStreams,
         qualityOptions: _detectedQualityOptions,
       );
-      
-      
+
       // 返回结果
       Navigator.of(context).pop(onlineVideo);
-      
     } catch (e) {
       setState(() {
         _errorMessage = '创建视频失败: $e';

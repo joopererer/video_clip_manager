@@ -1,0 +1,351 @@
+00:00 +0: loading D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart
+00:00 +0: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests resolveCliPath finds compiled local-media-ai executable
+00:00 +1: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests checkDoctor reports FFmpeg and CLI presence
+00:00 +2: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests generateCaption parses structured output correctly
+00:00 +3: D:/workspace/FlutterProjects/video_clip_manager/test/ai_service_test.dart: AiService Tests sanitizeTags strips punctuation, splits clauses and extracts atomic keywords
+00:00 +4: D:/workspace/FlutterProjects/video_clip_manager/test/app_state_ai_test.dart: AppState Semantic Search & AI Integration getFilteredClips matches AI generated summary, scene, and actions via text query
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\app_state_test_5e8e238d/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:00 +5: D:/workspace/FlutterProjects/video_clip_manager/test/app_state_ai_test.dart: AppState Semantic Search & AI Integration computeMaxSim ranks by cosine similarity and finds hitTimestampMs
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\app_state_test_cdc589c/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:01 +6: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: FrameEmbeddingPool & VideoFrameEmbeddingRecord cosineSimilarity computes correctly
+00:01 +7: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: FrameEmbeddingPool & VideoFrameEmbeddingRecord putFrames and getFramesInRange filters by time window
+00:01 +8: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: FrameEmbeddingPool & VideoFrameEmbeddingRecord saveToDisk and loadFromDisk persists records
+00:01 +9: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: DeltaEngine planDelta detects full missing on empty cache
+00:01 +10: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: DeltaEngine planDelta detects partial cache hit with tolerance
+00:01 +11: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: DeltaEngine planDelta detects 100% cache hit on trimmed/already cached range
+00:01 +12: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: DeltaEngine computeMaxSim finds optimal frame and timestamp
+00:01 +13: D:/workspace/FlutterProjects/video_clip_manager/test/delta_engine_test.dart: DeltaEngine syncClipRange skips extraction when 100% cache hit
+[DeltaEngine] 100% 缓存命中，零计算复用已有 1 帧
+00:01 +14: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: playlist_time effective duration uses custom range only when both bounds set
+00:01 +15: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: playlist_time total is the exact millisecond sum, not whole seconds
+00:01 +16: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: playlist_time offset is the sum of earlier entries
+00:01 +17: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: playlist_time negative custom range counts as zero
+00:01 +18: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: playlist_time formatting
+00:01 +19: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: PlaylistDraft untouched draft is not dirty
+00:01 +20: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: PlaylistDraft reorder follows ReorderableListView semantics
+00:01 +21: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: PlaylistDraft several drags then commit persist the full order
+00:01 +22: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: PlaylistDraft moving back to the original order is not dirty
+00:01 +23: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: PlaylistDraft remove then reorder then commit
+00:01 +24: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: PlaylistDraft reset restores the loaded state and writes nothing
+00:01 +25: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: PlaylistDraft duplicate or empty item ids are edited by position
+00:01 +26: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: PlaylistDraft commit keeps custom times and every other field
+00:02 +27: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: PlaylistDraft orphan items are kept and appended on commit
+00:02 +28: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: PlaylistDraft draft total follows the draft, in milliseconds
+00:02 +29: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: PlaylistDraft staleness detection compares against the loaded items
+00:02 +30: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_draft_test.dart: PlaylistDraft save then reload through JSON keeps order and metadata
+00:02 +31: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_save_regression_test.dart: baseline: playlist holds the five clips in insertion order
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_save_test_6233de6/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:02 +32: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_save_regression_test.dart: several drags are all saved in one commit
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_save_test_4c9ccc2f/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:02 +33: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_save_regression_test.dart: remove then reorder, then reload from disk
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_save_test_745e7035/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_save_test_745e7035/test_db.json
+Populating metadata for 1 videos...
+Updating metadata for video: v1.mp4
+[VideoMetadataService] File does not exist: C:\视频\v1.mp4
+Failed to get duration for video: v1.mp4
+Populating thumbnails for 5 clips...
+[FrameEmbeddingPool] loadFromDisk error: 
+00:02 +34: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_save_regression_test.dart: save keeps name, description and createdAt
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_save_test_4ee97db7/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:02 +35: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_save_regression_test.dart: custom ranges survive a reorder save
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_save_test_93da1b94/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:02 +36: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_save_regression_test.dart: reset and discard never write to AppState
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_save_test_96ee4fac/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:02 +37: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_save_regression_test.dart: stale draft is detected after an outside change
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_save_test_6198fdd7/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:03 +38: D:/workspace/FlutterProjects/video_clip_manager/test/playlist_save_regression_test.dart: items whose clip was deleted are not lost on save
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_save_test_e0c8fe57/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:03 +39: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:04 +40: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:04 +41: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:04 +42: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:04 +43: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:04 +44: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:04 +45: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:04 +46: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:04 +47: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:04 +48: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:04 +49: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:04 +50: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +51: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +52: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +53: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +54: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +55: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +56: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +57: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +58: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +59: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +60: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +61: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +62: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +63: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +64: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +65: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +66: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +67: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +68: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +69: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +70: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +71: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +72: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +73: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +74: D:/workspace/FlutterProjects/video_clip_manager/test/stage1_visual_verification_test.dart: Capture 1: Theme Unified Components & Contrast Showcase
+00:05 +74: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\stage2_test_6b929738/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+00:06 +75: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +76: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +77: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +78: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +79: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +80: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +81: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +82: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +83: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +84: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +85: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +86: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +87: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +88: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +89: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:06 +90: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:07 +91: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:07 +92: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:07 +92: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_mgmt_test_315556d7/db.json
+00:07 +93: D:/workspace/FlutterProjects/video_clip_manager/test/stage3_widgets_test.dart: TimecodeField shows the value as HH:MM:SS.mmm
+00:07 +93: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistGridCard interactions single click selects without playing
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_card_test_9aee2c38/db.json
+00:07 +94: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:07 +95: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:07 +96: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:07 +97: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:07 +98: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:07 +99: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:07 +100: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:07 +101: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:07 +102: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:07 +103: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:07 +104: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:07 +105: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:08 +106: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 1: Widget harness 1280x800 Clips Grid View
+00:08 +107: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:08 +107: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 2: Widget harness 1280x800 Clips List View
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\stage2_test_6b7d0be2/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+00:08 +108: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:08 +109: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:08 +110: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:08 +111: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:08 +112: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:08 +113: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:08 +114: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:08 +115: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:08 +116: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:08 +117: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:08 +118: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:08 +119: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:09 +119: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 2: Widget harness 1280x800 Clips List View
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+00:09 +119: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistGridCard interactions single click selects without playing
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:09 +120: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:09 +120: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistGridCard interactions double click plays
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_card_test_78276df/db.json
+00:09 +121: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:09 +121: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 2: Widget harness 1280x800 Clips List View
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:09 +122: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:09 +122: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\stage2_test_dcc7d283/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+00:09 +122: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistGridCard interactions double click plays
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:09 +123: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:09 +123: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistGridCard interactions two slow clicks never play
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_card_test_39836669/db.json
+00:09 +124: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:09 +125: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:09 +126: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:09 +127: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:09 +128: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:09 +128: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistGridCard interactions two slow clicks never play
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:09 +129: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:09 +129: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistGridCard interactions right click selects and offers the menu actions
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_card_test_f85b7802/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:09 +130: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:09 +131: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:10 +132: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:10 +133: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:10 +134: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:10 +135: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:10 +136: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:10 +137: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:10 +138: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:10 +139: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:10 +140: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: clean screen leaves without a prompt
+00:10 +141: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_timeline_test.dart: PlaylistTimelineView renders a 1 ms clip next to a 60 s clip without overflow
+00:10 +141: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: removing marks dirty and does not touch AppState
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_mgmt_test_b2754146/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:10 +141: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistGridCard interactions more button shows the same menu
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_card_test_330b0afc/db.json
+00:10 +142: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_timeline_test.dart: PlaylistTimelineView renders a 1 ms clip next to a 60 s clip without overflow
+00:10 +143: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+00:10 +144: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 3: Widget harness 900x700 Narrow Collapsed Sidebar
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:10 +145: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:10 +146: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:10 +146: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistGridCard interactions more button shows the same menu
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:10 +146: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\stage2_test_e3621e61/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:10 +147: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:10 +147: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+00:10 +147: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab no overflow at 900x700 (grid)
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlists_tab_test_35c20a26/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:10 +148: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +149: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +150: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +151: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +152: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +153: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +154: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +155: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +156: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +157: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +158: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +159: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +160: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +160: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab no overflow at 900x700 (list)
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlists_tab_test_5aac4bad/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:11 +161: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +162: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +162: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: back with edits: keep editing stays on the screen
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_mgmt_test_c5b0c8c4/db.json
+00:11 +163: D:/workspace/FlutterProjects/video_clip_manager/test/theme_test.dart: AppTheme & Tokens Tests TimecodeChip renders timecode and optional label
+00:11 +164: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+00:11 +165: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Stage 2 Capture 4: Active Search and Filter State
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:11 +166: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab no overflow at 900x700 (list)
+00:12 +166: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\stage2_test_f03e5bf7/test_db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+Updating metadata for video: BigBuckBunny_4K_60FPS.mp4
+Updating metadata for video: ElephantsDream_HDR.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+00:12 +167: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab no overflow at 900x700 (list)
+00:12 +168: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: back with edits: keep editing stays on the screen
+00:12 +168: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab no overflow at 1280x800 (grid)
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlists_tab_test_d563c8bd/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:12 +169: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: back with edits: keep editing stays on the screen
+00:12 +170: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: back with edits: keep editing stays on the screen
+00:12 +170: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab no overflow at 1280x800 (list)
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlists_tab_test_9d3f0cb3/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:12 +171: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: back with edits: keep editing stays on the screen
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:12 +172: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:12 +172: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: back with edits: discard leaves and writes nothing
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_mgmt_test_ec64ce/db.json
+00:12 +173: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:12 +174: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:12 +175: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:12 +176: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:12 +177: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:12 +177: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab no overflow at 1600x900 (grid)
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlists_tab_test_a4eb2d0e/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:13 +178: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:13 +178: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab no overflow at 1600x900 (list)
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlists_tab_test_3353ee19/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:13 +178: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: back with edits: discard leaves and writes nothing
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:13 +179: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:13 +179: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: back with edits: save and leave persists the draft
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_mgmt_test_a4cf6536/db.json
+00:13 +180: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:13 +180: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab header shows real totals and create button
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlists_tab_test_7de48aa0/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:13 +180: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+Failed to get duration for video: BigBuckBunny_4K_60FPS.mp4
+[VideoMetadataService] File does not exist: https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4
+Failed to get duration for video: ElephantsDream_HDR.mp4
+00:13 +181: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:13 +181: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab search filters by name and description
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlists_tab_test_f6d0fb4c/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:14 +182: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:14 +182: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab search with no hit shows the filtered empty state
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlists_tab_test_5e9f2e62/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:14 +183: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:14 +183: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab view toggle persists the choice in AppState
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlists_tab_test_15b1915e/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:14 +183: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: back with edits: save and leave persists the draft
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:14 +184: D:/workspace/FlutterProjects/video_clip_manager/test/stage2_visual_verification_test.dart: Desktop interactions: hover, context menu, favorite, rating, reset
+00:14 +184: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: reset restores the list without writing
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_mgmt_test_3a184c91/db.json
+00:14 +185: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab view toggle persists the choice in AppState
+00:14 +186: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: reset restores the list without writing
+00:14 +186: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab delete asks for confirmation and keeps the clips
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlists_tab_test_1e8d883f/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:14 +186: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: reset restores the list without writing
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:14 +187: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab delete asks for confirmation and keeps the clips
+00:14 +187: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: drag handle reorders the draft and save writes all of it
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_mgmt_test_ccbd0e56/db.json
+00:15 +188: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: drag handle reorders the draft and save writes all of it
+00:15 +188: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlists_tab_test.dart: PlaylistsTab empty library shows the create prompt
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlists_tab_test_b768b8c1/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:15 +189: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: drag handle reorders the draft and save writes all of it
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:15 +190: D:/workspace/FlutterProjects/video_clip_manager/test/stage4_playlist_management_test.dart: no layout overflow at 900x700 with a long title
+Loading database from: C:\Users\UNIVAS~1\AppData\Local\Temp\playlist_mgmt_test_2b771442/db.json
+Failed to parse as new format, trying old format: type 'List<dynamic>' is not a subtype of type 'Map<String, dynamic>'
+00:16 +191: All tests passed!

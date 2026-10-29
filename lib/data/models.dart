@@ -658,20 +658,24 @@ class EnhancedMultiSourceResult {
   String? get bestTitle {
     if (titles.isEmpty) return null;
     if (titles.length == 1) return titles.first;
-    
+
     // 如果有多个标题，返回第一个非空的
-    return titles.firstWhere((title) => title.isNotEmpty && title != 'Unknown Title', 
-                           orElse: () => titles.first);
+    return titles.firstWhere(
+      (title) => title.isNotEmpty && title != 'Unknown Title',
+      orElse: () => titles.first,
+    );
   }
 
   /// 获取最佳封面图（置信度最高的）
   String? get bestThumbnail {
     if (thumbnailUrls.isEmpty) return null;
     if (thumbnailUrls.length == 1) return thumbnailUrls.first;
-    
+
     // 如果有多个封面图，返回第一个有效的
-    return thumbnailUrls.firstWhere((url) => url.isNotEmpty, 
-                                  orElse: () => thumbnailUrls.first);
+    return thumbnailUrls.firstWhere(
+      (url) => url.isNotEmpty,
+      orElse: () => thumbnailUrls.first,
+    );
   }
 
   /// 检查是否有多个选择
@@ -741,7 +745,7 @@ class AggregatedSearchResult {
   EnhancedMultiSourceResult toEnhancedResult() {
     final titleSources = titles.map((t) => t.source).toList();
     final thumbnailSources = thumbnails.map((t) => t.source).toList();
-    
+
     final sourceConfidence = <String, double>{};
     for (final title in titles) {
       sourceConfidence['${title.source}_title'] = title.confidence;

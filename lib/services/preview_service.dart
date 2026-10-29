@@ -549,7 +549,9 @@ class PreviewService {
   /// 启动全局预生成
   Future<void> startGlobalPreGeneration(List<String> videoPaths) async {
     if (_isSuspended) {
-      print('PreviewService: Skipped startGlobalPreGeneration because pre-generation is suspended');
+      print(
+        'PreviewService: Skipped startGlobalPreGeneration because pre-generation is suspended',
+      );
       return;
     }
     if (_globalPreGenerating) {
