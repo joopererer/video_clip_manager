@@ -8,6 +8,7 @@ import '../theme/app_typography.dart';
 import '../utils/tag_utils.dart';
 import 'clip_media_preview.dart';
 import 'common/media_card_activation.dart';
+import 'common/semantic_score_chip.dart';
 import 'common/timecode_chip.dart';
 
 class ClipListRow extends StatefulWidget {
@@ -21,6 +22,10 @@ class ClipListRow extends StatefulWidget {
   final ValueChanged<bool> onFavoriteToggled;
   final VoidCallback? onSelect;
 
+  /// Cosine similarity of the best matching frame for the current semantic
+  /// search. Null for keyword-only results, so no score is ever invented.
+  final double? semanticScore;
+
   const ClipListRow({
     super.key,
     required this.clip,
@@ -32,6 +37,7 @@ class ClipListRow extends StatefulWidget {
     required this.onRatingChanged,
     required this.onFavoriteToggled,
     this.onSelect,
+    this.semanticScore,
   });
 
   @override
@@ -228,38 +234,55 @@ class _ClipListRowState extends State<ClipListRow> {
                               ),
                             ),
                           ),
-                          if (clip.hitTimestampMs != null) ...[
+                          if (clip.hitTimestampMs != null ||
+                              widget.semanticScore != null) ...[
                             const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.warning.withValues(alpha: 0.9),
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.xs,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.auto_awesome,
-                                    size: 11,
-                                    color: Colors.black87,
-                                  ),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    '命中: ${AppTypography.formatTimecode(Duration(milliseconds: clip.hitTimestampMs!))}',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (clip.hitTimestampMs != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.warning.withValues(
+                                        alpha: 0.9,
+                                      ),
+                                      borderRadius: BorderRadius.circular(
+                                        AppRadius.xs,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.auto_awesome,
+                                          size: 11,
+                                          color: Colors.black87,
+                                        ),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          '命中: ${AppTypography.formatTimecode(Duration(milliseconds: clip.hitTimestampMs!))}',
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black87,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
+                                if (widget.semanticScore != null) ...[
+                                  const SizedBox(height: 3),
+                                  SemanticScoreChip(
+                                    score: widget.semanticScore!,
+                                    fontSize: 10,
+                                  ),
                                 ],
-                              ),
+                              ],
                             ),
                           ],
                         ],
