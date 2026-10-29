@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'ai_failure.dart';
+
 /// 视频关键帧嵌入记录（绝对时间戳锚定）
 class VideoFrameEmbeddingRecord {
   /// 绝对时间戳（毫秒，相对于母视频开始时刻 0ms）
@@ -108,10 +110,18 @@ class FrameEmbeddingPool {
       final content = await file.readAsString();
       if (content.isEmpty) return 0;
 
-      final json = jsonDecode(content) as Map<String, dynamic>;
-      final framesJson = (json['frames'] as List<dynamic>?) ?? [];
+      final decoded = jsonDecode(content);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('cache root is not a JSON object');
+      }
+      final rawFrames = decoded['frames'];
+      if (rawFrames != null && rawFrames is! List) {
+        throw const FormatException('"frames" is not a list');
+      }
+      final framesJson = (rawFrames as List<dynamic>?) ?? [];
 
       final key = computeVideoKey(videoPathOrUrl);
+      _unreadable.remove(key);
       final map = _pool.putIfAbsent(key, () => {});
 
       int count = 0;
@@ -123,22 +133,62 @@ class FrameEmbeddingPool {
         }
       }
       return count;
+    } on FormatException catch (e) {
+      // Unreadable JSON: keep the file for inspection instead of letting the
+      // next save silently replace whatever was recoverable in it.
+      debugPrint('[FrameEmbeddingPool] cache file is not valid JSON: $e');
+      await _quarantine(videoPathOrUrl, customDir: customStorageDir);
+      return 0;
     } catch (e) {
-      debugPrint('[FrameEmbeddingPool] loadFromDisk error: ');
+      // The file may exist but could not be read (locked, I/O error). Mark it
+      // so saveToDisk does not replace it with a partial in-memory view.
+      debugPrint('[FrameEmbeddingPool] loadFromDisk error: $e');
+      _unreadable.add(computeVideoKey(videoPathOrUrl));
       return 0;
     }
   }
 
-  /// 保存当前视频的所有帧嵌入到磁盘
+  /// Videos whose cache file exists but could not be read this session.
+  final Set<String> _unreadable = {};
+
+  Future<void> _quarantine(String videoPathOrUrl, {String? customDir}) async {
+    try {
+      final file = await _getFile(videoPathOrUrl, customDir: customDir);
+      if (!await file.exists()) return;
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      await file.rename('${file.path}.corrupt-$stamp');
+    } catch (e) {
+      debugPrint('[FrameEmbeddingPool] could not set aside bad cache: $e');
+    }
+  }
+
+  /// 保存当前视频的所有帧嵌入到磁盘。
+  ///
+  /// Writes `<key>.json.tmp` and renames it over the cache, so an interrupted
+  /// or failed write leaves the previous cache intact. Throws
+  /// [AiStageException] (stage `storage`) when the write fails, instead of the
+  /// earlier silent swallow that made lost caches invisible.
   Future<void> saveToDisk(
     String videoPathOrUrl, {
     String? customStorageDir,
   }) async {
-    try {
-      final key = computeVideoKey(videoPathOrUrl);
-      final map = _pool[key];
-      if (map == null || map.isEmpty) return;
+    final key = computeVideoKey(videoPathOrUrl);
+    final map = _pool[key];
+    if (map == null || map.isEmpty) return;
 
+    if (_unreadable.contains(key)) {
+      throw AiStageException(
+        stage: AiStage.storage,
+        kind: AiFailureKind.storageFailed,
+        message:
+            '该视频已有的向量缓存无法读取，为避免覆盖已有数据，本次不写入。'
+            '请关闭占用该文件的程序后重试。',
+        videoPath: videoPathOrUrl,
+      );
+    }
+
+    File? tmp;
+    try {
       final file = await _getFile(videoPathOrUrl, customDir: customStorageDir);
       final list = map.values.toList()..sort((a, b) => a.tMs.compareTo(b.tMs));
 
@@ -148,9 +198,26 @@ class FrameEmbeddingPool {
         'frames': list.map((r) => r.toJson()).toList(),
       };
 
-      await file.writeAsString(jsonEncode(data));
-    } catch (e) {
-      debugPrint('[FrameEmbeddingPool] saveToDisk error: ');
+      tmp = File('${file.path}.tmp');
+      await tmp.writeAsString(jsonEncode(data), flush: true);
+      await tmp.rename(file.path);
+    } on FileSystemException catch (e) {
+      try {
+        if (tmp != null && await tmp.exists()) await tmp.delete();
+      } catch (_) {}
+      throw AiStageException(
+        stage: AiStage.storage,
+        kind: AiFailureKind.storageFailed,
+        message: describeAiFailure(
+          AiStage.storage,
+          AiFailureKind.storageFailed,
+        ),
+        detail: tailForLog(
+          '${e.message} | ${e.osError?.message ?? ''} '
+          '(errno ${e.osError?.errorCode}) | ${e.path ?? ''}',
+        ),
+        videoPath: videoPathOrUrl,
+      );
     }
   }
 

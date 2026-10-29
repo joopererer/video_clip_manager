@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 
+import 'ai_failure.dart';
 import 'ai_service.dart';
 import 'frame_embedding_pool.dart';
 
@@ -32,7 +33,7 @@ class DeltaSyncPlan {
 
   @override
   String toString() =>
-      'DeltaSyncPlan(expected: \, cached: \, missing: \, reuseRatio: \%)';
+      'DeltaSyncPlan(expected: , cached: , missing: , reuseRatio: %)';
 }
 
 /// MaxSim 匹配结果
@@ -48,7 +49,62 @@ class MaxSimResult {
   });
 
   @override
-  String toString() => 'MaxSimResult(score: \, hitTime: \ms)';
+  String toString() => 'MaxSimResult(score: , hitTime: ms)';
+}
+
+/// The source-video range that should be indexed for a clip.
+class ClipIndexRange {
+  const ClipIndexRange({
+    required this.startMs,
+    required this.endMs,
+    this.problem,
+  });
+
+  /// Positions in the **source video** (not clip-relative, not playlist time).
+  final int startMs;
+  final int endMs;
+
+  /// Set when no usable range exists; [startMs]/[endMs] are then the inputs.
+  final AiFailureKind? problem;
+
+  bool get isUsable => problem == null;
+}
+
+/// Resolves what to index for a clip.
+///
+/// A saved clip with `end == 0` means "until the end of the video" (the player
+/// only enforces the end when it is positive), so it is resolved with the
+/// source duration. An end past the real duration is clamped, otherwise the
+/// planner would keep expecting frames that can never exist and re-extract
+/// them on every run. Nothing here changes the stored clip.
+ClipIndexRange resolveClipIndexRange({
+  required int startMs,
+  required int endMs,
+  int? videoDurationMs,
+}) {
+  var end = endMs;
+  if (end <= 0) {
+    if (videoDurationMs == null || videoDurationMs <= 0) {
+      return ClipIndexRange(
+        startMs: startMs,
+        endMs: endMs,
+        problem: AiFailureKind.unknownDuration,
+      );
+    }
+    end = videoDurationMs;
+  } else if (videoDurationMs != null &&
+      videoDurationMs > 0 &&
+      end > videoDurationMs) {
+    end = videoDurationMs;
+  }
+  if (startMs < 0 || end <= startMs) {
+    return ClipIndexRange(
+      startMs: startMs,
+      endMs: end,
+      problem: AiFailureKind.invalidRange,
+    );
+  }
+  return ClipIndexRange(startMs: startMs, endMs: end);
 }
 
 /// 增量叠加同步引擎 (Delta Engine)
@@ -140,47 +196,77 @@ class DeltaEngine {
     final minMissing = plan.missingTimestamps.reduce(min);
     final maxMissing = plan.missingTimestamps.reduce(max);
 
+    // A single missing point (short clip) has min == max; the extractor
+    // rejects an empty range, so ask for one step starting at that point.
+    final extractEnd = maxMissing > minMissing
+        ? maxMissing
+        : minMissing + stepMs;
+
     final extracted = await aiService.extractClipFrames(
       videoPathOrUrl: videoPathOrUrl,
       startMs: minMissing,
-      endMs: maxMissing,
+      endMs: extractEnd,
       strategy: strategy,
       everyMs: stepMs,
     );
 
-    // 4. 计算缺失帧的 Embedding
-    if (extracted.isNotEmpty) {
-      final embeddingsData = await aiService.embedFrames(
-        frames: extracted,
-        modelDir: modelDir,
-        ortLib: ortLib,
+    if (extracted.isEmpty) {
+      throw AiStageException(
+        stage: AiStage.extraction,
+        kind: AiFailureKind.noFrames,
+        message: describeAiFailure(
+          AiStage.extraction,
+          AiFailureKind.noFrames,
+          videoPath: videoPathOrUrl,
+        ),
+        videoPath: videoPathOrUrl,
+        startMs: minMissing,
+        endMs: extractEnd,
       );
-
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final newRecords = <VideoFrameEmbeddingRecord>[];
-
-      for (int i = 0; i < extracted.length; i++) {
-        final frame = extracted[i];
-        List<double> vec = const [];
-        if (i < embeddingsData.length && embeddingsData[i]['vector'] != null) {
-          final rawVec = (embeddingsData[i]['vector'] as List<dynamic>?) ?? [];
-          vec = rawVec.map((v) => (v as num).toDouble()).toList();
-        }
-
-        newRecords.add(
-          VideoFrameEmbeddingRecord(
-            tMs: frame.tMs,
-            vector: vec,
-            frameImagePath: frame.path,
-            createdAtMs: now,
-          ),
-        );
-      }
-
-      // 5. 合并入池并持久化
-      pool.putFrames(videoPathOrUrl, newRecords);
-      await pool.saveToDisk(videoPathOrUrl, customStorageDir: customStorageDir);
     }
+
+    // 4. 计算缺失帧的 Embedding
+    final embeddingsData = await aiService.embedFrames(
+      frames: extracted,
+      modelDir: modelDir,
+      ortLib: ortLib,
+    );
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final newRecords = <VideoFrameEmbeddingRecord>[];
+
+    for (int i = 0; i < extracted.length; i++) {
+      final frame = extracted[i];
+      if (i >= embeddingsData.length) continue;
+      final rawVec = embeddingsData[i]['vector'];
+      if (rawVec is! List || rawVec.isEmpty) continue;
+      // Only real vectors are cached. A frame without one stays "missing" and
+      // is retried on the next run instead of counting as a cache hit.
+      newRecords.add(
+        VideoFrameEmbeddingRecord(
+          tMs: frame.tMs,
+          vector: rawVec.map((v) => (v as num).toDouble()).toList(),
+          frameImagePath: frame.path,
+          createdAtMs: now,
+        ),
+      );
+    }
+
+    if (newRecords.isEmpty) {
+      throw AiStageException(
+        stage: AiStage.inference,
+        kind: AiFailureKind.outputInvalid,
+        message:
+            '模型没有为任何帧返回向量 (提取 ${extracted.length} 帧，返回 ${embeddingsData.length} 个结果)。',
+        videoPath: videoPathOrUrl,
+        startMs: minMissing,
+        endMs: extractEnd,
+      );
+    }
+
+    // 5. 合并入池并持久化 (旧缓存先加载，因此只增不减)
+    pool.putFrames(videoPathOrUrl, newRecords);
+    await pool.saveToDisk(videoPathOrUrl, customStorageDir: customStorageDir);
 
     // 6. 返回合并后的区间帧记录
     return pool.getFramesInRange(videoPathOrUrl, startMs, endMs);

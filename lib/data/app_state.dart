@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:collection';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:collection/collection.dart';
@@ -14,6 +12,7 @@ import '../services/thumbnail_service.dart';
 import '../services/video_metadata_service.dart';
 import 'data_service.dart';
 import 'models.dart';
+import '../services/ai_failure.dart';
 import '../services/ai_service.dart';
 import '../services/delta_engine.dart';
 import '../services/frame_embedding_pool.dart';
@@ -56,12 +55,43 @@ class AppState extends ChangeNotifier {
   String? _indexingStatus;
   String? get indexingStatus => _indexingStatus;
 
+  /// Clips that could not be indexed in the last run, with stage and reason.
+  /// Cleared at the start of the next run; failed clips are simply attempted
+  /// again, while clips that already have all frames cached cost nothing.
+  List<ClipIndexFailure> _indexFailures = const [];
+  List<ClipIndexFailure> get indexFailures => _indexFailures;
+  int _indexedOkCount = 0;
+  int _indexedSkippedCount = 0;
+  int get lastIndexOkCount => _indexedOkCount;
+  int get lastIndexSkippedCount => _indexedSkippedCount;
+
   // VLM 视觉大模型配置
   String get vlmMode => _prefs.getString('vlm_mode') ?? 'ollama';
   String get vlmApiUrl =>
       _prefs.getString('vlm_api_url') ?? 'http://localhost:11434/v1';
   String get vlmApiKey => _prefs.getString('vlm_api_key') ?? '';
   String get vlmModel => _prefs.getString('vlm_model') ?? 'qwen2-vl:2b';
+
+  /// User-selected folder for the in-app EmbeddingGemma model. `null` means
+  /// the built-in default candidates. Stored in SharedPreferences, so the
+  /// business database JSON schema is untouched.
+  String? get aiModelDir => _prefs.getString('ai_model_dir');
+
+  Future<void> setAiModelDir(String? dir) async {
+    final text = dir?.trim();
+    if (text == null || text.isEmpty) {
+      await _prefs.remove('ai_model_dir');
+      try {
+        _aiService.customEmbeddingModelDir = null;
+      } catch (_) {}
+    } else {
+      await _prefs.setString('ai_model_dir', text);
+      try {
+        _aiService.customEmbeddingModelDir = text;
+      } catch (_) {}
+    }
+    notifyListeners();
+  }
 
   Future<void> saveVlmConfig({
     required String mode,
@@ -132,12 +162,18 @@ class AppState extends ChangeNotifier {
     required SharedPreferences prefs,
     required PathService pathService,
     required ThumbnailService thumbnailService,
+    AiService? aiService,
   }) : _prefs = prefs,
        _pathService = pathService,
        _thumbnailService = thumbnailService {
     _dataService = DataService(pathService: _pathService);
     _videoMetadataService = VideoMetadataService();
-    _aiService = AiService();
+    _aiService = aiService ?? AiService();
+    try {
+      _aiService.customEmbeddingModelDir = _prefs.getString('ai_model_dir');
+    } catch (_) {
+      // Test doubles may not implement this optional setter.
+    }
     _framePool = FrameEmbeddingPool();
     _deltaEngine = DeltaEngine(pool: _framePool, aiService: _aiService);
     _clipsIsGridView = _prefs.getBool('clipsIsGridView') ?? false;
@@ -595,6 +631,8 @@ class AppState extends ChangeNotifier {
         _currentDbPath!,
       );
       _hasUnsavedChanges = false;
+    } catch (e) {
+      debugPrint('[AppState] save failed: $e');
     } finally {
       _isSaving = false;
       notifyListeners();
@@ -930,50 +968,182 @@ class AppState extends ChangeNotifier {
     _indexingStatus = '准备构建语义特征向量库...';
     notifyListeners();
 
-    try {
-      final modelDir = await _aiService.resolveEmbeddingModelDir() ?? 'models';
-      final localClips = _clips
-          .where(
-            (c) =>
-                !c.videoPath.startsWith('http://') &&
-                !c.videoPath.startsWith('https://') &&
-                File(c.videoPath).existsSync(),
-          )
-          .toList();
+    final failures = <ClipIndexFailure>[];
+    var okCount = 0;
+    var skipped = 0;
+    _indexFailures = const [];
+    _indexedOkCount = 0;
+    _indexedSkippedCount = 0;
+    AiStageException? stoppedBy;
 
-      if (localClips.isEmpty) {
-        _indexingStatus = '暂无需要索引的本地片段。';
+    try {
+      final modelDir = await _aiService.resolveEmbeddingModelDir();
+      if (modelDir == null) {
+        _indexingStatus = '语义检索模型未就绪或不完整，请先在上方点击“一键下载 / 修复”。';
         return;
       }
 
-      for (int i = 0; i < localClips.length; i++) {
-        final clip = localClips[i];
-        _indexingProgress = (i + 1) / localClips.length;
-        _indexingStatus =
-            '正在提取关键帧特征 (${i + 1}/${localClips.length}): ${clip.name}';
-        notifyListeners();
-        onProgress?.call(i + 1, localClips.length, clip.name);
+      // Online sources are not indexed (unchanged behaviour); they are counted
+      // so the summary can say so.
+      final candidates = <VideoClip>[];
+      for (final c in _clips) {
+        if (c.videoPath.startsWith('http://') ||
+            c.videoPath.startsWith('https://')) {
+          skipped++;
+        } else {
+          candidates.add(c);
+        }
+      }
 
-        // 先载入磁盘已有记录
-        if (_framePool.getCachedTimestamps(clip.videoPath).isEmpty) {
-          await _framePool.loadFromDisk(clip.videoPath);
+      if (candidates.isEmpty) {
+        _indexingStatus = skipped > 0
+            ? '暂无需要索引的本地片段 (已跳过 $skipped 个在线片段)。'
+            : '暂无需要索引的本地片段。';
+        return;
+      }
+
+      // One failing clip never stops the others. Only a failure that would hit
+      // every clip the same way (sidecar, FFmpeg, ONNX or model missing) ends
+      // the run early, so the same error is not repeated hundreds of times.
+      for (int i = 0; i < candidates.length; i++) {
+        final clip = candidates[i];
+        _indexingProgress = (i + 1) / candidates.length;
+        _indexingStatus =
+            '正在提取关键帧特征 (${i + 1}/${candidates.length}): ${clip.name}';
+        notifyListeners();
+        onProgress?.call(i + 1, candidates.length, clip.name);
+
+        final startMs = clip.startTime.inMilliseconds;
+        final endMs = clip.endTime.inMilliseconds;
+        AiStageException? err;
+        try {
+          if (!await File(clip.videoPath).exists()) {
+            throw AiStageException(
+              stage: AiStage.extraction,
+              kind: AiFailureKind.sourceMissing,
+              message: describeAiFailure(
+                AiStage.extraction,
+                AiFailureKind.sourceMissing,
+                videoPath: clip.videoPath,
+              ),
+              videoPath: clip.videoPath,
+              startMs: startMs,
+              endMs: endMs,
+            );
+          }
+
+          final sourceDuration = _originalVideos
+              .firstWhereOrNull((v) => v.path == clip.videoPath)
+              ?.duration;
+          final range = resolveClipIndexRange(
+            startMs: startMs,
+            endMs: endMs,
+            videoDurationMs: sourceDuration?.inMilliseconds,
+          );
+          if (!range.isUsable) {
+            throw AiStageException(
+              stage: AiStage.extraction,
+              kind: range.problem!,
+              message: describeAiFailure(
+                AiStage.extraction,
+                range.problem!,
+                videoPath: clip.videoPath,
+              ),
+              videoPath: clip.videoPath,
+              startMs: startMs,
+              endMs: endMs,
+            );
+          }
+
+          // Existing cache first, so a failure below cannot cost earlier work.
+          if (_framePool.getCachedTimestamps(clip.videoPath).isEmpty) {
+            await _framePool.loadFromDisk(clip.videoPath);
+          }
+          await _deltaEngine.syncClipRange(
+            videoPathOrUrl: clip.videoPath,
+            startMs: range.startMs,
+            endMs: range.endMs,
+            modelDir: modelDir,
+          );
+          okCount++;
+        } on AiStageException catch (e) {
+          err = e;
+        } catch (e, st) {
+          debugPrint('[AppState] indexAllClips unexpected error: $e\n$st');
+          err = AiStageException(
+            stage: AiStage.internal,
+            kind: AiFailureKind.unknown,
+            message: '程序内部错误：$e',
+            detail: tailForLog('$e\n$st'),
+            videoPath: clip.videoPath,
+            startMs: startMs,
+            endMs: endMs,
+          );
         }
 
-        // 增量规划与同步
-        await _deltaEngine.syncClipRange(
-          videoPathOrUrl: clip.videoPath,
-          startMs: clip.startTime.inMilliseconds,
-          endMs: clip.endTime.inMilliseconds,
-          modelDir: modelDir,
-        );
+        if (err != null) {
+          debugPrint(
+            '[AppState] index failed for "${clip.name}": ${err.report()}',
+          );
+          failures.add(
+            ClipIndexFailure(
+              clipId: clip.id,
+              clipName: clip.name,
+              videoPath: clip.videoPath,
+              startMs: err.startMs ?? startMs,
+              endMs: err.endMs ?? endMs,
+              stage: err.stage,
+              kind: err.kind,
+              message: err.message,
+              report: err.report(),
+            ),
+          );
+          if (err.isEnvironmental) {
+            stoppedBy = err;
+            break;
+          }
+        }
       }
-      _indexingStatus = '所有本地片段语义向量构建完成！';
-    } catch (e) {
-      _indexingStatus = '索引构建中断: $e';
+
+      _indexFailures = List.unmodifiable(failures);
+      _indexedOkCount = okCount;
+      _indexedSkippedCount = skipped;
+      _indexingStatus = _summarizeIndexRun(
+        total: candidates.length,
+        ok: okCount,
+        skipped: skipped,
+        failures: failures,
+        stoppedBy: stoppedBy,
+      );
+    } catch (e, st) {
+      debugPrint('[AppState] indexAllClips aborted: $e\n$st');
+      _indexFailures = List.unmodifiable(failures);
+      _indexingStatus = '索引构建出现程序内部错误：$e';
     } finally {
       _isIndexingEmbeddings = false;
       notifyListeners();
     }
+  }
+
+  String _summarizeIndexRun({
+    required int total,
+    required int ok,
+    required int skipped,
+    required List<ClipIndexFailure> failures,
+    AiStageException? stoppedBy,
+  }) {
+    final parts = <String>[];
+    if (stoppedBy != null) {
+      parts.add(
+        '已停止：${stoppedBy.stageLabel}环节出现会影响所有片段的问题。\n${stoppedBy.message}',
+      );
+    } else if (failures.isEmpty) {
+      parts.add('所有本地片段语义向量构建完成！($ok 个片段)');
+    } else {
+      parts.add('构建完成：成功 $ok 个，失败 ${failures.length} 个。已成功的缓存均已保留，再次点击会重试失败项。');
+    }
+    if (skipped > 0) parts.add('已跳过 $skipped 个在线片段。');
+    return parts.join('\n');
   }
 
   /// 清除语义检索结果

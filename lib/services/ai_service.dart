@@ -5,9 +5,74 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'ai_failure.dart';
 import 'ai_model_downloader.dart';
 import 'ai_model_manifest.dart';
 import 'ai_model_verifier.dart';
+
+/// Raw result of one sidecar invocation.
+class SidecarOutput {
+  const SidecarOutput({
+    required this.exitCode,
+    required this.stdout,
+    required this.stderr,
+    this.timedOut = false,
+  });
+
+  final int exitCode;
+  final String stdout;
+  final String stderr;
+  final bool timedOut;
+}
+
+/// Runs the sidecar. Throws [ProcessException] when it cannot be started.
+typedef SidecarRunner =
+    Future<SidecarOutput> Function(
+      String exe,
+      List<String> args, {
+      required Duration timeout,
+    });
+
+/// Starts [exe], decodes its output as UTF-8 (the sidecar writes UTF-8 even on
+/// a GBK system), and stops the whole process tree when [timeout] passes.
+Future<SidecarOutput> runSidecarProcess(
+  String exe,
+  List<String> args, {
+  required Duration timeout,
+}) async {
+  final proc = await Process.start(exe, args);
+  const decoder = Utf8Decoder(allowMalformed: true);
+  final outF = proc.stdout.transform(decoder).join();
+  final errF = proc.stderr.transform(decoder).join();
+
+  var timedOut = false;
+  final code = await proc.exitCode.timeout(
+    timeout,
+    onTimeout: () async {
+      timedOut = true;
+      if (Platform.isWindows) {
+        // proc.kill() would leave the FFmpeg child running.
+        try {
+          await Process.run('taskkill', ['/PID', '${proc.pid}', '/T', '/F']);
+        } catch (_) {
+          proc.kill();
+        }
+      } else {
+        proc.kill();
+      }
+      return -1;
+    },
+  );
+  const drain = Duration(seconds: 3);
+  final out = await outF.timeout(drain, onTimeout: () => '');
+  final err = await errF.timeout(drain, onTimeout: () => '');
+  return SidecarOutput(
+    exitCode: code,
+    stdout: out,
+    stderr: err,
+    timedOut: timedOut,
+  );
+}
 
 /// 诊断信息
 class AiDoctorInfo {
@@ -204,22 +269,115 @@ class AiService {
       maxEdge.toString(),
     ];
 
-    final res = await Process.run(cli ?? 'local-media-ai', args);
-    if (res.exitCode != 0) {
-      throw Exception('抽取视频帧失败: ${res.stderr}');
+    final exe = cli ?? 'local-media-ai';
+    final cmdLine =
+        'extract-clip --video "$videoPathOrUrl" '
+        '--start-ms $startMs --end-ms $endMs --strategy $strategy '
+        '--every-ms $everyMs --max-frames $maxFrames --max-edge $maxEdge';
+
+    AiStageException fail(
+      AiFailureKind kind, {
+      String? detail,
+      int? exitCode,
+    }) => AiStageException(
+      stage: AiStage.extraction,
+      kind: kind,
+      message: describeAiFailure(
+        AiStage.extraction,
+        kind,
+        videoPath: videoPathOrUrl,
+      ),
+      detail: detail,
+      videoPath: videoPathOrUrl,
+      startMs: startMs,
+      endMs: endMs,
+      command: redactSecrets(cmdLine),
+      exitCode: exitCode,
+    );
+
+    if (endMs <= startMs) {
+      throw fail(
+        AiFailureKind.invalidRange,
+        detail: 'start=$startMs end=$endMs',
+      );
     }
 
-    final json = jsonDecode(res.stdout as String) as Map<String, dynamic>;
-    if (json['ok'] != true || json['data'] == null) {
-      throw Exception('抽帧结果解析失败: ${json['error']}');
+    final SidecarOutput res;
+    try {
+      res = await sidecarRunner(exe, args, timeout: sidecarTimeout);
+    } on ProcessException catch (e) {
+      throw fail(AiFailureKind.cliMissing, detail: '$exe: ${e.message}');
+    }
+    if (res.timedOut) {
+      throw fail(
+        AiFailureKind.timeout,
+        detail:
+            '超过 ${sidecarTimeout.inSeconds}s\n${tailForLog('${res.stdout}\n${res.stderr}')}',
+      );
     }
 
-    final data = json['data'] as Map<String, dynamic>;
-    final rawFrames = (data['frames'] as List<dynamic>?) ?? [];
+    // The sidecar reports errors as JSON on stdout and usually leaves stderr
+    // empty, so both streams are read.
+    Map<String, dynamic>? json;
+    try {
+      final decoded = jsonDecode(res.stdout);
+      if (decoded is Map<String, dynamic>) json = decoded;
+    } catch (_) {}
+
+    if (res.exitCode != 0 || json == null || json['ok'] != true) {
+      final reason = (json?['error'] as String?) ?? '';
+      final raw = [
+        reason,
+        if (json == null) res.stdout,
+        res.stderr,
+      ].where((s) => s.trim().isNotEmpty).join('\n');
+      final kind = json == null && res.exitCode == 0
+          ? AiFailureKind.outputInvalid
+          : classifySidecarText(raw);
+      throw fail(kind, detail: tailForLog(raw), exitCode: res.exitCode);
+    }
+
+    final data = json['data'];
+    final rawFrames = data is Map<String, dynamic>
+        ? (data['frames'] as List<dynamic>?) ?? const []
+        : const [];
+    final method = data is Map<String, dynamic>
+        ? (data['method'] as String?)
+        : null;
     return rawFrames
         .map((f) => ExtractedClipFrame.fromJson(f as Map<String, dynamic>))
+        .map((f) => normalizeFrameTime(f, startMs: startMs, method: method))
         .toList();
   }
+
+  /// Makes [ExtractedClipFrame.tMs] an absolute position in the source video.
+  ///
+  /// Measured on the sidecar (synthetic ramp video whose brightness encodes
+  /// the source second): with `method == "Seek"` `t_ms` is already absolute;
+  /// with `method == "Filter"` `t_ms` counts from `--start-ms` and the pixels
+  /// come from about `start + t_ms` (within roughly one second). When the
+  /// method is missing the value is left unchanged (the older behaviour).
+  @visibleForTesting
+  static ExtractedClipFrame normalizeFrameTime(
+    ExtractedClipFrame frame, {
+    required int startMs,
+    required String? method,
+  }) {
+    if (method == null || method.toLowerCase() != 'filter' || startMs <= 0) {
+      return frame;
+    }
+    return ExtractedClipFrame(
+      tMs: frame.tMs + startMs,
+      path: frame.path,
+      sizeBytes: frame.sizeBytes,
+    );
+  }
+
+  /// Process runner and time limit for sidecar calls. Fields (not method
+  /// parameters) so test doubles that override [extractClipFrames] and
+  /// [embedFrames] keep the same signatures.
+  SidecarRunner sidecarRunner = runSidecarProcess;
+  Duration sidecarTimeout = const Duration(minutes: 3);
 
   /// 自动探测并解析 ONNX Runtime 动态链接库路径 (Windows: onnxruntime.dll)
   Future<String?> resolveOrtLibPath() async {
@@ -323,26 +481,62 @@ class AiService {
       args.addAll(['--ort-lib', resolvedOrt]);
     }
 
-    final res = await Process.run(cli ?? 'local-media-ai', args);
-    if (res.exitCode != 0) {
-      String errMsg = (res.stderr as String).trim();
-      if (errMsg.isEmpty && (res.stdout as String).isNotEmpty) {
-        try {
-          final j = jsonDecode(res.stdout as String);
-          errMsg = j['error'] ?? res.stdout;
-        } catch (_) {
-          errMsg = res.stdout;
-        }
-      }
-      throw Exception('批量帧向量生成失败: $errMsg');
+    final exe = cli ?? 'local-media-ai';
+    final cmdLine =
+        'embed-frames --frames-json <${frames.length} frames> '
+        '--model-dir "$effectiveModelDir" --soft-tokens $softTokens'
+        '${resolvedOrt != null ? ' --ort-lib "$resolvedOrt"' : ''}';
+
+    AiStageException fail(
+      AiFailureKind kind, {
+      String? detail,
+      int? exitCode,
+    }) => AiStageException(
+      stage: AiStage.inference,
+      kind: kind,
+      message: describeAiFailure(AiStage.inference, kind),
+      detail: detail,
+      command: redactSecrets(cmdLine),
+      exitCode: exitCode,
+    );
+
+    final SidecarOutput res;
+    try {
+      res = await sidecarRunner(exe, args, timeout: sidecarTimeout);
+    } on ProcessException catch (e) {
+      throw fail(AiFailureKind.cliMissing, detail: '$exe: ${e.message}');
+    }
+    if (res.timedOut) {
+      throw fail(
+        AiFailureKind.timeout,
+        detail:
+            '超过 ${sidecarTimeout.inSeconds}s\n${tailForLog('${res.stdout}\n${res.stderr}')}',
+      );
     }
 
-    final json = jsonDecode(res.stdout as String) as Map<String, dynamic>;
-    if (json['ok'] != true || json['data'] == null) {
-      throw Exception('帧向量结果解析失败: ${json['error']}');
+    Map<String, dynamic>? json;
+    try {
+      final decoded = jsonDecode(res.stdout);
+      if (decoded is Map<String, dynamic>) json = decoded;
+    } catch (_) {}
+
+    if (res.exitCode != 0 || json == null || json['ok'] != true) {
+      final reason = (json?['error'] as String?) ?? '';
+      final raw = [
+        reason,
+        if (json == null) res.stdout,
+        res.stderr,
+      ].where((s) => s.trim().isNotEmpty).join('\n');
+      final kind = json == null && res.exitCode == 0
+          ? AiFailureKind.outputInvalid
+          : classifySidecarText(raw, stage: AiStage.inference);
+      throw fail(kind, detail: tailForLog(raw), exitCode: res.exitCode);
     }
 
-    final data = json['data'] as Map<String, dynamic>;
+    final data = json['data'];
+    if (data is! Map<String, dynamic>) {
+      throw fail(AiFailureKind.outputInvalid, detail: tailForLog(res.stdout));
+    }
     return (data['embeddings'] as List<dynamic>?)
             ?.cast<Map<String, dynamic>>()
             .toList() ??
@@ -713,11 +907,19 @@ class AiService {
     return null;
   }
 
+  /// Optional user-selected folder for the in-app EmbeddingGemma model.
+  /// Persisted by [AppState]; this is the single source used by discovery,
+  /// download, verification and loading.
+  String? customEmbeddingModelDir;
+
   /// Folders searched for the EmbeddingGemma 2 model, in priority order.
   /// Unchanged from earlier releases so existing installs keep working.
   /// Download, verification, loading and the settings page all read this
   /// list (or [embeddingInstallDir]); nothing else decides where the model is.
-  List<String> embeddingModelCandidateDirs() => const [
+  List<String> embeddingModelCandidateDirs() => [
+    if (customEmbeddingModelDir != null &&
+        customEmbeddingModelDir!.trim().isNotEmpty)
+      customEmbeddingModelDir!.trim(),
     'models',
     r'models\embeddinggemma2',
     r'D:\workspace\IdeaProjects\video_clip_manager\models',
@@ -739,6 +941,12 @@ class AiService {
   /// files, which reported "ready" for half-finished downloads. The sha256
   /// check is the (slow) explicit verify in [installEmbeddingModel].
   Future<String?> resolveEmbeddingModelDir() async {
+    final custom = customEmbeddingModelDir?.trim();
+    if (custom != null && custom.isNotEmpty) {
+      if (!Directory(custom).existsSync()) return null;
+      final v = await _modelVerifier.verify(custom, embeddingGemmaManifest);
+      return v.isComplete ? Directory(custom).absolute.path : null;
+    }
     for (final dir in embeddingModelCandidateDirs()) {
       if (!Directory(dir).existsSync()) continue;
       final v = await _modelVerifier.verify(dir, embeddingGemmaManifest);
@@ -747,10 +955,13 @@ class AiService {
     return null;
   }
 
-  /// Folder a download goes to: the first candidate that already holds part of
-  /// the model (so a repair completes that install instead of starting a
-  /// second copy), otherwise the default `models` folder.
+  /// Folder a download goes to. A user-selected folder is authoritative; the
+  /// default candidates are only searched when no custom folder is set.
   Future<String> embeddingInstallDir() async {
+    final custom = customEmbeddingModelDir?.trim();
+    if (custom != null && custom.isNotEmpty) {
+      return Directory(custom).absolute.path;
+    }
     for (final dir in embeddingModelCandidateDirs()) {
       if (!Directory(dir).existsSync()) continue;
       final v = await _modelVerifier.verify(dir, embeddingGemmaManifest);
