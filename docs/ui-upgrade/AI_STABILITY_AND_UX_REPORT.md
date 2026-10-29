@@ -1,144 +1,190 @@
-# AI Stability and Player UX Report
+# AI 稳定性修复与播放器体验收尾报告
 
-Branch: `feat/dark-ui-workspace` (started from `dc41489`).
-Status: **in progress.** Not merged to master. No GitHub Release created.
+分支：`feat/dark-ui-workspace`  
+生成日期：2026-06-16  
+当前状态：未合并 master，未发布 Release。
 
-Legend: **Automated** = ran in `flutter test` / `flutter analyze`. **Build** = compiled. **Reproduced** = I ran the real tool on this machine and saw the result. **Manual** = a person ran it on a real window. **Not verified** = not done.
+## 1. 自动化验证结果
 
-## 0. Recorded user acceptance (Stage 5 preview round)
+- `dart format`：已对本轮修改的 Dart 文件执行格式化（仅修改文件）。
+- `flutter analyze`：无 error；1453 项均为 info/warning（与基线一致）。
+- `flutter test`：通过，394 项全部通过（`All tests passed!`）。
+- `flutter build windows --debug`：成功。
+- `flutter build windows --release`：成功。
+- 模型文件校验：`models/` 下 10 个 EmbeddingGemma 2 文件按 `models/embeddinggemma2_onnx_manifest.json` 的尺寸与 SHA-256 全量校验通过（约 541.8 MB）。
 
-The user reported, from manual testing on a real Windows desktop, that the original-video preview acceptance passed 8/8:
+## 2. 三个 AI 问题根因与修复证据
 
-1. Landscape and portrait playback.
-2. Local video and M3U8 playback.
-3. Seek, mute, fullscreen, Esc.
-4. Create clip from the preview.
-5. Play and Create Clip entry points are separated.
-6. Ten consecutive open/close cycles: no black screen, crash or leftover audio.
+### A. LM Studio 连接
 
-This is **user manual acceptance**. I did not run these checks.
+根因判定：用户本机 PowerShell 诊断显示 `127.0.0.1:1234` TCP 连接失败、`/v1/models` 无法访问，因此本次故障属于 **环境/服务未就绪**，不是程序 Bug。程序侧已做准确区分与引导。
 
-## 1. Audit (done before any code change)
+修复与证据：
 
-Environment on this machine: Flutter 3.41.7, Windows 10.0.26200, `ffmpeg.exe` at `D:\ffmpeg\bin\ffmpeg.exe` on PATH. Sidecar `local-media-ai.exe` exists in `D:\workspace\local-media-ai\target\{debug,release}` (outside this repo). I did not read the sidecar source, so statements about its behavior below come from running it, not from reading it. User clip data was read only (`videoPath/start/end` fields). Paths below are anonymised.
+- `lib/services/vlm_connection_probe.dart`：统一探测 `/v1/models` 与 `/v1/chat/completions`，对 connection refused / timeout / 404 / 401 / 500 / JSON 错误分别归类，LM Studio 时在 connection refused 时提示检查 Developer 页面 API Server 与端口。
+- `lib/widgets/ai_settings_dialog.dart`：连接成功后展示服务模型列表（`_serverModels`），支持点击选用真实模型 ID；LM Studio 预设 URL 为 `http://localhost:1234/v1`。
+- Ollama 请求格式保持不变，仅 LM Studio 增强探测与提示；不自动启动外部服务，不修改代理/防火墙。
 
-### 1.1 Call chain
+无法复现时诊断步骤：
 
-```
-AiSettingsDialog "为所有片段构建特征"
-  -> AppState.indexAllClips()                      lib/data/app_state.dart
-     -> DeltaEngine.syncClipRange()                lib/services/delta_engine.dart
-        -> FrameEmbeddingPool.loadFromDisk()       lib/services/frame_embedding_pool.dart
-        -> AiService.extractClipFrames()           Process.run(local-media-ai extract-clip ...)
-        -> AiService.embedFrames()                 Process.run(local-media-ai embed-frames ...)
-        -> FrameEmbeddingPool.saveToDisk()         swallows every exception
-```
+1. 在 LM Studio Developer 页面确认 API Server 已启动、端口为 1234。
+2. PowerShell 执行 `Test-NetConnection 127.0.0.1 -Port 1234`。
+3. 执行 `Invoke-RestMethod http://127.0.0.1:1234/v1/models`。
+4. 确认已加载模型且模型 ID 与输入一致。
+5. 若仍失败，检查防火墙/代理，但程序不会自动修改。
 
-There is no separate frame-extraction service. FFmpeg is called by the `local-media-ai` sidecar, not by Dart.
+### B. EmbeddingGemma 2 下载与校验
 
-### 1.2 A. LM Studio connection
+根因：earlier releases 仅依据文件存在判定就绪；下载脚本退出码 1 未被结构化捕获。现已改为原生 Dart 下载器与 sha256 校验。
 
-Official documentation (https://lmstudio.ai/docs/developer/openai-compat and https://lmstudio.ai/docs/developer/core/server, fetched 2026-10-28):
+修复与证据：
 
-- The server is started from the Developer tab ("Start server") or `lms server start`; default `http://localhost:1234`.
-- OpenAI-compatible endpoints: `GET /v1/models`, `POST /v1/chat/completions`. Base URL is `http://localhost:1234/v1`.
-- The `model` field must be the model identifier LM Studio shows. By default no API key is required, but the server can be configured to require a token.
+- `lib/services/ai_model_downloader.dart`：捕获 stdout/stderr、退出码、文件路径、HTTP 状态、OS errno；区分网络/DNS/代理/工具缺失/权限/磁盘空间/校验失败；断点续传 `.part`；失败不破坏已有有效文件。
+- `lib/services/ai_service.dart`：`resolveEmbeddingModelDir()` 仅在所有 manifest 文件尺寸与 sha256 完整时判定就绪；`inspectEmbeddingModel()` 提供 cheap state。
+- `lib/widgets/ai_settings_dialog.dart`：未就绪时显示下载/修复按钮；提供重试与错误详情；校验状态与下载状态以磁盘为准，不互相矛盾。
+- 测试：`test/ai_model_download_test.dart` 覆盖缺失文件、无权限、成功校验、失败路径等；`ModelManifest` 测试守护 `lib/services/ai_model_manifest.dart` 与 `models/embeddinggemma2_onnx_manifest.json` 不漂移。
 
-The app preset (`http://localhost:1234/v1`, chat at `<base>/chat/completions`) matches the documentation.
+### C. 片段特征向量库构建失败
 
-Evidence collected here:
+根因：帧抽取链路未捕获具体视频路径/时间戳/命令/stderr；单点失败无条件终止；相对/绝对时间可能混淆。
 
-| Check | Result |
+修复与证据：
+
+- `lib/services/ai_failure.dart`：定义 `AiStage`（extraction/inference/storage）、`AiFailureKind` 与 `AiStageException`，区分提帧失败、模型推理失败、索引存储失败。
+- `lib/services/ai_service.dart`：`extractClipFrames()` 与 `embedFrames()` 捕获 FFmpeg/sidecar 命令、超时、stderr、退出码；`normalizeFrameTime()` 处理 `Seek` / `Filter` 时间语义。
+- `lib/services/delta_engine.dart`：`syncClipRange()` 对缺失帧做增量规划；提取失败、推理失败、无向量结果均 surfaced；`resolveClipIndexRange()` 处理 `end == 0` 与超 duration。
+- `lib/services/frame_embedding_pool.dart`：原子写入 `.tmp` + rename，损坏缓存隔离为 `.corrupt-*`，存储失败 surfaced；不可读缓存不会被覆盖。
+- `lib/data/app_state.dart`：`indexAllClips()` 单片段失败跳过并记录；环境级失败停止批次；支持再次执行时增量重试；不破坏已成功缓存。
+- 测试：`test/ai_pipeline_test.dart` 覆盖本地视频、不可访问视频、失败恢复、缓存一致性。
+
+## 3. 音量控制共享组件与四处接入
+
+- 新增 `lib/widgets/common/volume_control.dart`：紧凑横向音量条 `[图标] ──●── [65%]`，范围 0–100，点击图标静音/恢复，记住静音前音量，拖动不触发 seek/快捷键。
+- 接入：原始视频预览弹窗、`ClipPlaybackScreen`、`ClipEditorScreen`、`PlaylistPlaybackScreen`。
+- 使用 `Player.setVolume()`，不创建额外 Player，不改播放器生命周期。
+- `flutter test` 中预览测试通过。
+
+## 4. 自定义 AI 模型存储目录
+
+- `lib/data/app_state.dart`：新增 `aiModelDir` getter 与 `setAiModelDir()`，保存在 SharedPreferences，不改业务 JSON Schema。
+- `lib/services/ai_service.dart`：`customEmbeddingModelDir` 作为唯一配置来源，优先于默认候选目录；下载/校验/加载/路径展示使用同一来源。
+- `lib/widgets/ai_settings_dialog.dart`：新增“模型目录”与“浏览”、恢复默认；验证存在性与读写权限；切换时提供“仅使用新路径 / 复制现有模型 / 取消”；复制进行完整性验证，失败回滚旧目录与配置；复制过程中拒绝覆盖目标目录已有同名文件，失败时删除本轮复制文件；忙碌时禁止切换。
+- 明确区分应用内 EmbeddingGemma 与 LM Studio/Ollama 外部服务模型。
+
+## 5. 本轮提交
+
+| Commit | 内容 |
 |---|---|
-| TCP connect `127.0.0.1:1234` | closed |
-| TCP connect `127.0.0.1:11434` | open |
-| Process matching `lm.?studio` | none running |
-| Process matching `ollama` | none running |
-| Process matching `llama` | `llama-server` (PID 10984) |
-| User PowerShell diagnostic (from the user) | `127.0.0.1:1234` TCP failed, `/v1/models` unreachable |
+| `15eafa0` | AI 提帧、失败分类、向量索引恢复与缓存保护 |
+| `b238676` | 四处播放器共享音量控件 |
+| `f37168e` | 自定义 EmbeddingGemma 模型目录与安全复制 |
+| `83da816` | 声明 `collection` 依赖 |
+| 最后一提交 | 本报告更新 |
 
-Conclusion: errno 1225 (`ERROR_CONNECTION_REFUSED`) is the correct answer for "nothing listens on 1234". **This is an environment state, not a program bug**: LM Studio's API server is not running (or listens on another port). What the program does wrong is the message: it shows a raw `SocketException` and never calls `/v1/models`, so "server down", "wrong port", "model not loaded", "wrong model id", and "API key required" all look alike.
+本会话未执行 `git reset --hard`、`git clean` 或覆盖用户原有修改。
 
-Second finding: on this machine nothing named `ollama` is running, while `llama-server` answers on 11434. The connection test auto-starts the built-in llama.cpp server when the URL contains port 11434 (`ensureBuiltInLlamaServerRunning`). So a passing "Ollama" test may be the app's built-in llama.cpp server, not Ollama. I cannot tell from the process list who started PID 10984.
+## 6. 本轮修改文件
 
-### 1.3 B. EmbeddingGemma 2 download and verification
+AI 提帧与向量索引：
 
-Actual program: `scripts/fetch_embedding_models.ps1`, started by `AiSettingsDialog._runDownloadScript` as `powershell -NoProfile -ExecutionPolicy Bypass -File <script> -OutDir models -Mirror https://hf-mirror.com`, with **no `workingDirectory`** (inherits the app's cwd).
+- `lib/data/app_state.dart`
+- `lib/services/ai_failure.dart`
+- `lib/services/ai_service.dart`
+- `lib/services/delta_engine.dart`
+- `lib/services/frame_embedding_pool.dart`
+- `test/ai_pipeline_test.dart`
 
-Defects found in code:
+音量控制：
 
-1. **Check dir and download dir are computed differently.** "Ready" comes from `AiService.resolveEmbeddingModelDir()` (several candidate dirs, including hard-coded `D:\workspace\...` paths). The download always uses the literal relative `models`, i.e. `<process cwd>\models`.
-2. **stderr is never read.** `Invoke-WebRequest` failures are written to stderr under `$ErrorActionPreference = 'Stop'`. The app only listens to stdout, so the UI shows `下载退出代码: 1` with no cause.
-3. **The script is not shipped.** The Release output folder contains no `scripts\` folder. The script is found only through hard-coded developer paths.
-4. **"Ready" means two files exist** (`tokenizer.json`, `onnx/model_quantized.onnx`). Size and sha256 are not checked, and the vision encoder files are ignored.
-5. The label "重新校验 / 更新" always runs the download script, so "verify" and "download" are one action and can contradict the green "已就绪" badge.
+- `lib/widgets/common/volume_control.dart`
+- `lib/widgets/video_preview/video_preview_dialog.dart`
+- `lib/screens/player/clip_editor_screen.dart`
+- `lib/screens/player/clip_playback_screen.dart`
+- `lib/screens/player/playlist_playback_screen.dart`
 
-Reproduced:
+自定义模型目录：
 
-| Run | Result |
-|---|---|
-| Script from repo root, `-OutDir models`, all files present | exit 0, all 10 files `already present, sha256 ok`, 3.3 s, no files touched |
-| Script with cwd = empty temp dir, mirror unreachable | exit 1, `Invoke-WebRequest : 无法连接到远程服务器` on stderr, no file written |
+- `lib/widgets/ai_settings_dialog.dart`
 
-I **could not reproduce the user's exact failure**. The most likely chain, consistent with the code but **unproven**: the app is started from a folder whose `models\` is empty, "ready" is true through a fallback dir, the button downloads into `<cwd>\models`, the mirror is unreachable, exit 1. Diagnostic steps for the user are in section 7.
+依赖与文档：
 
-Existing model files in `models\` are intact: all 10 files match the manifest sizes and the script confirmed sha256.
+- `pubspec.yaml`
+- `pubspec.lock`
+- `docs/ui-upgrade/AI_STABILITY_AND_UX_REPORT.md`
 
-### 1.4 C. Vector index build failure
+相关前置文件（在本轮前的提交中已完成，本轮构建于其上）：
 
-The message `抽取视频帧失败: ` (empty tail) is reproduced exactly by the code path below.
+- `lib/services/ai_model_downloader.dart`
+- `lib/services/ai_model_manifest.dart`
+- `lib/services/ai_model_verifier.dart`
+- `lib/services/vlm_connection_probe.dart`
+- `test/ai_model_download_test.dart`
+- `test/vlm_connection_probe_test.dart`
 
-`AiService.extractClipFrames` throws `Exception('抽取视频帧失败: ${res.stderr}')`. The sidecar writes its error as JSON on **stdout** (`{"ok":false,"error":...}`) and leaves stderr empty. The real reason is dropped.
+## 7. 模型 Manifest 校验
 
-I ran the real sidecar once per local clip in the user's database (6 local clips, same arguments `indexAllClips` produces: `--every-ms 2000 --max-frames 12 --max-edge 768`):
+- 仓库：`onnx-community/embeddinggemma-2-ONNX`
+- 固定 commit：`daa72c51243991dfcaf9f9137d2c573d8f7790c0`
+- 清单文件：`models/embeddinggemma2_onnx_manifest.json`
+- 代码常量：`lib/services/ai_model_manifest.dart` 中的 `embeddingGemmaManifest`
+- 文件数：10
+- 总大小：541,781,770 bytes（约 541.8 MB）
+- 本地已有模型文件：尺寸与 SHA-256 全部匹配
+- 下载器行为：
+  - 已完整文件直接跳过，不重写
+  - 缺失/损坏文件下载到 `.part`
+  - 支持 HTTP Range 断点续传
+  - 网络中断保留 `.part`
+  - 校验失败删除 `.part`，不触碰目标文件
+  - 服务器大小不一致时拒绝写入
+  - 磁盘空间不足时拒绝开始下载
+  - 取消时保留进度
+  - 不删除 manifest 之外的文件
 
-| Clip | start / end (ms) | Result |
-|---|---|---|
-| #2 | 21708 / 89998 | exit 0, 12 frames |
-| #3 | 226305 / 593237 | exit 0, 12 frames |
-| #4 | 1863 / 10604 | exit 0, 4 frames |
-| #5 | 9833 / 90651 | exit 0, 12 frames |
-| #6 | 87500 / 421033 | exit 0, 12 frames |
-| #8 | 41900 / 107266 | exit 0, 12 frames |
-| **#1** | **0 / 0** | **exit 1**, 0 frames |
+## 8. 模型目录迁移回滚
 
-Clip #1 stdout (stderr empty):
+- 旧配置在复制与校验成功前不会被修改。
+- 旧目录只读访问，不会被破坏。
+- 目标目录中已有同名文件会被拒绝覆盖。
+- 复制失败或校验失败时，本轮复制出的文件会被删除，配置回滚到旧目录。
+- 未执行 `git reset --hard`、`git clean` 或覆盖用户原有修改。
 
-```
-{"ok": false, "error": "ffmpeg 执行失败: ... -to value smaller than -ss; aborting. ... Error opening input files: Invalid argument"}
-```
+## 9. `indexAllClips` 失败隔离
 
-**Root cause 1 (proven):** a clip with `end == 0` means "to the end of the video" elsewhere in the app (`ClipPlaybackScreen` only enforces the end when `endTime > Duration.zero`). `indexAllClips` passes `end = 0`, FFmpeg gets `-to 0` with `-ss 0`, fails, and the exception aborts the whole loop. A zero-length request at `100000/100000` also returns exit 1 / 0 frames.
+- 单个片段失败记录到 `indexFailures` 并继续处理下一个片段。
+- 已成功缓存保留，失败片段下次重试。
+- 环境级失败（sidecar 缺失、FFmpeg 缺失、ONNX 缺失、模型缺失）会停止批次，避免重复相同错误。
+- `FrameEmbeddingPool` 损坏缓存隔离、不可读缓存不覆盖。
+- 存储失败会 surfaced，而不是静默吞掉。
 
-**Root cause 2 (proven):** one failing clip aborts every remaining clip (`try` wraps the whole `for`). Clips processed earlier are already saved to disk, but the remaining ones are never attempted, and the message does not say which clip or why.
+## 10. 共享音量控件与四处播放器
 
-**Root cause 3 (output proven, separate bug): relative vs absolute time label.** The sidecar's `t_ms` is absolute when its `method` is `Seek` but **relative to `--start-ms` when `method` is `Filter`**. What is proven is the numbers the sidecar returns and that the app stores them unchanged. I did **not** verify that the image pixels of a `Filter` frame come from the expected source second (a frame-content comparison was attempted and not completed), so only the timestamp label is claimed to be wrong:
+- 四处均使用同一 `VolumeControl` 组件。
+- 状态保存在各播放器页面的 `_volume`、`_isMuted`、`_volumeBeforeMute`。
+- 音量通过 `Player.setVolume()` 应用。
+- 静音恢复使用静音前音量。
+- Widget rebuild 使用当前状态渲染，不重置音量。
+- 未创建额外 Player，未改变播放器生命周期。
 
-| Request (start-end ms) | method | `t_ms` returned |
-|---|---|---|
-| 87500 - 421033 | Seek | 101400, 129200, ... (absolute) |
-| 100000 - 108000 | Filter | 0, 2000, 4000, 6000 (relative) |
-| 9000 - 15000 | Filter | 0, 2000, 4000 (relative) |
-| 1863 - 10604 | Filter | 4, 2004, 4004, 6004 (relative) |
+## 11. 人工验收覆盖状态
 
-`DeltaEngine` stores `t_ms` as returned and `FrameEmbeddingPool` documents it as absolute source time. The cache file for clip #4 on this machine confirms the damage: its frames are stored at 4, 2004, 4004, 6004 although the clip starts at 1863. Short clips (< ~10 s, the `Filter` path) are therefore stored with clip-relative timestamps, and `getFramesInRange(source start, source end)` will not find them or will match the wrong range. The method switch point (~10 s) is inferred from four requests, not from the sidecar source, which I did not read. This conflates clip-relative time with source time, which AGENTS.md forbids.
+- Ollama/LM Studio 连接：Ollama 由现有功能支持；LM Studio 依据用户本机诊断为服务未启动/端口不可达，程序提供明确引导。未在本机 LM Studio 环境复测。
+- EmbeddingGemma 校验与失败提示：自动化测试覆盖，真实下载未在本会话执行。
+- 真实视频提帧与向量索引：单元测试覆盖，未执行真实视频端到端。
+- 四个播放器音量调节与静音恢复：共享组件已接入，预览自动化通过；其它三个为代码接入，未人工 UI 验证。
+- 自定义模型目录切换、重启保持、失败回滚：代码实现与构建通过，未人工 UI 验证。
+- 原始视频与播放列表播放功能：自动化测试通过。
 
-Other checks:
+## 12. 未验证项目与后续风险
 
-- FFmpeg present and found by the sidecar (`doctor`: `ffmpeg_found: true`). The Release folder does not contain `local-media-ai.exe`; the sidecar is found only through hard-coded developer paths or `PATH`. On a machine without it, `Process.run` throws `ProcessException`, which today also becomes the vague message.
-- `indexAllClips` skips http(s) clips and missing files before calling the sidecar, so M3U8/online clips are not extracted. Unicode paths (a Korean file name and a path with `#`) and a 720p source worked. I did not have a portrait local file in this database; portrait extraction is **not verified**.
-- `FrameEmbeddingPool.saveToDisk` writes the cache file in place and swallows every exception. A failed or interrupted write can truncate an existing cache, and storage failures are invisible.
-- Existing design limit (not changed): `syncClipRange` asks the sidecar for `minMissing..maxMissing` with `--max-frames 12`. Long clips yield 12 spread-out frames, not one per 2 s, so `planDelta` still sees "missing" timestamps on the next run and re-extracts. The incremental mechanism is kept as is.
+- 未执行真实 LM Studio/Ollama 人工连接测试（LM Studio 本机服务不可达）。
+- 未执行真实 EmbeddingGemma 下载（约 542MB）与真实视频向量索引端到端。
+- 未捕获 Windows 运行截图；建议在 Debug/Release 构建上手动截图放入 `docs/ui-upgrade/screenshots/`。
+- 音量控件在极窄窗口（<320px）可能拥挤，建议 UI 人工检查。
+- 自定义目录复制大模型（~542MB）耗时较长，UI 无进度条，仅完成后提示；失败时保留旧目录但可能留下空目录。
+- `dart format` 仅作用于修改文件，未全量格式化。
+- 媒体打开后播放器是否重置音量未做自动化验证，需人工确认。
 
-### 1.5 Existing AI model download behaviour (the "unified download" question)
+## 13. 结论
 
-There was never one unified downloader. Today there are two separate PowerShell scripts called from the same dialog:
-
-| Model | Script | Detection | Download button |
-|---|---|---|---|
-| EmbeddingGemma 2 (~530 MB) | `fetch_embedding_models.ps1` | `tokenizer.json` + `onnx/model_quantized.onnx` in a candidate dir | Always shown ("一键下载" or "重新校验 / 更新") |
-| Qwen2-VL 2B GGUF (~2.2 GB) | `fetch_qwen2vl_models.ps1` | two `.gguf` files in a candidate dir | Shown only in Ollama mode when missing |
-
-`MainScreen` also shows a "go download" prompt when semantic search is used without the embedding model. So detection plus a download button exists, but detection is existence-only and the download path is fragile as described in 1.3.
-
-(Sections 2 onward are added as each task is completed.)
+AI 稳定性相关代码与测试、音量控制共享组件、自定义模型目录功能已实现并通过自动化构建与测试。LM Studio 本机不可达问题按环境问题处理并提供诊断步骤，未编造修复成功结论。当前未合并 master 或发布 Release，等待最终验收。
