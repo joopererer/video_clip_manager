@@ -83,7 +83,7 @@ e073713 Merge branch 'feat/v1.1-release-polish' into master   <-- 合并提交
 | 图形 / 解压依赖 | `d3dcompiler_47.dll`、`libEGL.dll`、`libGLESv2.dll`、`vk_swiftshader.dll`、`vulkan-1.dll`、`zlib.dll` |
 | 插件 | `desktop_drop_plugin.dll`、`url_launcher_windows_plugin.dll`、`volume_controller_plugin.dll`、`native_assets.json` |
 
-**未包含**（已扫描确认，无任何 `.onnx` / `.safetensors` / `.gguf` / `.bin` / `.pt` / `.model` 权重文件，也没有 `models/` 目录）：
+**未包含**（已对 ZIP 条目逐条扫描确认：无 `models/` 目录，无任何模型权重文件；唯一以 `.bin` 结尾的是 313 字节的 Flutter 资源索引 `data/flutter_assets/AssetManifest.bin`，不是权重）：
 - EmbeddingGemma 2 模型权重（约 530MB）；
 - Qwen2-VL 多模态权重；
 - `local-media-ai.exe` sidecar（本仓库不产出该二进制）。
@@ -105,7 +105,7 @@ e073713 Merge branch 'feat/v1.1-release-polish' into master   <-- 合并提交
 | 已加载模块 | `flutter_windows.dll`、**`libmpv-2.dll`**（播放内核被真实加载） |
 | `onnxruntime.dll` | 未被加载 —— 符合预期：无模型时不会触发推理，也没有崩溃 |
 | 首次运行写入 | `%APPDATA%\com.vcm\Video Clip Manager\shared_preferences.json`（含 `db_path`、`update_check_at_ms`） |
-| 更新检查（无任何 Release） | 记录了节流时间戳、无崩溃、无错误弹窗 —— 与"无 Release 时提示合理"一致 |
+| 更新检查（远端最新为 v1.0.1） | 记录了节流时间戳、无崩溃、无错误弹窗 —— 远端 1.0.1 不高于本地 1.1.0，判定为"已是最新"，与预期一致 |
 | 退出 | 强制结束后无残留进程 |
 
 ### 5.1 必须披露的副作用
@@ -137,7 +137,7 @@ Windows 的"文档"目录由 Shell 已知文件夹决定，**不受重定向的 
 1. **真实"无模型机器"未完全模拟**：本机存在 `models/`（516.7 MB，12 个文件）以及 `D:\workspace\local-media-ai\runtime\models`、`D:\workspace\IdeaProjects\video_clip_manager\models`、`D:\workspace\FlutterProjects\video_clip_manager\models` 三个绝对路径候选（代码中的既有开发路径）。因此"AI 显示未下载并引导下载"是**通过测试断言 + 代码路径**证明的，不是在真正缺模型的机器上肉眼看到的。
 2. **包内播放/截取的端到端操作未在打包版内用鼠标跑一遍**：可确认的是进程存活、窗口创建、`libmpv-2.dll` 已加载、真实资料库读取成功；实际点开视频播放仍需人工在解压目录里点一次。
 3. **界面截图未产出**：本会话的图片读取能力不可用（工具拒绝读取 png/jpg），`PrintWindow` 虽然成功抓到窗口位图，但无法自行确认画面内容，故**没有**把未核实的截图作为证据提交。视觉层面仍以 `docs/ui-upgrade/screenshots/v1_1/` 中生产 widget 渲染图与用户已完成的人工验收为准。
-4. **更新检查的成功路径**：仓库仍无任何 Release，`/releases/latest` 返回 404 的分支已被单测覆盖；"发现新版本"的真实网络路径要等首个 Release 上线后才能实测。
+4. **更新检查的真实远端**：发布前核实发现仓库**已有**正式 Release `v1.0.1`（2026-10-26 发布，非 prerelease，含 Windows/macOS/Linux 三个 CI 产物；tag `v1.0.1` 为 annotated tag，指向 `477087d`）。因此"无 Release 时 404"并非唯一现状；本机实测的路径是"远端 1.0.1 低于本地 1.1.0 → 不提示更新"，符合预期。此前文档中"仓库尚无任何 Release"的表述据此更正。
 5. **语义检索阈值未调整**：仍为 `minScore = 0.28` 且无 Top-K，低相关结果仍会返回（本版只是把分数如实显示并默认按相关度排序）。真实语料评估表 `semantic_eval/queries.csv` 仍待填写。
 6. **包内不含 sidecar**：纯新环境启用 AI 语义搜索，除模型外还需自行获取 `local-media-ai.exe` 与 FFmpeg；提示文案明确，但不是"下载即用"。
 7. `docs/ui-upgrade/screenshots/stage1`、`stage2` 下 6 张既有截图会被 `flutter test` 重新生成（内容为该测试的渲染输出）。本次已把它们**备份到 `%TEMP%\vcm_regen_shots\` 后恢复到 HEAD 版本**，以保持工作区干净；未做任何 `reset --hard` / `clean -fd` 等破坏性清理。
@@ -159,5 +159,45 @@ Windows 的"文档"目录由 Shell 已知文件夹决定，**不受重定向的 
 
 1. 决定是否推送 `master`（落后 0 个、领先全部 v1.1.0 提交）。
 2. 起 tag（建议 `v1.1.0`）并创建 GitHub Release，附件上传 `video_clip_manager-v1.1.0-windows-x64.zip`，正文使用 `V1_1_RELEASE_NOTES.md`。
-3. Release 上线后，实测一次「关于 → 检查更新」的成功路径，并把结果补进本文件。
+3. Release 上线后，实测一次「关于 → 检查更新」：确认已发布同版本时**不会**提示有新版本，并把结果补进本文件。
 4. 如需彻底验证"无模型新环境"，在一台干净的 Windows 机器/虚拟机上解压运行，确认 AI 设置的下载引导与普通播放均正常。
+
+## 10. 发布前最终确认（用户授权后、实际推送前）
+
+### 10.1 已核对项
+
+| 项 | 结果 |
+| --- | --- |
+| 工作区 | 干净（`git status --porcelain` 为 0 条） |
+| 当前分支 / HEAD | `master` / `3936f88f6897b655119887aa38a94b54b10e8077`（与用户给出的 `3936f88` 一致） |
+| 本地 `origin/master` | `c7011b2f74a450783887bf73a7d4f8b2983b3969` |
+| 远端 `refs/heads/master`（`git ls-remote`，只读） | `c7011b2f74a450783887bf73a7d4f8b2983b3969` —— **与本地跟踪分支一致，无新的远程提交** |
+| 分叉判断 | `git rev-list --left-right --count origin/master...master` = `0  49` → 领先 49、落后 0，推送为**快进**，无需强推 |
+| 远端 tag `v1.1.0` | **不存在**（`git ls-remote --tags origin v1.1.0` 无输出），创建安全 |
+| 已有 Release | `v1.0.1`（Latest，非 prerelease，2026-10-26），tag `v1.0.1` 为 annotated tag → `477087d` |
+| ZIP 与源码对应 | 发布构建完成于 `fcfbfd5`；此后的 `8e54a67`/`243f36b`/`3936f88` **只改了 `docs/ui-upgrade/V1_1_RELEASE_FINAL.md`**，`lib/`、`windows/`、`pubspec.*`、`assets/` 无任何差异 → ZIP 即当前 HEAD 的代码 |
+| ZIP SHA-256 复算 | `500C9081850F2F6F5132252D74ACC0CB8301B7975E090CCC9FFB826C1B132349`，与 §4 记录**一致**；41,516,055 字节 |
+| ZIP 结构复检 | 35 个条目 = 30 个文件 + 5 个目录条目；唯一 `.bin` 是 313 字节的 `AssetManifest.bin`；最大文件均为运行时 DLL，**无模型权重** |
+| GitHub 权限 | `gh auth status` → 账号 `joopererer`，token scopes 含 `repo`；仓库 `joopererer/video_clip_manager`（public，默认分支 `master`） |
+
+### 10.2 阻断项：仓库自带的发布工作流与人工发布计划冲突
+
+`.github/workflows/release.yml` 的触发条件是 `push: tags: v*`，其中 `publish-release` job 用 `softprops/action-gh-release@v2` **自动创建 Release**，且：
+
+- 标题固定为 `Release ${tag}`，不是「Video Clip Manager v1.1.0」；
+- 正文由 `generate_release_notes: true` 自动生成，**不会**使用 `V1_1_RELEASE_NOTES.md`；
+- 附件来自 CI 三平台构建，Windows 包名为 `video_clip_manager-windows-x64.zip`（无版本号），与本地产出的 `video_clip_manager-v1.1.0-windows-x64.zip` 是**两个不同的二进制**；
+- `prerelease: false`。
+
+因此，一旦推送 `v1.1.0` tag，CI 会先建好一个标题/正文/附件都与本次发布计划不同的 Release；随后用 `gh release create v1.1.0` 会因已存在而失败，改用编辑则会覆盖正文并产生重复附件。此外通过 `gh release create --target master` 让 GitHub 代建 tag，同样会触发该工作流。
+
+**结论：在用户就"如何处理该工作流"作出决定之前，不执行 tag 推送与 Release 创建。**
+
+### 10.3 尚未满足的前置条件
+
+用户要求"未经确认最终 ZIP 的人工播放测试通过，不得开始实际推送与 Release 创建"。截至本节撰写，**尚未收到该确认**，因此 `git push`、tag、Release 均未执行。
+
+### 10.4 本轮更正的事实
+
+- 仓库**已有**正式 Release `v1.0.1`，此前"仓库尚无任何 Release、`/releases/latest` 404"的表述不准确，已在 §7 第 4 条与 Release Notes 的「已知限制」中更正。
+- 冒烟测试时远端最新 Release 已为 `v1.0.1`，因此当时走的是"远端版本更低 → 不提示更新"的分支，而非 404 分支。
