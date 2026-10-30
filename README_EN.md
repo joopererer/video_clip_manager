@@ -68,7 +68,7 @@ Latest stable release: [**Video Clip Manager v1.1.0**](https://github.com/jooper
 - **Relevance sorting**: when semantic scores exist, results default to "highest relevance", strictly descending by score; switching sort order keeps HIT and Score intact.
 - **Keyword filtering is separate from AI search**: the search box always filters by keyword as you type, and only `Enter` or the ✨ button in the search box starts an AI semantic search. A status bar and result banner always show the current mode; editing the query clears stale HIT/Score immediately and late responses are discarded as a whole.
 - **Model management for semantic search**: the AI settings panel reports EmbeddingGemma 2 status (ready / not downloaded / incomplete), supports a custom model directory (with an option to copy existing models), one-click download and a "repair / complete download" action that verifies each file by SHA-256 and only fetches what is missing or corrupt.
-- **Local-first**: embeddings are computed on your machine; no media, model or vector data is uploaded.
+- **Privacy boundary**: embedding and frame extraction for EmbeddingGemma semantic search run on your machine, and media, model and vector data are not uploaded. If you use a remote VLM API that you configured yourself (OpenAI- or DashScope-compatible, or a remote Ollama / LM Studio endpoint), your requests send the necessary data — such as frame images and prompts — to that service, so please evaluate it under that provider's policy.
 
 ### VLM descriptions (optional, external inference service)
 
@@ -117,7 +117,7 @@ Skip this section entirely if you only manage, play and clip videos. AI semantic
 | --- | --- | --- |
 | **EmbeddingGemma 2** model (~530 MB) | 768-dimensional text and keyframe embeddings | Download from **Settings → AI Settings → Semantic search model** inside the app; each file is SHA-256 verified, and the model directory is configurable (defaults to `models/` next to the executable) |
 | **`local-media-ai.exe`** sidecar | Frame extraction, text/image embeddings, VLM calls | This repository **does not build that binary** and the release ZIP does not include it. The sidecar comes from the separate `local-media-ai` Rust project; build it yourself and place it next to the executable (or in a `bin/` subfolder, or on the system `PATH`) |
-| **FFmpeg** | Frame extraction and media decoding | Install FFmpeg the usual way from its official distribution and make sure it can be found |
+| **FFmpeg** | AI frame extraction (called by the sidecar) and merging of online audio/video streams (DASH/HLS split tracks) | Install FFmpeg the usual way from its official distribution and make sure it can be found; normal local playback is handled by the bundled media_kit (mpv) core and does **not** need an external FFmpeg |
 
 If the model, the sidecar or FFmpeg is missing the app does not crash — AI settings and search show explicit guidance on what is missing and where to put it.
 
@@ -135,7 +135,7 @@ If the model, the sidecar or FFmpeg is missing the app does not crash — AI set
 ### Prerequisites
 
 - [Flutter SDK](https://flutter.dev) 3.41+ (Dart 3.11+)
-- [FFmpeg](https://ffmpeg.org) (playback and frame extraction; required for AI semantic search)
+- [FFmpeg](https://ffmpeg.org) (AI frame extraction and online audio/video stream merging; not required for normal local playback, which uses the bundled media_kit / mpv core)
 - [Rust](https://rustup.rs) (optional, only for building the `local-media-ai` sidecar yourself)
 
 ### Common commands

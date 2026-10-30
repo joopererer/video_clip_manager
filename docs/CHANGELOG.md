@@ -2,6 +2,7 @@
 
 Video Clip Manager 的完整版本历史。仓库首页 README 只保留当前版本摘要，历史细节收录在此，并保留原有条目内容。
 
+- 仓库首页：[README（简体中文）](../README.md) ｜ [README (English)](../README_EN.md)
 - 当前版本：**v1.1.0**（构建 `1.1.0+3`）
 - 已发布 Release：<https://github.com/joopererer/video_clip_manager/releases>
 - v1.1.0 发布说明：[`docs/ui-upgrade/V1_1_RELEASE_NOTES.md`](ui-upgrade/V1_1_RELEASE_NOTES.md)
