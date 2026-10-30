@@ -205,6 +205,22 @@ git grep -n -i "AV_Data_Capture"
 
 说明：运行 `flutter test` 时，视觉验证测试会重写 `docs/ui-upgrade/screenshots/` 下 6 张已跟踪截图。为保持发布截图不被无意替换，测试后已用 `git restore` 恢复这些图片，工作区最终干净。
 
+### 6.1 与 master 整合后的复核（第二次全量验证）
+
+在把最新 `master`（含双语 README 合并 `29bc429`）整合进整理分支后，于 `f4e3692` 之上重新执行了完整验证：
+
+| 检查 | 结果 |
+| --- | --- |
+| `flutter --version` | Flutter 3.41.7 / Dart 3.11.5 |
+| `flutter pub get` | 成功（`Got dependencies!`，`pubspec.lock` 未变更） |
+| `flutter analyze` | 0 error；**1344** 条既有 info/warning（与整理前基线一致，未新增） |
+| `flutter test` | **461 项全部通过**（`+461: All tests passed!`） |
+| `flutter build windows --release` | 成功；`build\windows\x64\runner\Release\video_clip_manager.exe`，同目录含 `flutter_windows.dll`、`data/`、`libmpv-2.dll`、`onnxruntime.dll`、各插件 DLL |
+| 回归链接 | `README.md` / `README_EN.md` / `docs/CHANGELOG.md` 的 3 张截图与全部本地链接均可解析 |
+| 本地资产 | `AV_Data_Capture/` 与 `AV_Data_Capture/.git` 存在；`models/*_manifest.json` 2 份均在；`models/` 权重未被跟踪、未被改动 |
+
+说明（截图）：本轮 `flutter test` 同样重写了 6 张已跟踪的 Widget 截图（`stage1/02_clips_tab_dark.png`、`stage2/widget/interaction_1600x800.png`、`stage2_01/02/03/05`）。逐项核对：只是 PNG 重新编码（字节数相差 1 B ~ 1.2 KB，渲染内容一致），非界面变更。为避免把测试副产物混进整理提交、并保持发布截图稳定，测试后仅对上述 6 个文件做了路径精确的 `git checkout --` 恢复；未对任何未确认用途的文件执行恢复。
+
 ## 7. 提交清单
 
 | 提交 | 内容 |
@@ -214,12 +230,50 @@ git grep -n -i "AV_Data_Capture"
 | `ea4d399` `chore(repo): stop tracking the stray AV_Data_Capture checkout` | 移除父仓库 gitlink，`.gitignore` 增加 `/AV_Data_Capture/` |
 | `1694e3c` `refactor(repo): organize diagnostic scripts and fixtures` | 24 个诊断脚本 → `tool/diagnostics/`；2 个夹具 → `test/fixtures/`；修正 `lib/` 导入 |
 | `8edc0a4` `docs: archive historical development notes` | 11 个历史说明 → `docs/archive/`；3 个指南/研究 → `docs/guides/` |
-| 本文件所在提交 | `docs(maintenance): add repository cleanup audit` |
+| `1d3eb6a` `docs(maintenance): add repository cleanup audit` | 新增本审计文件 |
+| `2825639` `chore(repo): ignore diagnostic temp files` | `.gitignore` 补充诊断脚本临时 `.py`；审计文件一处措辞修正 |
+| `f4e3692` `Merge master (bilingual README) into repository cleanup branch` | 并入最新 `master`（`29bc429`），无冲突；仅带入 README/README_EN/docs/CHANGELOG 的隐私与 FFmpeg 修正（3 文件 +7/−6） |
+| 本文件本次修订所在提交 | `docs(maintenance): record final classification, master integration and re-verification` |
 
-## 8. 仍需用户判断
+## 8. 32 项未提交改动的最终分类与处理
 
-1. `tool/diagnostics/` 中多个高度重叠的 MissAV / 编码诊断脚本是否还需要保留；确认后可单独删除，不影响 `flutter test` 与构建。
-2. 是否把 `docs/ui-upgrade/logs/` 继续作为公开历史保留（含开发机绝对路径），或后续移到单独的私有归档。
-3. 是否在双语 README 中补充 `docs/guides/ONLINE_VIDEO_SETUP.md` 与 `docs/guides/EXTERNAL_SCRAPERS_GUIDE.md` 的入口；本次只修复了移动后的路径引用，未新增宣传性链接。
+整理工作区在整合 `master` 前共有 32 项 `git status` 显示的“已修改”文件（`LICENSE`、`docs/ui-upgrade/**`、`lib/**`、`test/**`）。逐项核查结论：
+
+| 分类 | 数量 | 判定依据 | 处理 |
+| --- | --- | --- | --- |
+| 有意的仓库清理修改 | **0** | 32 个文件的工作区内容经 `git hash-object --path=<f>`（应用 clean 过滤）后与索引 blob **逐一相等**（脚本断言 `content_diff=0`） | 无 |
+| 纯 CRLF/LF 换行差异 | **32** | `git diff --quiet` 退出 0；`git diff --ignore-space-at-eol` 无输出；索引存储 LF、工作区为 CRLF（`core.autocrlf=input`），仅 stat 缓存过期 | 用 `git add --renormalize .` 刷新（`git diff --cached` 为空，证明无内容进入暂存） |
+| 无关格式变化 | 0 | — | — |
+| 无法确定来源 | 0 | — | — |
+
+补充说明：
+- 未使用 `git restore`/`git reset`/`git clean` 处理这 32 项，也未丢弃任何内容；`--renormalize` 后 `git status -sb` 输出为干净（0 项）。
+- 根因是历史提交以 LF 入库、而工作区文件被 Windows 编辑器/处理器保存为 CRLF。彻底根治需要提交 `.gitattributes`（`* text=auto eol=lf`）并全仓 renormalize，会改写成千上万行的提交，超出本次“文档与仓库卫生”范围，故仅记录、不改写。
+
+## 9. 与最新 master 的整合
+
+- 整理分支原基线为 `340382a`（双语 README 首个提交），`master` 后续新增 `20c6566`（隐私边界 + FFmpeg 范围修正）与合并提交 `29bc429`。
+- 合并命令：`git merge --no-ff master`，结果提交 `f4e3692`，**无冲突**。
+- 合并只引入 `README.md`、`README_EN.md`、`docs/CHANGELOG.md` 三处修正（+7/−6）；整理分支从未在 `340382a` 之后修改过这三个文件，因此**不会用旧 README 覆盖 master 的新 README**。
+- 合并后确认：`README.md` 含“隐私边界”段、`README_EN.md` 含 `Privacy boundary` 段、`docs/CHANGELOG.md` 顶部保留返回 README 的双语链接。
+
+## 10. 大文件与敏感信息复核（整合后）
+
+- 仓库内最大的被跟踪二进制为根目录 `onnxruntime.dll`（约 15.7 MB），是 Release 与 CI 必需资源（`.github/workflows/release.yml` 复制进发布包），保留。
+- 未跟踪的 `models/`（含 `tokenizer.json` 约 32 MB 与 ONNX 权重）、根目录 Release ZIP、`AV_Data_Capture/` 均由 `.gitignore` 覆盖，不进入版本库，本机原样保留。
+- 对被删除/迁移文件复查 `C:\Users`、`password`、`token`、`api_key`、`secret`、`cookie`、`Authorization`：**无硬编码凭证**；`tool/diagnostics/test_scrapegraph_ai.py` 仅从环境变量读取 `OPENAI_API_KEY`。
+- 未改动任何用户媒体、AI 模型权重或向量缓存。
+
+## 11. 保留但需作者确认的项（未处理）
+
+1. `tool/diagnostics/` 中多个高度重叠的 MissAV / 编码诊断脚本：无引用、可能过时，删除前建议作者确认。
+2. `docs/ui-upgrade/logs/**`：含开发机绝对路径的阶段性日志，作为历史保留。
+3. 是否在双语 README 中增加 `docs/guides/ONLINE_VIDEO_SETUP.md` 与 `docs/guides/EXTERNAL_SCRAPERS_GUIDE.md` 的入口（本次未新增宣传性链接）。
 4. 原始视频预览、播放列表、关于页的 v1.1 正式截图尚未重新抓取，README 已按实际情况不展示这些页面。
-5. `flutter analyze` 的 1344 条既有提示属于另一项独立清理工作，本任务未处理，以免扩大改动范围。
+5. `flutter analyze` 的 1344 条既有提示属于独立清理任务，本任务未处理。
+
+## 12. 准备合并的提交
+
+- 整合 `master` 的合并提交：`f4e3692`
+- 本审计最终修订提交：见本文件最后修订的 `docs(maintenance): ...` 提交（运行 `git log -1 --stat` 查看哈希）
+- 建议合并方式：`git merge --no-ff chore/repository-cleanup-readme` → `master`（保留整理历史，不重写、不 force push），由用户批准后执行。
