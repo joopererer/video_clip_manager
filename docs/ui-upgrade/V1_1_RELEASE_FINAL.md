@@ -201,3 +201,38 @@ Windows 的"文档"目录由 Shell 已知文件夹决定，**不受重定向的 
 
 - 仓库**已有**正式 Release `v1.0.1`，此前"仓库尚无任何 Release、`/releases/latest` 404"的表述不准确，已在 §7 第 4 条与 Release Notes 的「已知限制」中更正。
 - 冒烟测试时远端最新 Release 已为 `v1.0.1`，因此当时走的是"远端版本更低 → 不提示更新"的分支，而非 404 分支。
+
+## 11. 正式发布结果（2026-10-30）
+
+人工验收通过后执行，全部操作均为普通推送与手工发布，未使用 force push / reset / clean。
+
+| 项 | 值 |
+| --- | --- |
+| GitHub Release | https://github.com/joopererer/video_clip_manager/releases/tag/v1.1.0 |
+| Release 标题 | `Video Clip Manager v1.1.0` |
+| Release 状态 | 正式稳定版（`prerelease: false`、`draft: false`），发布时间 `2026-10-30T00:30:46Z` |
+| Tag | `v1.1.0`（annotated tag，object `55726df`） |
+| Tag 指向提交 | `d39996c5ba4825579d3262a299034fec6496faeb` |
+| 推送 | `c7011b2..d39996c  master -> master`（快进，无 force） |
+| CI 运行 | run `40979395665`，结论 **success**（Windows / macOS / Linux 三个构建 + Publish 全部成功） |
+| `/releases/latest` | `v1.1.0`、非 prerelease → 1.1.0 客户端检查更新时判定为"已是最新"，不会误报 |
+
+### 11.1 附件
+
+| 附件 | 大小 | SHA-256 | 来源 |
+| --- | --- | --- | --- |
+| `video_clip_manager-v1.1.0-windows-x64.zip` | 41,516,055 | `500c9081850f2f6f5132252d74acc0cb8301b7975e090ccc9ffb826c1b132349` | **本地构建 + 人工实测通过**，手工上传 |
+| `video_clip_manager-windows-x64.zip` | 40,973,205 | `22680763ae50ef43c8f2187cb53185f47670558e6893097f3bc9fa6a32f7de12` | CI（GitHub Runner）构建 |
+| `video_clip_manager-macos.zip` | 38,878,617 | `772e7ed978c3f456fb18c7b8af5a4a9c96bfde7febf2e06c6a26024b3e9cf392` | CI 构建，保留 |
+| `video_clip_manager-linux-x64.tar.gz` | 11,773,352 | `2801806a660cac8e08add71c9661790652a8522eb4bfb52e8d41375ad9f9572c` | CI 构建，保留 |
+
+两个 Windows 包**不等价**（实测差异）：本地包 30 个文件且带外层目录 `video_clip_manager-v1.1.0-windows-x64\`；CI 包 27 个文件、无外层目录（解压即当前目录）。两者都含 `libmpv-2.dll` 与 `onnxruntime.dll`，都不含模型权重。Release 正文已说明应以 SHA-256 区分，人工验证过的是带版本号的那一份。
+
+从 Release 重新下载 `video_clip_manager-v1.1.0-windows-x64.zip` 后校验：41,516,055 字节、SHA-256 `500C9081…2349`，与本地一致；Release 页面与下载链接均返回 HTTP 200。
+
+### 11.2 未做与遗留
+
+- **未删除** CI 产出的 `video_clip_manager-windows-x64.zip`（删除附件不在本次授权范围内）。若希望发布页只保留一个 Windows 包，需要单独授权后删除，并保留 CI 的 macOS/Linux 产物。
+- **未修改** `.github/workflows/release.yml`，后续任何 `v*` tag 推送仍会自动构建三平台并创建/更新对应 Release（正文会被 `generate_release_notes` 覆盖），因此**下一次发版**需要重复本轮的"发布后编辑正文"步骤。
+- **未改动**版本号、Logo 与安装程序形态。
+- 本报告新增的 §11 是在发布提交之后追加的文档提交；Tag `v1.1.0` 仍指向发布提交 `d39996c`。
