@@ -3,11 +3,11 @@ import 'dart:io';
 import 'dart:async';
 
 import 'package:http/http.dart' as http;
-import 'lib/services/hybrid_video_sniffer_service.dart';
+import 'package:video_clip_manager/services/hybrid_video_sniffer_service.dart';
 
-/// 测试混合视频嗅探服务
+/// 最终混合服务测试
 void main() async {
-  print('=== 混合视频嗅探服务测试 ===\n');
+  print('=== 最终混合视频嗅探服务测试 ===\n');
   
   // 测试URL列表
   final testUrls = [
@@ -131,4 +131,3 @@ Future<void> analyzeStreams(List<dynamic> streams) async {
     print('    HLS流可用: 是');
   }
 }
-

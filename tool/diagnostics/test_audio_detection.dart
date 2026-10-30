@@ -1,5 +1,5 @@
-import 'lib/services/yt_dlp_service.dart';
-import 'lib/services/audio_detection_service.dart';
+import 'package:video_clip_manager/services/yt_dlp_service.dart';
+import 'package:video_clip_manager/services/audio_detection_service.dart';
 
 void main() async {
   print('🎵 测试音频检测改进...\n');
