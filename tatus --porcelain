@@ -1,5 +1,0 @@
-[33md391c0f[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m Clean up debug print statements from playlist functionality
-[33m1291c25[m Fix playlist dialog issues: enable Create/Save button with TextEditingController listeners, fix duration calculation, and add debug output
-[33m93b9ddb[m[33m ([m[1;31morigin/master[m[33m)[m refactor: 清理未使用的代码
-[33m353e829[m feat: 实现全局拖拽添加视频功能
-[33m990b740[m feat: add draggable for video file
