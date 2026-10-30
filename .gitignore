@@ -15,6 +15,11 @@ migrate_working_dir/
 # Stray nested Git working copy (upstream AV_Data_Capture), not a declared submodule
 /AV_Data_Capture/
 
+# Python shims written by the manual diagnostics in tool/diagnostics
+/test_cloudscraper.py
+/test_encoding_detection.py
+/test_simple_encoding.py
+
 # IntelliJ related
 *.iml
 *.ipr

@@ -38,7 +38,7 @@ python -c "..."   # 读取 JSON、核对本地相对链接
 
 | 原路径 | 大小 | 类型 | 引用情况 | 建议 | 依据与风险 |
 | --- | --- | --- | --- | --- | --- |
-| `.gitignore` | ~0.8 KB | 文本 | Git 使用 | 保留并补充 | 需要新增 `/AV_Data_Capture/`；不影响正式代码/测试 |
+| `.gitignore` | ~0.8 KB | 文本 | Git 使用 | 保留并补充 | 新增 `/AV_Data_Capture/` 与 3 条诊断脚本临时 `.py` 规则；不忽略正式代码、测试或配置 |
 | `.metadata` | 1.5 KB | Flutter 元数据 | Flutter CLI 使用 | **保留** | Flutter 工具元数据，不是垃圾文件，删除会破坏工具链识别 |
 | `analysis_options.yaml` | 1.4 KB | YAML | `flutter analyze` | 保留 | 分析规则配置 |
 | `pubspec.yaml` / `pubspec.lock` | 4.5 KB / 27.9 KB | YAML | 依赖与版本 | 保留 | 版本 `1.1.0+3`，构建必需 |
