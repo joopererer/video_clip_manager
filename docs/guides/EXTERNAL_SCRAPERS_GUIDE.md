@@ -23,7 +23,7 @@
 
 ### 1. 安装依赖
 
-运行安装脚本：
+运行安装脚本（在仓库根目录执行）：
 ```bash
 # Windows
 install_external_scrapers.bat
@@ -42,7 +42,8 @@ pip install jav-scraper requests beautifulsoup4 lxml tmdbv3api yt-dlp
 ### 3. 测试安装
 
 ```bash
-dart test_external_scrapers.dart
+# 手动诊断脚本位于 tool/diagnostics/，例如：
+dart run tool/diagnostics/test_hybrid_service.dart
 ```
 
 ## 📖 使用示例

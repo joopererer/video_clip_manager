@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'lib/services/yt_dlp_service.dart';
+import 'package:video_clip_manager/services/yt_dlp_service.dart';
 
 /// 测试 YouTube 视频流嗅探
 /// 
