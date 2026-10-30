@@ -23,7 +23,7 @@ pip install bilibili-api>=16.1.0
 pip install yt-dlp
 ```
 
-或者直接运行安装脚本：
+或者直接运行安装脚本（在仓库根目录执行）：
 ```bash
 install_dependencies.bat
 ```
