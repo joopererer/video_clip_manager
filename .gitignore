@@ -12,6 +12,9 @@
 .swiftpm/
 migrate_working_dir/
 
+# Stray nested Git working copy (upstream AV_Data_Capture), not a declared submodule
+/AV_Data_Capture/
+
 # IntelliJ related
 *.iml
 *.ipr
